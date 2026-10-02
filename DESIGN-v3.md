@@ -1,6 +1,6 @@
 # Engineering Skills Tutor: Design
 
-Status: draft 3, revision 7. Date: 2026-10-02. This file replaces `DESIGN.md` (draft 2).
+Status: draft 3, revision 8. Date: 2026-10-02. This file replaces `DESIGN.md` (draft 2).
 
 ## Purpose
 
@@ -444,7 +444,8 @@ The tutor code calls one small interface, not a provider SDK. At start, the tuto
 interface Source { id: string; title: string; text: string }
 
 // One reference in a lesson: the source and the exact quote from it.
-interface Reference { sourceId: string; quote: string }
+// The text marks the reference with its number, for example "[2]".
+interface Reference { number: number; sourceId: string; quote: string }
 
 interface LlmClient {
   // Return JSON that matches the schema.
@@ -471,6 +472,10 @@ The two classes do the same work in different ways:
 - Prompt cache: each client puts the sources at the start of the prompt, in the same order for each call. `AnthropicClient` adds a cache marker after the sources. OpenAI caches long prompt prefixes without a marker.
 
 For each provider, the tutor checks that each quote is in the text of its source. If a quote is not in the source, the tutor removes the reference. If a lesson has no valid reference, the tutor shows a warning on the lesson.
+
+For some Claude models (Claude Fable 5.1, Claude Opus 5.5, Claude Opus 5, and Claude Sonnet 5.5), `AnthropicClient` turns on the server-side fallback. If the model refuses a request, the API runs the request again on a different Claude model.
+
+To check the model in `.env`, run `npm run llm:check`. The command sends one JSON request and one text request with references.
 
 ### Cost
 

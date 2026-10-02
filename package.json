@@ -10,15 +10,18 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "parse": "tsx src/cli/parse.ts"
+    "parse": "tsx src/cli/parse.ts",
+    "llm:check": "tsx src/cli/llm-check.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "better-sqlite3": "^13.0.3",
     "cheerio": "^1.2.0",
     "dom-serializer": "^2.0.0",
     "domhandler": "^5.0.3",
     "entities": "^4.5.0",
     "jszip": "^3.10.2",
+    "openai": "^7.27.0",
     "pdfjs-dist": "^6.3.289",
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",

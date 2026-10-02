@@ -15,6 +15,7 @@ Status: draft 1. Date: 2026-10-02. The design is in `DESIGN-v3.md`. This file gi
 - Milestone 1: done.
 - Milestone 2: done. Pro Git and a book of the user parse with no lost text. The parser reads publisher CSS for headings, bold, and italic.
 - Milestone 2b: done. The parser reads tagged PDF files. A PDF book of the user parses with no lost text.
+- Milestone 3: the code and the tests are done. The exit test waits for the user: fill in `.env`, then run `npm run llm:check`.
 
 ## Milestones
 
