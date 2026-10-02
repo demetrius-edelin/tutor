@@ -121,6 +121,18 @@ describe("lessons", () => {
     expect((await get<SessionView>(`/api/sessions/${body.sessionId}`)).questions.length).toBe(2);
   });
 
+  it("does not save an empty lesson or an empty answer", async () => {
+    await post(`/api/concepts/${conceptIds[1]}/lesson`);
+    const lessonId = db.prepare("SELECT id FROM lessons").pluck().get() as number;
+    const empty = buildServer({ db, dataDir, llm: new FakeLlm({ text: () => ({ text: " ", references: [] }) }) });
+    const lesson = await empty.inject({ method: "POST", url: `/api/concepts/${conceptIds[2]}/lesson` });
+    expect(lesson.statusCode).toBe(502);
+    const answer = await empty.inject({ method: "POST", url: `/api/lessons/${lessonId}/messages`, payload: { text: "Why?" } });
+    expect(answer.statusCode).toBe(502);
+    expect(db.prepare("SELECT COUNT(*) FROM lessons").pluck().get()).toBe(1);
+    expect(db.prepare("SELECT COUNT(*) FROM lesson_messages").pluck().get()).toBe(0);
+  });
+
   it("needs a model to write a lesson", async () => {
     const noModel = buildServer({ db, dataDir, llm: null, llmError: "No provider is selected." });
     const response = await noModel.inject({ method: "POST", url: `/api/concepts/${conceptIds[1]}/lesson` });

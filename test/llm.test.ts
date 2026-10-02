@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { ModelConfig } from "../src/config.js";
 import { AnthropicClient } from "../src/llm/anthropic.js";
-import { LlmError, type Source } from "../src/llm/index.js";
+import { LlmError, setModelLog, type Source } from "../src/llm/index.js";
 import { OPENROUTER_URL, OpenAiClient, openAiOptions, strictJsonSchema } from "../src/llm/openai.js";
 import { checkReferences, containsQuote } from "../src/llm/references.js";
 
@@ -52,8 +52,9 @@ function fakeOpenAi(answers: unknown[]) {
   return { sdk: sdk as unknown as ConstructorParameters<typeof OpenAiClient>[1], requests };
 }
 
-const chat = (content: string, finish_reason = "stop") => ({
-  choices: [{ finish_reason, message: { role: "assistant", content, refusal: null } }],
+const chat = (content: string | null, finish_reason = "stop", reasoning?: string) => ({
+  choices: [{ finish_reason, message: { role: "assistant", content, refusal: null, reasoning } }],
+  usage: { completion_tokens: 900, completion_tokens_details: { reasoning_tokens: 850 } },
 });
 
 describe("AnthropicClient", () => {
@@ -171,6 +172,40 @@ describe("OpenAiClient", () => {
   it("reports an answer that is too long", async () => {
     const { sdk } = fakeOpenAi([chat("{", "length")]);
     await expect(new OpenAiClient(config, sdk).object({ system: "s", prompt: "p", schema })).rejects.toThrow(LlmError);
+  });
+
+  it("sends the reasoning level to OpenRouter in its own format", async () => {
+    const { sdk, requests } = fakeOpenAi([chat('{"facts":["a"]}')]);
+    await new OpenAiClient({ ...config, provider: "openrouter", reasoning: "high" }, sdk).object({ system: "s", prompt: "p", schema });
+    expect(requests[0]).toMatchObject({ reasoning: { effort: "high" } });
+    expect(requests[0]).not.toHaveProperty("reasoning_effort");
+  });
+
+  it("asks one more time after an empty answer", async () => {
+    const { sdk, requests } = fakeOpenAi([chat(null, "stop", "The answer is in the reasoning."), chat("Indexes cost space.")]);
+    const result = await new OpenAiClient(config, sdk).text({ system: "s", sources: [], messages: [{ role: "user", content: "q" }] });
+    expect(result.text).toBe("Indexes cost space.");
+    expect(requests).toHaveLength(2);
+  });
+
+  it("reports two empty answers with the details", async () => {
+    const { sdk } = fakeOpenAi([chat("", "stop", "Thinking."), chat("  ", "stop", "Thinking.")]);
+    const request = new OpenAiClient(config, sdk).text({ system: "s", sources: [], messages: [{ role: "user", content: "q" }] });
+    await expect(request).rejects.toThrow(/empty answer two times \(finish reason "stop", 900 output tokens, 850 of them for reasoning, text only in the reasoning field\)/);
+  });
+
+  it("logs each model call with the time and the result", async () => {
+    const lines: string[] = [];
+    setModelLog((line) => lines.push(line));
+    try {
+      const { sdk } = fakeOpenAi([chat(""), chat("Indexes cost space.")]);
+      await new OpenAiClient(config, sdk).text({ system: "s", sources: [], messages: [{ role: "user", content: "q" }] });
+    } finally {
+      setModelLog(null);
+    }
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatch(/^Model call: \d+\.\d s, finish reason "stop", 900 output tokens, 850 of them for reasoning, empty answer$/);
+    expect(lines[1]).not.toContain("empty answer");
   });
 
   it("uses the OpenRouter URL for OpenRouter", () => {

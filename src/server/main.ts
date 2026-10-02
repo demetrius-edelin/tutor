@@ -1,6 +1,6 @@
 import { loadEnvFile, modelConfig } from "../config.js";
 import { openDb } from "../db/index.js";
-import { createClient, type LlmClient } from "../llm/index.js";
+import { createClient, setModelLog, type LlmClient } from "../llm/index.js";
 import { buildServer } from "./app.js";
 
 const port = Number(process.env.PORT ?? 3000);
@@ -13,6 +13,7 @@ let llmError: string | undefined;
 try {
   const config = modelConfig();
   llm = createClient(config);
+  setModelLog((line) => console.log(line));
   console.log(`Model: ${config.provider} ${config.model}`);
 } catch (error) {
   llmError = error instanceof Error ? error.message : String(error);

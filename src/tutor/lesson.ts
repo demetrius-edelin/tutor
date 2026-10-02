@@ -262,6 +262,7 @@ export function startLesson(db: Db, llm: LlmClient | null, dataDir: string, conc
       sources: toSources(dataDir, sources),
       messages: [{ role: "user", content: lessonRequest(db, concept, round) }],
     });
+    if (result.text.trim() === "") throw new TutorError("The model returned an empty lesson. Try again.", 502);
     db.transaction(() => {
       db.prepare("INSERT INTO lessons (concept_id, round, text, refs) VALUES (?, ?, ?, ?)").run(
         conceptId,
@@ -298,6 +299,7 @@ export async function askAboutLesson(db: Db, llm: LlmClient | null, dataDir: str
     { role: "user", content: question.trim() },
   ];
   const result = await llm.text({ system: CHAT_SYSTEM, sources: toSources(dataDir, sources), messages });
+  if (result.text.trim() === "") throw new TutorError("The model returned an empty answer. Try again.", 502);
   const insert = db.prepare("INSERT INTO lesson_messages (lesson_id, role, text, refs) VALUES (?, ?, ?, ?)");
   db.transaction(() => {
     insert.run(lessonId, "user", question.trim(), "[]");

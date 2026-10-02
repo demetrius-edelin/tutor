@@ -9,6 +9,7 @@ import {
   applyChoices,
   applyMarks,
   disputeAttempt,
+  failInterruptedSessions,
   finishSession,
   prepareSession,
   sessionView,
@@ -37,6 +38,7 @@ export interface TutorServer extends FastifyInstance {
 export function buildServer({ db, dataDir, appDir, llm = null, llmError }: ServerOptions): TutorServer {
   const app = Fastify({ logger: false }) as unknown as TutorServer;
   const jobs = new Set<Promise<void>>();
+  failInterruptedSessions(db);
   const runInBackground = (job: Promise<void>) => {
     jobs.add(job);
     void job.finally(() => jobs.delete(job));

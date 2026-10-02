@@ -62,8 +62,9 @@ function SessionBody({ session, onChange }: { session: SessionView; onChange: (s
       <>
         <h1>{title}</h1>
         <p className="lead" role="status">
-          The tutor writes 3 new questions about the concept. This can take a minute.
+          The tutor writes 3 new questions about the concept.
         </p>
+        <Waiting />
       </>
     );
   }
@@ -78,12 +79,28 @@ function SessionBody({ session, onChange }: { session: SessionView; onChange: (s
           <span className="segment segment-mastered" style={{ flexGrow: session.prepared }} />
           <span className="segment segment-new" style={{ flexGrow: Math.max(0, session.total - session.prepared) || 0.0001 }} />
         </div>
+        <Waiting />
       </>
     );
   }
   if (session.status === "failed") return <FailedView session={session} title={title} onChange={onChange} />;
   if (session.status === "finished") return test ? <TestResults session={session} /> : <ResultsView session={session} />;
   return <QuestionFlow session={session} title={title} onChange={onChange} />;
+}
+
+// The time since the page started to wait for the model.
+function Waiting() {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => setSeconds((value) => value + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const time = seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
+  return (
+    <p className="quiet">
+      Waiting for the model: {time}. The time depends on the model and its reasoning level. A high reasoning level can take some minutes.
+    </p>
+  );
 }
 
 function FailedView({ session, title, onChange }: { session: SessionView; title: string; onChange: (session: SessionView) => void }) {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ConfigError, loadEnvFile, modelConfig } from "../config.js";
-import { createClient, LlmError, type Source } from "../llm/index.js";
+import { createClient, LlmError, setModelLog, type Source } from "../llm/index.js";
 
 // Check the model in .env with one JSON request and one text request with references.
 
@@ -18,6 +18,7 @@ async function main(): Promise<void> {
   const config = modelConfig();
   console.log(`\nProvider: ${config.provider}\nModel: ${config.model}\nReasoning: ${config.reasoning ?? "default of the model"}\n`);
   const client = createClient(config);
+  setModelLog((line) => console.log(`   (${line})`));
 
   let start = Date.now();
   const facts = await client.object({

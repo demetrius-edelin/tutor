@@ -480,6 +480,8 @@ The two classes do the same work in different ways:
 - JSON output: each client sends the zod schema as a JSON schema. If a model does not accept a JSON schema, the client asks for JSON in the prompt. The client checks each result with zod. If the check fails, the client tries one more time.
 - References: `AnthropicClient` uses the citations of the Anthropic API. `OpenAiClient` tells the model to cite with markers, for example `[S3: "exact quote"]`. Each client returns the same `Reference` list.
 - Prompt cache: each client puts the sources at the start of the prompt, in the same order for each call. `AnthropicClient` adds a cache marker after the sources. OpenAI caches long prompt prefixes without a marker.
+- Reasoning level: `OpenAiClient` sends `reasoning_effort` to OpenAI. OpenRouter uses a different format, so the client sends `reasoning: { effort }` to OpenRouter.
+- Empty answers: some reasoning models on OpenRouter sometimes return an empty answer with a normal finish. The text is then only in the reasoning field. After an empty answer, `OpenAiClient` asks one more time. After a second empty answer, it shows an error with the finish reason, the token counts, and the provider. The tutor never saves an empty lesson or an empty chat answer.
 
 For each provider, the tutor checks that each quote is in the text of its source. If a quote is not in the source, the tutor removes the reference. If a lesson has no valid reference, the tutor shows a warning on the lesson.
 

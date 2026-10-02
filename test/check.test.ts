@@ -119,6 +119,16 @@ describe("the test after a lesson", () => {
     expect((await post(`/api/concepts/${conceptIds[1]}/after-test`, { action: "other" })).status).toBe(400);
   });
 
+  it("marks a test as failed if the server stopped before the questions were ready", async () => {
+    await post(`/api/concepts/${conceptIds[1]}/lesson`);
+    const { body } = await post<{ sessionId: number }>(`/api/concepts/${conceptIds[1]}/check`);
+    await app.idle();
+    db.prepare("UPDATE sessions SET status = 'preparing' WHERE id = ?").run(body.sessionId);
+    const restarted = buildServer({ db, dataDir: "", llm });
+    const session = (await restarted.inject({ method: "GET", url: `/api/sessions/${body.sessionId}` })).json() as SessionView;
+    expect(session).toMatchObject({ status: "failed", error: "The tutor stopped before the questions were ready." });
+  });
+
   it("tests the prerequisites of a concept", async () => {
     const [prerequisite, concept] = [conceptIds[0]!, conceptIds[1]!];
     db.prepare("DELETE FROM concept_prereqs").run();

@@ -119,6 +119,14 @@ function questionConcepts(db: Db, dataDir: string, sessionId: number): QuestionC
   }));
 }
 
+// A new server has no running jobs. A session that is still "preparing" lost its job, for example after a restart.
+// The session becomes "failed", and the learner can start the job again with "Try again".
+export function failInterruptedSessions(db: Db): void {
+  db.prepare("UPDATE sessions SET status = 'failed', error = ? WHERE status = 'preparing'").run(
+    "The tutor stopped before the questions were ready.",
+  );
+}
+
 // Write the questions of a session. The function runs in the background. It saves the questions
 // of each group of concepts at once, so that the app can show the progress.
 // A diagnosis gets 2 questions for each concept. A test after a lesson gets 3 new questions.

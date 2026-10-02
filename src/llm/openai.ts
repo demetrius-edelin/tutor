@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { z } from "zod";
 import type { ModelConfig } from "../config.js";
 import { toLlmError } from "./errors.js";
+import { logModelCall } from "./log.js";
 import { formatSources, jsonInstructions, readJson, REFERENCE_INSTRUCTIONS } from "./prompt.js";
 import { checkReferences, ReferenceList } from "./references.js";
 import { LlmError, type LlmClient, type ObjectRequest, type TextRequest, type TextResult } from "./types.js";
@@ -38,6 +39,27 @@ export function strictJsonSchema(schema: z.ZodType): Record<string, unknown> {
   return visit(z.toJSONSchema(schema)) as Record<string, unknown>;
 }
 
+// The reasoning level. OpenRouter takes it in its own format: a "reasoning" object with "effort".
+export function reasoningParams(config: ModelConfig): Record<string, unknown> {
+  if (!config.reasoning) return {};
+  return config.provider === "openrouter" ? { reasoning: { effort: config.reasoning } } : { reasoning_effort: config.reasoning };
+}
+
+// Facts about an answer for an error message: the finish reason, the tokens, and the provider behind OpenRouter.
+function answerDetails(response: OpenAI.Chat.Completions.ChatCompletion): string {
+  const choice = response.choices[0];
+  const reasoning = (choice?.message as { reasoning?: string | null } | undefined)?.reasoning;
+  const parts = [`finish reason "${choice?.finish_reason ?? "none"}"`];
+  if (response.usage) {
+    const reasoningTokens = response.usage.completion_tokens_details?.reasoning_tokens ?? 0;
+    parts.push(`${response.usage.completion_tokens} output tokens, ${reasoningTokens} of them for reasoning`);
+  }
+  if (reasoning?.trim()) parts.push("text only in the reasoning field");
+  const provider = (response as { provider?: string }).provider;
+  if (provider) parts.push(`provider ${provider}`);
+  return parts.join(", ");
+}
+
 // A 400 error about the response format means that the model does not accept a JSON schema.
 function isSchemaUnsupported(error: unknown): boolean {
   return error instanceof OpenAI.BadRequestError && /response_format|json_schema|structured output/i.test(error.message);
@@ -55,30 +77,45 @@ export class OpenAiClient implements LlmClient {
     this.sdk = sdk ?? new OpenAI(openAiOptions(config));
   }
 
+  // Some reasoning models on OpenRouter sometimes return an empty answer with a normal finish,
+  // and put the text in the reasoning field. Then the client asks one more time.
   private async complete(
     messages: ChatMessage[],
     responseFormat?: OpenAI.Chat.Completions.ChatCompletionCreateParams["response_format"],
   ): Promise<string> {
-    let response: OpenAI.Chat.Completions.ChatCompletion;
-    try {
-      response = await this.sdk.chat.completions.create({
-        model: this.config.model,
-        messages,
-        ...(this.config.reasoning ? { reasoning_effort: this.config.reasoning } : {}),
-        ...(responseFormat ? { response_format: responseFormat } : {}),
-      });
-    } catch (error) {
-      if (responseFormat && isSchemaUnsupported(error)) throw error;
-      throw toLlmError(error, this.config);
+    for (let attempt = 1; ; attempt++) {
+      let response: OpenAI.Chat.Completions.ChatCompletion;
+      const start = Date.now();
+      try {
+        response = await this.sdk.chat.completions.create({
+          model: this.config.model,
+          messages,
+          ...reasoningParams(this.config),
+          ...(responseFormat ? { response_format: responseFormat } : {}),
+        } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming);
+      } catch (error) {
+        logModelCall(start, `failed: ${error instanceof Error ? error.message : String(error)}`);
+        if (responseFormat && isSchemaUnsupported(error)) throw error;
+        throw toLlmError(error, this.config);
+      }
+      logModelCall(start, `${answerDetails(response)}${response.choices[0]?.message.content?.trim() ? "" : ", empty answer"}`);
+      const choice = response.choices[0];
+      if (!choice) throw new LlmError("The model returned no answer.");
+      if (choice.message.refusal) throw new LlmError(`The model refused the request: ${choice.message.refusal}`);
+      if (choice.finish_reason === "length") {
+        throw new LlmError(
+          `The answer of the model stopped before the end (${answerDetails(response)}). If most tokens are for reasoning, set a lower LLM_REASONING.`,
+        );
+      }
+      if (choice.finish_reason === "content_filter") throw new LlmError("The content filter of the provider stopped the answer.");
+      const content = choice.message.content ?? "";
+      if (content.trim() !== "") return content;
+      if (attempt === 2) {
+        throw new LlmError(
+          `The model returned an empty answer two times (${answerDetails(response)}). Try again. If the problem continues, set a lower LLM_REASONING or select a different model.`,
+        );
+      }
     }
-    const choice = response.choices[0];
-    if (!choice) throw new LlmError("The model returned no answer.");
-    if (choice.message.refusal) throw new LlmError(`The model refused the request: ${choice.message.refusal}`);
-    if (choice.finish_reason === "length") {
-      throw new LlmError("The answer of the model was too long and stopped before the end.");
-    }
-    if (choice.finish_reason === "content_filter") throw new LlmError("The content filter of the provider stopped the answer.");
-    return choice.message.content ?? "";
   }
 
   async object<T>(request: ObjectRequest<T>): Promise<T> {

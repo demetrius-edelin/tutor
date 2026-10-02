@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { ModelConfig } from "../config.js";
 import { toLlmError } from "./errors.js";
+import { logModelCall } from "./log.js";
 import { formatSources, readJson } from "./prompt.js";
 import { checkReferences, ReferenceList } from "./references.js";
 import { LlmError, type LlmClient, type ObjectRequest, type TextRequest, type TextResult } from "./types.js";
@@ -20,6 +21,7 @@ interface AnyResponse {
   stop_details?: { category?: string | null; explanation?: string | null } | null;
   content: Array<{ type: string; text?: string; citations?: Array<Record<string, unknown>> | null }>;
   parsed_output?: unknown;
+  usage?: { output_tokens?: number };
 }
 
 export class AnthropicClient implements LlmClient {
@@ -43,19 +45,25 @@ export class AnthropicClient implements LlmClient {
 
   private async call(kind: "parse" | "create", params: Record<string, unknown>): Promise<AnyResponse> {
     const base = { model: this.config.model, max_tokens: MAX_TOKENS, ...params };
+    const start = Date.now();
+    let response: AnyResponse;
     try {
       if (this.fallback) {
         const beta = { ...base, betas: [FALLBACK_BETA], fallbacks: "default" as const };
-        return (await (kind === "parse"
+        response = (await (kind === "parse"
           ? this.sdk.beta.messages.parse(beta as never)
           : this.sdk.beta.messages.create(beta as never))) as unknown as AnyResponse;
+      } else {
+        response = (await (kind === "parse"
+          ? this.sdk.messages.parse(base as never)
+          : this.sdk.messages.create(base as never))) as unknown as AnyResponse;
       }
-      return (await (kind === "parse"
-        ? this.sdk.messages.parse(base as never)
-        : this.sdk.messages.create(base as never))) as unknown as AnyResponse;
     } catch (error) {
+      logModelCall(start, `failed: ${error instanceof Error ? error.message : String(error)}`);
       throw toLlmError(error, this.config);
     }
+    logModelCall(start, `stop reason "${response.stop_reason ?? "none"}", ${response.usage?.output_tokens ?? 0} output tokens`);
+    return response;
   }
 
   private checkStop(response: AnyResponse): void {
