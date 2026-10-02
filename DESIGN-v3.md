@@ -349,7 +349,7 @@ The user writes the answer in a code box in the app. The runners use Docker cont
 ## Screens
 
 - Home: the list of themes, with the queue length and the due reviews of each theme. A field to create a new theme.
-- Theme: the books of the theme, the "Add book" button, the ingest progress, and the ingest report of each book. The "Start session" button starts the due reviews, then the first concept in the queue.
+- Theme: the books of the theme and the progress. Later: the "Add book" button, the ingest progress, and the ingest report of each book. Until then, ingest runs from the command line. The "Start session" button starts the due reviews, then the first concept in the queue.
 - Map: the modules and concepts, with the status and the sources of each concept. Open a module here to mark its concepts. Undo a skip here.
 - Diagnosis: the questions one at a time. Then the results, with the "Learn" and "Skip" choices.
 - Queue: the study queue, with drag and drop and the queue buttons.
@@ -497,9 +497,13 @@ A Telegram client for reviews on the phone is an option for later. A move to a s
 data/                 (not in git)
   tutor.db            SQLite database
   themes/<theme>/
-    books/            EPUB files
-    sections/         section text in Markdown
-    reports/          ingest reports (JSON)
+    concept-map.md    the concept map of the theme, for people to read
+    books/<book>/
+      <book file>     a copy of the EPUB or PDF file
+      sections/       section text in Markdown
+      work/           cached results of the extract and review stages
+      parse-report.json
+      ingest-report.json
 src/
   server/             HTTP API
   app/                React app

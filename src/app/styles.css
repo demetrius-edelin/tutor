@@ -1,0 +1,618 @@
+/* The tutor is a study notebook: ink on paper, a red margin line with the status marks
+   of the concepts, and a highlighter for the quotes from the books. */
+
+:root {
+  --paper: #fcfcfa;
+  --ink: #1d2c4d;
+  --graphite: #5b6472;
+  --rule: #d3deee;
+  --margin-red: #d9534f;
+  --highlight: #ffe55c;
+  --highlight-soft: #fff3b0;
+  --panel: #ffffff;
+  --focus: #2f6fdb;
+
+  --ui: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --reading: "Literata", Georgia, "Times New Roman", serif;
+  --code: "JetBrains Mono", ui-monospace, Menlo, monospace;
+
+  /* A type scale with the ratio 1.2. */
+  --step--1: 0.833rem;
+  --step-0: 1rem;
+  --step-1: 1.2rem;
+  --step-2: 1.44rem;
+  --step-3: 2.074rem;
+
+  --margin-width: 4.5rem;
+  --measure: 46rem;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #16213a;
+    --ink: #e6ebf4;
+    --graphite: #a3adbd;
+    --rule: #2c3a58;
+    --margin-red: #e0736f;
+    --highlight: #b89a16;
+    --highlight-soft: #4d4516;
+    --panel: #1c2944;
+    --focus: #8ab4ff;
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 106.25%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--ui);
+  font-size: var(--step-0);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+a:hover {
+  text-decoration-color: var(--margin-red);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+h1,
+h2 {
+  font-family: var(--ui);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+h1 {
+  font-size: var(--step-3);
+  margin: 0 0 0.5rem;
+}
+
+h2 {
+  font-size: var(--step-1);
+  margin: 2.5rem 0 1rem;
+}
+
+p {
+  margin: 0 0 1rem;
+}
+
+.quiet {
+  color: var(--graphite);
+}
+
+.lead {
+  max-width: var(--measure);
+  color: var(--graphite);
+  font-size: var(--step-1);
+  line-height: 1.45;
+  margin-bottom: 2rem;
+}
+
+/* The page: a notebook page with a red margin line on the left. */
+
+/* The red margin line runs down the full page, also through the top bar. */
+.shell {
+  position: relative;
+  min-height: 100vh;
+}
+
+.shell::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--margin-width);
+  width: 2px;
+  background: color-mix(in srgb, var(--margin-red) 80%, var(--paper));
+  pointer-events: none;
+}
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+  padding: 1.25rem 1.5rem 1rem calc(var(--margin-width) + 1.5rem);
+  border-bottom: 1px solid var(--rule);
+}
+
+.wordmark {
+  font-family: var(--reading);
+  font-size: var(--step-1);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--graphite);
+  font-size: var(--step--1);
+}
+
+.crumbs li + li::before {
+  content: "/";
+  margin-right: 0.5rem;
+  color: var(--rule);
+}
+
+.page {
+  position: relative;
+  max-width: calc(var(--measure) + var(--margin-width) + 6rem);
+  padding: 2.5rem 1.5rem 6rem calc(var(--margin-width) + 1.5rem);
+}
+
+.notice {
+  max-width: var(--measure);
+}
+
+.command,
+.reading pre {
+  overflow-x: auto;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--rule);
+  background: color-mix(in srgb, var(--rule) 25%, transparent);
+  font-family: var(--code);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+/* Lists of themes and books read as the contents page of a book, with dotted leaders. */
+
+.contents {
+  max-width: var(--measure);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.contents li {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.contents-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  text-decoration: none;
+}
+
+.contents-title {
+  font-family: var(--reading);
+  font-size: var(--step-1);
+  font-weight: 500;
+}
+
+a.contents-entry:hover .contents-title {
+  text-decoration: underline;
+  text-decoration-color: var(--margin-red);
+  text-underline-offset: 0.2em;
+}
+
+.leader {
+  flex: 1;
+  min-width: 2rem;
+  border-bottom: 2px dotted var(--rule);
+  transform: translateY(-0.3em);
+}
+
+.contents-figure {
+  color: var(--graphite);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.contents-note {
+  margin: 0.15rem 0 0;
+  color: var(--graphite);
+  font-size: var(--step--1);
+}
+
+/* Progress */
+
+.progress-bar {
+  display: flex;
+  height: 0.6rem;
+  max-width: var(--measure);
+  overflow: hidden;
+  border-radius: 0.3rem;
+  background: var(--rule);
+}
+
+.segment-new {
+  background: var(--rule);
+}
+.segment-to_test {
+  background: color-mix(in srgb, var(--graphite) 45%, var(--rule));
+}
+.segment-failed {
+  background: var(--margin-red);
+}
+.segment-queued {
+  background: var(--highlight-soft);
+}
+.segment-learning {
+  background: var(--highlight);
+}
+.segment-known {
+  background: color-mix(in srgb, var(--ink) 60%, var(--paper));
+}
+.segment-mastered {
+  background: var(--ink);
+}
+.segment-skipped {
+  background: repeating-linear-gradient(135deg, var(--rule) 0 4px, transparent 4px 8px);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin: 0.9rem 0 1.5rem;
+  padding: 0;
+  list-style: none;
+  font-size: var(--step--1);
+}
+
+.legend li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.legend .count {
+  color: var(--graphite);
+  font-variant-numeric: tabular-nums;
+}
+
+.button {
+  display: inline-block;
+  padding: 0.55rem 1.1rem;
+  border-radius: 0.3rem;
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.button:hover {
+  background: color-mix(in srgb, var(--ink) 85%, var(--margin-red));
+}
+
+.text-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--step--1);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.text-button:hover {
+  text-decoration-color: var(--margin-red);
+}
+
+/* The status marks sit in the margin, as a reader marks a book. */
+
+.mark {
+  display: inline-block;
+  min-width: 1.3em;
+  font-family: var(--reading);
+  font-size: 1.3em;
+  line-height: 1;
+  text-align: center;
+}
+
+.mark-new,
+.mark-skipped {
+  color: var(--graphite);
+}
+.mark-to_test,
+.mark-known,
+.mark-mastered {
+  color: var(--ink);
+}
+.mark-failed {
+  color: var(--margin-red);
+}
+.mark-queued,
+.mark-learning {
+  color: var(--ink);
+  background: linear-gradient(transparent 20%, var(--highlight) 20%, var(--highlight) 85%, transparent 85%);
+}
+
+/* Concept map */
+
+.search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  max-width: var(--measure);
+  margin-bottom: 1rem;
+}
+
+.search label {
+  font-weight: 500;
+}
+
+.search input {
+  flex: 1;
+  min-width: 14rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.3rem;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+}
+
+.module h2 {
+  display: flex;
+  gap: 0.5rem;
+  max-width: var(--measure);
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--ink);
+}
+
+.module-number {
+  color: var(--margin-red);
+  font-variant-numeric: tabular-nums;
+}
+
+.concepts {
+  max-width: var(--measure);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.concept {
+  position: relative;
+  padding: 0.75rem 0 0.6rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* The margin column is to the left of the red line. */
+.margin {
+  position: absolute;
+  top: 0.65rem;
+  left: calc(-1 * var(--margin-width) - 1.5rem);
+  width: var(--margin-width);
+  text-align: center;
+}
+
+.concept-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--step-0);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.concept-name:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--margin-red);
+  text-underline-offset: 0.2em;
+}
+
+.concept-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.6rem;
+}
+
+.concept-meta {
+  color: var(--graphite);
+  font-size: var(--step--1);
+}
+
+.objective {
+  margin: 0.2rem 0 0;
+  font-family: var(--reading);
+  font-size: 0.97rem;
+  line-height: 1.6;
+}
+
+.concept-details {
+  margin-top: 0.75rem;
+  padding-left: 1rem;
+  border-left: 2px solid var(--rule);
+}
+
+.needs {
+  font-size: var(--step--1);
+}
+
+.sources {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sources li + li {
+  margin-top: 1rem;
+}
+
+.source-ref {
+  margin: 0;
+  color: var(--graphite);
+  font-size: var(--step--1);
+}
+
+.quote {
+  margin: 0.35rem 0 0.4rem;
+  font-family: var(--reading);
+  font-style: italic;
+  line-height: 1.7;
+}
+
+.quote span {
+  background: linear-gradient(transparent 55%, var(--highlight-soft) 55%);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* The panel with the text of a book section. */
+
+.panel-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: flex-end;
+  background: color-mix(in srgb, var(--ink) 25%, transparent);
+}
+
+.panel {
+  width: min(44rem, 100%);
+  height: 100%;
+  overflow-y: auto;
+  padding: 1.25rem 2rem 4rem;
+  background: var(--panel);
+  box-shadow: -1px 0 0 var(--rule);
+  animation: panel-in 180ms ease-out;
+}
+
+@keyframes panel-in {
+  from {
+    transform: translateX(2rem);
+    opacity: 0;
+  }
+}
+
+.panel-head {
+  position: sticky;
+  top: -1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin: -1.25rem -2rem 1rem;
+  padding: 1.25rem 2rem 0.75rem;
+  border-bottom: 1px solid var(--rule);
+  background: var(--panel);
+}
+
+.panel-source {
+  margin: 0;
+  color: var(--graphite);
+  font-size: var(--step--1);
+}
+
+.reading {
+  font-family: var(--reading);
+  font-size: 1.02rem;
+  line-height: 1.65;
+}
+
+.reading h1,
+.reading h2,
+.reading h3,
+.reading h4 {
+  margin: 1.75rem 0 0.75rem;
+  font-family: var(--ui);
+  font-size: var(--step-1);
+  line-height: 1.25;
+}
+
+.reading h2:first-child {
+  margin-top: 0;
+  font-size: var(--step-2);
+}
+
+.reading code {
+  font-family: var(--code);
+  font-size: 0.85em;
+}
+
+.reading table {
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-family: var(--ui);
+  font-size: var(--step--1);
+}
+
+.reading th,
+.reading td {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--rule);
+  text-align: left;
+}
+
+.reading blockquote {
+  margin: 1rem 0;
+  padding-left: 1rem;
+  border-left: 3px solid var(--highlight);
+}
+
+@media (max-width: 40rem) {
+  :root {
+    --margin-width: 2.5rem;
+  }
+  .topbar {
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    padding-left: calc(var(--margin-width) + 1rem);
+  }
+  .page {
+    padding-left: calc(var(--margin-width) + 1rem);
+    padding-right: 1rem;
+  }
+  .margin {
+    left: calc(-1 * var(--margin-width) - 1rem);
+  }
+  .panel {
+    padding: 1rem 1.25rem 3rem;
+  }
+  .panel-head {
+    margin: -1rem -1.25rem 1rem;
+    padding: 1rem 1.25rem 0.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
+}

@@ -15,7 +15,9 @@ Status: draft 1. Date: 2026-10-02. The design is in `DESIGN-v3.md`. This file gi
 - Milestone 1: done.
 - Milestone 2: done. Pro Git and a book of the user parse with no lost text. The parser reads publisher CSS for headings, bold, and italic.
 - Milestone 2b: done. The parser reads tagged PDF files. A PDF book of the user parses with no lost text.
-- Milestone 3: the code and the tests are done. The exit test waits for the user: fill in `.env`, then run `npm run llm:check`.
+- Milestone 3: done. `npm run llm:check` passes with a model of the user.
+- Milestone 4: done. A preview of one chapter of a book of the user gave a good concept map. The full book can come later with `--replace`.
+- Milestone 5: done, with a smaller scope. The app has the home screen, the theme screen, and the map screen. Ingest stays a command for now. "Add book" and the ingest progress in the app come later.
 
 ## Milestones
 
@@ -23,7 +25,7 @@ Status: draft 1. Date: 2026-10-02. The design is in `DESIGN-v3.md`. This file gi
 2. Parse (ingest stage 1): EPUB or tagged PDF to Markdown sections, the checklist, and the parse warnings. Command: `npm run parse -- <book.epub | book.pdf>`. Exit test: a real EPUB parses, and the parse report shows no lost text.
 3. Model client: `LlmClient`, `AnthropicClient`, and `OpenAiClient`. Exit test: a script gets a JSON answer and a text answer with references from the selected provider.
 4. Extract, review, and merge (ingest stages 2 to 4), and the ingest report. For the first book, the merge step builds the concept map from an empty map. Command: `npm run ingest -- <theme> <book.epub>`. The command also writes the concept map to a Markdown file. Exit test: the user reads the concept map of one real book and finds no large gaps.
-5. App shell: the server, the React app, the home screen, the theme screen with "Add book", the ingest progress, the ingest report, and the map screen.
+5. App shell: the server, the React app, the home screen, the theme screen, and the map screen. "Add book", the ingest progress, and the ingest report in the app come later.
 6. Select, diagnose, and choose.
 7. The study queue.
 8. Teach: lessons with references, and the chat box.

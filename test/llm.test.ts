@@ -6,7 +6,7 @@ import type { ModelConfig } from "../src/config.js";
 import { AnthropicClient } from "../src/llm/anthropic.js";
 import { LlmError, type Source } from "../src/llm/index.js";
 import { OPENROUTER_URL, OpenAiClient, openAiOptions, strictJsonSchema } from "../src/llm/openai.js";
-import { checkReferences } from "../src/llm/references.js";
+import { checkReferences, containsQuote } from "../src/llm/references.js";
 
 const source: Source = {
   id: "3.2",
@@ -200,5 +200,24 @@ describe("helpers", () => {
       { number: 2, sourceId: "s", quote: "it is slow" },
     ], sources);
     expect(result).toEqual({ text: "A [1] B", references: [{ number: 1, sourceId: "s", quote: 'it is "fast", and' }] });
+  });
+});
+
+describe("containsQuote", () => {
+  const markdown = "-   **UNION ALL** does not remove duplicates, so it is faster than **UNION**.\n\n### 3\\. COUNT(column\\_name):\n\nIt counts `non-null` values.";
+
+  it("ignores Markdown formatting in the text and in the quote", () => {
+    expect(containsQuote(markdown, "UNION ALL does not remove duplicates, so it is faster than UNION.")).toBe(true);
+    expect(containsQuote(markdown, "3. COUNT(column_name):")).toBe(true);
+    expect(containsQuote(markdown, "It counts **non-null** values.")).toBe(true);
+  });
+
+  it("accepts a quote that the model shortened with an ellipsis", () => {
+    expect(containsQuote(markdown, "UNION ALL does not remove duplicates ... faster than UNION")).toBe(true);
+  });
+
+  it("rejects a quote with other words", () => {
+    expect(containsQuote(markdown, "UNION ALL never removes duplicates")).toBe(false);
+    expect(containsQuote(markdown, "")).toBe(false);
   });
 });

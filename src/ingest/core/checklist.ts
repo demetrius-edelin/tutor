@@ -20,7 +20,7 @@ const COMMON_WORDS = new Set(
 );
 
 function cleanTerm(text: string, maxWords: number, maxLength = 60): string | null {
-  const term = normalizeSpace(text).replace(/^[\s"“'‘([]+|[\s"”'’)\].,;:]+$/g, "");
+  const term = normalizeSpace(text).replace(/^[\s"“'‘([]+|[\s"”'’)\].,;:\-–—]+$/g, "");
   if (!term || term.length > maxLength) return null;
   if (term.split(" ").length > maxWords) return null;
   if (!/\p{L}/u.test(term)) return null;
