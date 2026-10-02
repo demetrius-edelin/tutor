@@ -70,6 +70,17 @@ function QueueEditor({ slug, initial }: { slug: string; initial: QueueView }) {
     move(from, to);
   };
 
+  const startNow = async (item: QueueItem) => {
+    setBusy(true);
+    try {
+      await postJson(`/api/concepts/${item.conceptId}/top`);
+      window.location.hash = href.lesson(item.conceptId);
+    } catch (problem) {
+      setError((problem as Error).message);
+      setBusy(false);
+    }
+  };
+
   const remove = (item: QueueItem, status: "skipped" | "new") =>
     save(`/api/themes/${encodeURIComponent(slug)}/queue/remove`, { conceptId: item.conceptId, status }, queue.items.filter((other) => other !== item));
 
@@ -127,6 +138,7 @@ function QueueEditor({ slug, initial }: { slug: string; initial: QueueView }) {
                 onDown={() => move(i, i + 1)}
                 onSkip={() => remove(item, "skipped")}
                 onLater={() => remove(item, "new")}
+                onStart={() => startNow(item)}
               />
             ))}
           </ol>
@@ -147,6 +159,7 @@ function QueueRow(props: {
   onDown: () => void;
   onSkip: () => void;
   onLater: () => void;
+  onStart: () => void;
 }) {
   const { item } = props;
   const sortable = useSortable({ id: item.conceptId });
@@ -173,6 +186,9 @@ function QueueRow(props: {
           <p className="objective">{item.objective}</p>
           {item.warning && <p className="warning">{item.warning}</p>}
           <p className="row-actions">
+            <button className="text-button strong" onClick={props.onStart} disabled={props.busy}>
+              {props.first ? "Start the lesson" : "Start now"}
+            </button>
             <button className="text-button" onClick={props.onTop} disabled={props.busy || props.first}>
               Top
             </button>

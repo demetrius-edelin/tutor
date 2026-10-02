@@ -8,6 +8,7 @@ export type Route =
   | { name: "map"; slug: string; concept: string | null }
   | { name: "select"; slug: string; moduleId: number }
   | { name: "queue"; slug: string }
+  | { name: "lesson"; conceptId: number }
   | { name: "session"; id: number }
   | { name: "not-found" };
 
@@ -24,6 +25,7 @@ export function parseHash(hash: string): Route {
     return { name: "select", slug: parts[1], moduleId: Number(parts[3]) };
   }
   if (parts[0] === "sessions" && parts[1] && parts.length === 2) return { name: "session", id: Number(parts[1]) };
+  if (parts[0] === "lessons" && parts[1] && parts.length === 2) return { name: "lesson", conceptId: Number(parts[1]) };
   return { name: "not-found" };
 }
 
@@ -35,6 +37,7 @@ export const href = {
   select: (slug: string, moduleId: number) => `#/themes/${encodeURIComponent(slug)}/modules/${moduleId}`,
   queue: (slug: string) => `#/themes/${encodeURIComponent(slug)}/queue`,
   session: (id: number) => `#/sessions/${id}`,
+  lesson: (conceptId: number) => `#/lessons/${conceptId}`,
 };
 
 export function useRoute(): Route {

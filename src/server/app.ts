@@ -14,6 +14,7 @@ import {
   sessionView,
   TutorError,
 } from "../tutor/diagnosis.js";
+import { askAboutLesson, lessonView, moveToTop, startLesson, testConcept } from "../tutor/lesson.js";
 import { applySuggestedOrder, queueView, removeFromQueue, reorderQueue } from "../tutor/queue.js";
 import type { Choice, Mark } from "./api-types.js";
 import { conceptMap, listThemes, section, themeDetail } from "./queries.js";
@@ -119,6 +120,33 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError }: Serve
   app.post<{ Params: { slug: string }; Body: { conceptId: number; status: "skipped" | "new" } }>("/api/themes/:slug/queue/remove", async (request) =>
     removeFromQueue(db, request.params.slug, Number(request.body?.conceptId), request.body?.status),
   );
+
+  // Lessons
+
+  app.get<{ Params: { id: string } }>("/api/concepts/:id/lesson", async (request) => lessonView(db, Number(request.params.id)));
+
+  // Start the lesson. With again, the tutor writes a new lesson round.
+  app.post<{ Params: { id: string }; Body: { again?: boolean } }>("/api/concepts/:id/lesson", async (request) =>
+    startLesson(db, llm, dataDir, Number(request.params.id), Boolean(request.body?.again)),
+  );
+
+  app.post<{ Params: { id: string }; Body: { text: string } }>("/api/lessons/:id/messages", async (request) =>
+    askAboutLesson(db, llm, dataDir, Number(request.params.id), String(request.body?.text ?? "")),
+  );
+
+  // Put a concept at the top of the study queue, for example a prerequisite or a concept to start now.
+  app.post<{ Params: { id: string } }>("/api/concepts/:id/top", async (request) => {
+    moveToTop(db, Number(request.params.id));
+    return { ok: true };
+  });
+
+  // Test one concept, for example a prerequisite.
+  app.post<{ Params: { id: string } }>("/api/concepts/:id/test", async (request) => {
+    const model = requireModel();
+    const sessionId = testConcept(db, Number(request.params.id));
+    runInBackground(prepareSession(db, model, dataDir, sessionId));
+    return { sessionId };
+  });
 
   if (appDir && existsSync(appDir)) {
     app.register(fastifyStatic, { root: resolve(appDir) });

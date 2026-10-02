@@ -1,0 +1,251 @@
+import { useEffect, useRef, useState } from "react";
+import type { LessonReference, LessonView } from "../../server/api-types";
+import { getJson, postJson } from "../api";
+import { CitedMarkdown, ReferenceList } from "../components/CitedMarkdown";
+import { Layout, Notice } from "../components/Layout";
+import { SectionPanel } from "../components/SectionPanel";
+import { STATUS_INFO } from "../components/StatusMark";
+import { href } from "../router";
+
+const LEVEL = { basic: "Basic", intermediate: "Intermediate", advanced: "Advanced" } as const;
+
+export function Lesson({ conceptId }: { conceptId: number }) {
+  const [view, setView] = useState<LessonView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getJson<LessonView>(`/api/concepts/${conceptId}/lesson`)
+      .then(setView)
+      .catch((problem: unknown) => setError((problem as Error).message));
+  }, [conceptId]);
+
+  const crumbs = view
+    ? [
+        { label: "Themes", href: href.home() },
+        { label: view.concept.theme.name, href: href.theme(view.concept.theme.slug) },
+        { label: "Study queue", href: href.queue(view.concept.theme.slug) },
+        { label: view.concept.name },
+      ]
+    : [{ label: "Themes", href: href.home() }];
+
+  return (
+    <Layout crumbs={crumbs}>
+      {!view && !error && <p className="quiet">Loading the lesson.</p>}
+      {!view && error && <Notice title="The lesson did not load">{<p>{error}</p>}</Notice>}
+      {view && !view.lesson && <LessonStart view={view} onStarted={setView} />}
+      {view && view.lesson && <LessonBody view={view} onChange={setView} />}
+    </Layout>
+  );
+}
+
+function ConceptHeader({ view }: { view: LessonView }) {
+  return (
+    <>
+      <h1>{view.concept.name}</h1>
+      <p className="lead">{view.concept.objective}</p>
+      <p className="quiet small">
+        {LEVEL[view.concept.level]} {view.concept.kind}, module {view.concept.module.position}, {view.concept.module.name}
+        {view.lesson && view.lesson.round > 1 ? `. Lesson ${view.lesson.round}` : ""}
+      </p>
+    </>
+  );
+}
+
+function LessonStart({ view, onStarted }: { view: LessonView; onStarted: (view: LessonView) => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const start = async () => {
+    setBusy("start");
+    setError(null);
+    try {
+      onStarted(await postJson<LessonView>(`/api/concepts/${view.concept.id}/lesson`));
+    } catch (problem) {
+      setError((problem as Error).message);
+      setBusy(null);
+    }
+  };
+
+  const learnFirst = async (conceptId: number) => {
+    setBusy("learn");
+    try {
+      await postJson(`/api/concepts/${conceptId}/top`);
+      window.location.hash = href.lesson(conceptId);
+    } catch (problem) {
+      setError((problem as Error).message);
+      setBusy(null);
+    }
+  };
+
+  const testIt = async (conceptId: number) => {
+    setBusy("test");
+    try {
+      const { sessionId } = await postJson<{ sessionId: number }>(`/api/concepts/${conceptId}/test`);
+      window.location.hash = href.session(sessionId);
+    } catch (problem) {
+      setError((problem as Error).message);
+      setBusy(null);
+    }
+  };
+
+  return (
+    <>
+      <ConceptHeader view={view} />
+      {view.missingPrerequisites.length > 0 && (
+        <div className="suggestion">
+          <p>{view.warning}</p>
+          {view.missingPrerequisites.map((prerequisite) => (
+            <p key={prerequisite.conceptId} className="button-row">
+              <span className="prerequisite-name">
+                {prerequisite.name} <span className="quiet">({STATUS_INFO[prerequisite.status].label})</span>
+              </span>
+              <button className="text-button strong" disabled={busy !== null} onClick={() => learnFirst(prerequisite.conceptId)}>
+                {prerequisite.status === "learning" ? "Continue its lesson" : "Learn it first"}
+              </button>
+              <button className="text-button" disabled={busy !== null} onClick={() => testIt(prerequisite.conceptId)}>
+                Test it
+              </button>
+            </p>
+          ))}
+        </div>
+      )}
+      <p>The tutor writes the lesson from these sections of your books:</p>
+      <ul className="plain-list sources-list">
+        {view.sources.map((source) => (
+          <li key={source.sectionId}>
+            {source.book}, section {source.ref} {source.title}
+            {source.page ? `, page ${source.page}` : ""}
+          </li>
+        ))}
+      </ul>
+      <p>
+        <button className="button" onClick={start} disabled={busy !== null}>
+          {busy === "start" ? "Writing the lesson" : view.missingPrerequisites.length > 0 ? "Start the lesson anyway" : "Start the lesson"}
+        </button>
+      </p>
+      {busy === "start" && (
+        <p className="quiet" role="status">
+          The tutor writes the lesson. This can take a minute.
+        </p>
+      )}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </>
+  );
+}
+
+function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: LessonView) => void }) {
+  const lesson = view.lesson!;
+  const [open, setOpen] = useState<LessonReference | null>(null);
+  const [question, setQuestion] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [rewriting, setRewriting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const end = useRef<HTMLDivElement>(null);
+
+  const ask = async () => {
+    setAsking(true);
+    setError(null);
+    try {
+      onChange(await postJson<LessonView>(`/api/lessons/${lesson.id}/messages`, { text: question }));
+      setQuestion("");
+      requestAnimationFrame(() => end.current?.scrollIntoView({ block: "end" }));
+    } catch (problem) {
+      setError((problem as Error).message);
+    }
+    setAsking(false);
+  };
+
+  const teachAgain = async () => {
+    setRewriting(true);
+    setError(null);
+    try {
+      onChange(await postJson<LessonView>(`/api/concepts/${view.concept.id}/lesson`, { again: true }));
+      window.scrollTo({ top: 0 });
+    } catch (problem) {
+      setError((problem as Error).message);
+    }
+    setRewriting(false);
+  };
+
+  return (
+    <>
+      <ConceptHeader view={view} />
+      {lesson.references.length === 0 && (
+        <p className="warning">This lesson has no reference that the tutor could find in your books. Check it against the book sections.</p>
+      )}
+      <article className="reading lesson">
+        <CitedMarkdown text={lesson.text} references={lesson.references} onOpen={setOpen} />
+      </article>
+
+      {lesson.references.length > 0 && (
+        <section aria-labelledby="references-heading">
+          <h2 id="references-heading">References</h2>
+          <ReferenceList references={lesson.references} onOpen={setOpen} />
+        </section>
+      )}
+
+      <section aria-labelledby="questions-heading" className="chat">
+        <h2 id="questions-heading">Questions</h2>
+        {view.messages.length === 0 && <p className="quiet">Ask about anything in the lesson that is not clear.</p>}
+        {view.messages.map((message) =>
+          message.role === "user" ? (
+            <p key={message.id} className="chat-question">
+              {message.text}
+            </p>
+          ) : (
+            <div key={message.id} className="chat-answer reading">
+              <CitedMarkdown text={message.text} references={message.references} onOpen={setOpen} />
+              <ReferenceList references={message.references} onOpen={setOpen} />
+            </div>
+          ),
+        )}
+        <div ref={end} />
+        <div className="chat-input">
+          <label htmlFor="question" className="visually-hidden">
+            Your question
+          </label>
+          <textarea
+            id="question"
+            rows={3}
+            value={question}
+            placeholder="Ask a question about the lesson"
+            onChange={(event) => setQuestion(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && question.trim() && !asking) void ask();
+            }}
+          />
+          <button className="button" onClick={ask} disabled={asking || question.trim() === ""}>
+            {asking ? "Writing the answer" : "Ask"}
+          </button>
+        </div>
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+      </section>
+
+      <section aria-labelledby="after-heading">
+        <h2 id="after-heading">After the lesson</h2>
+        <p>
+          The test after the lesson comes in the next version of the tutor. If the lesson was not clear, the tutor can teach the concept again
+          from a different angle.
+        </p>
+        <p className="button-row">
+          <button className="text-button strong" onClick={teachAgain} disabled={rewriting}>
+            {rewriting ? "Writing a new lesson" : "Teach it again"}
+          </button>
+          <a className="text-link" href={href.queue(view.concept.theme.slug)}>
+            Back to the study queue
+          </a>
+        </p>
+      </section>
+
+      {open && <SectionPanel sectionId={open.sectionId} quote={open.quote} onClose={() => setOpen(null)} />}
+    </>
+  );
+}

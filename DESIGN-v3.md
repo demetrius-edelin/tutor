@@ -253,7 +253,7 @@ The queue screen gives the user these tools:
 - The "Later" button takes a concept out of the queue and sets it back to not started.
 - The "Skip" button skips a concept.
 - The "Use the suggested order" button applies the order of the tutor to the full queue. If the order of the tutor is the same as the current order, the button does not show.
-- Later, with the lessons: the "Start now" button moves a concept to the top and starts its lesson.
+- The "Start now" button moves a concept to the top and opens its lesson.
 
 The tutor does not block the order of the user. But it shows a warning on a concept with a prerequisite that is not `known` or `mastered`. Before such a lesson starts, the tutor offers three actions: "Learn the prerequisite first", "Test the prerequisite", or "Continue". The user selects one.
 
@@ -275,6 +275,8 @@ The lesson contains these parts:
 A lesson takes 5 to 10 minutes to read. The app shows the lesson as formatted Markdown.
 
 After the lesson, the user can ask questions in a chat box below the lesson. The model answers with the same sources in the prompt. Then the user clicks "Test me".
+
+If the lesson was not clear, the user clicks "Teach it again". Then the model writes a new lesson round, from a different angle and with different examples. A concept in a lesson has the status `learning`. Only one concept of a theme has this status.
 
 Each reference contains the exact quote from a source section. The tutor checks each quote against the text of the section. Thus, each reference points to text that is in the book. Each provider makes references in a different way. See "Model".
 

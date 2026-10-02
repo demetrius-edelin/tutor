@@ -1,10 +1,12 @@
 import type { LlmClient, ObjectRequest, Source, TextRequest, TextResult } from "../../src/llm/index.js";
+import { checkReferences } from "../../src/llm/references.js";
 
-export type Stage = "extract" | "review" | "merge" | "questions" | "grade";
+export type Stage = "extract" | "review" | "merge" | "questions" | "grade" | "lesson" | "chat";
 
 export interface FakeCall {
   stage: Stage;
   request: ObjectRequest<unknown>;
+  textRequest?: TextRequest;
 }
 
 // The concept that the fake model finds in a source: the section title, and the first words as the quote.
@@ -25,6 +27,7 @@ export interface FakeHandlers {
   merge?: (ids: string[], prompt: string) => unknown;
   questions?: (conceptIds: string[], sources: Source[]) => unknown;
   grade?: (prompt: string) => unknown;
+  text?: (request: TextRequest) => TextResult;
 }
 
 // Default questions: the first option is correct, and a good open answer contains "point".
@@ -105,7 +108,14 @@ export class FakeLlm implements LlmClient {
     return request.schema.parse(answer);
   }
 
-  async text(_request: TextRequest): Promise<TextResult> {
-    return { text: "", references: [] };
+  async text(request: TextRequest): Promise<TextResult> {
+    const stage: Stage = request.system.startsWith("You are a tutor. You teach") ? "lesson" : "chat";
+    this.calls.push({ stage, request: { system: request.system, prompt: "", schema: null as never }, textRequest: request });
+    if (this.handlers.text) return this.handlers.text(request);
+    // One reference to the first words of the first source. The check keeps it, because the quote is in the source.
+    const source = request.sources[0];
+    const quote = source ? defaultConcept(source).quote : "";
+    const text = stage === "lesson" ? `## Explanation\n\nThe concept, from the book [1].` : `The answer to your question [1].`;
+    return checkReferences(text, source ? [{ number: 1, sourceId: source.id, quote }] : [], request.sources);
   }
 }

@@ -30,6 +30,8 @@ export interface BookSummary {
 export interface ThemeDetail extends ThemeSummary {
   bookList: BookSummary[];
   nextModule: NextModule | null;
+  // The first concept of the study queue, or null if the queue is empty.
+  nextToLearn: { conceptId: number; name: string; status: Status } | null;
 }
 
 export interface SourceRef {
@@ -177,4 +179,48 @@ export interface QueueView {
   items: QueueItem[];
   // True if the suggested order of the tutor is different from the current order.
   suggestionDiffers: boolean;
+}
+
+// Lessons
+
+export interface SourceInfo {
+  sectionId: number;
+  ref: string;
+  title: string;
+  book: string;
+  page: string | null;
+}
+
+export interface LessonReference extends SourceInfo {
+  number: number;
+  quote: string;
+}
+
+export interface LessonMessage {
+  id: number;
+  role: "user" | "assistant";
+  text: string;
+  references: LessonReference[];
+}
+
+export interface LessonView {
+  concept: {
+    id: number;
+    slug: string;
+    name: string;
+    objective: string;
+    kind: "knowledge" | "skill";
+    level: "basic" | "intermediate" | "advanced";
+    status: Status;
+    theme: { slug: string; name: string };
+    module: { id: number; position: number; name: string };
+  };
+  // The latest lesson about the concept, or null if the tutor did not teach it yet.
+  lesson: { id: number; round: number; text: string; references: LessonReference[]; createdAt: string } | null;
+  messages: LessonMessage[];
+  sources: SourceInfo[];
+  // The prerequisites that the learner does not know yet, and a warning about them.
+  missingPrerequisites: { conceptId: number; slug: string; name: string; status: Status; position: number | null }[];
+  warning: string | null;
+  queuePosition: number | null;
 }

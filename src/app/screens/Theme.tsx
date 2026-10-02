@@ -33,10 +33,16 @@ function ThemeView({ theme }: { theme: ThemeDetail }) {
         <section aria-labelledby="queue-heading" className="queue-summary">
           <h2 id="queue-heading">Study queue</h2>
           <p>
-            {plural(theme.progress.queued + theme.progress.learning, "concept")} to learn. Check the order before the lessons.
+            {plural(theme.progress.queued + theme.progress.learning, "concept")} to learn.
+            {theme.nextToLearn ? ` Next: ${theme.nextToLearn.name}.` : ""}
           </p>
-          <p>
-            <a className="button" href={href.queue(theme.slug)}>
+          <p className="button-row">
+            {theme.nextToLearn && (
+              <a className="button" href={href.lesson(theme.nextToLearn.conceptId)}>
+                {theme.nextToLearn.status === "learning" ? "Continue the lesson" : "Start the lesson"}
+              </a>
+            )}
+            <a className="text-link" href={href.queue(theme.slug)}>
               Open the study queue
             </a>
           </p>

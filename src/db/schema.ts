@@ -145,6 +145,12 @@ ALTER TABLE questions ADD COLUMN session_id INTEGER REFERENCES sessions(id) ON D
 ALTER TABLE questions ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
 `;
 
-export const MIGRATIONS = [V1, V2];
+// Version 3: lessons and chat answers keep their references as JSON.
+const V3 = `
+ALTER TABLE lessons ADD COLUMN refs TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE lesson_messages ADD COLUMN refs TEXT NOT NULL DEFAULT '[]';
+`;
+
+export const MIGRATIONS = [V1, V2, V3];
 export const SCHEMA_VERSION = MIGRATIONS.length;
 

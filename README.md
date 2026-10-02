@@ -14,8 +14,9 @@ The project is in phase 1. These parts work now:
 - The app shows the themes, the books, the progress, and the concept map.
 - The diagnosis: you mark the concepts of a module, the tutor tests them, and you choose what to learn.
 - The study queue: the concepts to learn, in an order that you can change.
+- The lessons: the tutor teaches each concept from your books, with references, and answers your questions.
 
-The lessons and the tests come next. See `PLAN.md` for the build order and `DESIGN-v3.md` for the design.
+The test after each lesson comes next. See `PLAN.md` for the build order and `DESIGN-v3.md` for the design.
 
 ## Requirements
 
@@ -60,6 +61,8 @@ Then open http://localhost:3000 in a browser. The app has these screens:
 - Choose what to test: mark the concepts of a module as Test, Learn, Skip, or Later. Later keeps a concept for another day. You can also change the mark of a concept that you marked already.
 - Diagnosis: 2 questions for each concept that you marked Test, then the results. A concept that you do not know goes to your study queue, or you skip it.
 - Study queue: the concepts to learn, in order. Drag a concept, or use Top, Up, and Down, to change the order. A red note shows a prerequisite that comes later or that you did not learn. "Use the suggested order" puts prerequisites first, then the module order, then basic before advanced.
+
+- Lesson: the tutor teaches the concept from all its book sections. A number in the text is a reference: it opens the book section, with the quote. Ask questions in the box below the lesson. "Teach it again" writes a new lesson from a different angle. If a prerequisite is missing, the lesson page offers to learn it first or to test it.
 
 The diagnosis uses the model in `.env`. The model writes the questions and grades the open answers. If you think that a grade is wrong, use "Dispute the grade". A disputed answer counts as correct.
 

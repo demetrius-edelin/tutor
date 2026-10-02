@@ -5,7 +5,7 @@ import type { SectionView } from "../../server/api-types";
 import { useApi } from "../api";
 
 // A panel at the side of the page with the text of one book section.
-export function SectionPanel({ sectionId, onClose }: { sectionId: number; onClose: () => void }) {
+export function SectionPanel({ sectionId, quote, onClose }: { sectionId: number; quote?: string; onClose: () => void }) {
   const section = useApi<SectionView>(`/api/sections/${sectionId}`);
   const closeButton = useRef<HTMLButtonElement>(null);
 
@@ -38,6 +38,11 @@ export function SectionPanel({ sectionId, onClose }: { sectionId: number; onClos
             Close
           </button>
         </div>
+        {quote && (
+          <blockquote className="quote panel-quote">
+            <span>{quote}</span>
+          </blockquote>
+        )}
         {section.state === "loading" && <p className="quiet">Loading the section.</p>}
         {section.state === "error" && <p>{section.message}</p>}
         {section.state === "ready" && (

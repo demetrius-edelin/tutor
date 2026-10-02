@@ -74,6 +74,12 @@ export function themeDetail(db: Db, slug: string): ThemeDetail | undefined {
     ...summary(db, theme),
     bookList: books.map(({ file, ...book }) => ({ ...book, format: extname(file).toLowerCase() === ".pdf" ? "pdf" : "epub" })),
     nextModule: next ?? null,
+    nextToLearn:
+      (db
+        .prepare(
+          "SELECT id AS conceptId, name, status FROM concepts WHERE theme_id = ? AND status IN ('queued', 'learning') ORDER BY queue_pos, id LIMIT 1",
+        )
+        .get(theme.id) as ThemeDetail["nextToLearn"] | undefined) ?? null,
   };
 }
 
