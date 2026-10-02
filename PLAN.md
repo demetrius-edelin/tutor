@@ -21,6 +21,7 @@ Status: draft 1. Date: 2026-10-02. The design is in `DESIGN-v3.md`. This file gi
 - Milestone 6: done. The app has the select screen, the diagnosis with grades and disputes, and the results with the choices. The database has schema migrations now.
 - Milestone 7: done. The study queue has a suggested order, drag and drop, move buttons, prerequisite warnings, and Later and Skip.
 - Milestone 8: done. Lessons with checked references, the chat box, Teach it again, Start now in the queue, and the prerequisite actions.
+- Milestone 9: done. The test after a lesson has the pass rule, mastered concepts, and the next lesson. After a fail, the user selects an action. After 3 fails, the tutor offers a prerequisite test. Phase 1 is complete.
 
 ## Milestones
 

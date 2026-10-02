@@ -1,7 +1,7 @@
 import type { LlmClient, ObjectRequest, Source, TextRequest, TextResult } from "../../src/llm/index.js";
 import { checkReferences } from "../../src/llm/references.js";
 
-export type Stage = "extract" | "review" | "merge" | "questions" | "grade" | "lesson" | "chat";
+export type Stage = "extract" | "review" | "merge" | "questions" | "test" | "grade" | "lesson" | "chat";
 
 export interface FakeCall {
   stage: Stage;
@@ -26,6 +26,7 @@ export interface FakeHandlers {
   review?: (sources: Source[], prompt: string) => unknown;
   merge?: (ids: string[], prompt: string) => unknown;
   questions?: (conceptIds: string[], sources: Source[]) => unknown;
+  test?: (prompt: string, sources: Source[]) => unknown;
   grade?: (prompt: string) => unknown;
   text?: (request: TextRequest) => TextResult;
 }
@@ -70,6 +71,8 @@ export class FakeLlm implements LlmClient {
         ? "review"
         : request.system.startsWith("You write diagnosis questions")
           ? "questions"
+          : request.system.startsWith("You write test questions")
+            ? "test"
           : request.system.startsWith("You grade the answer")
             ? "grade"
             : "merge";
@@ -85,6 +88,13 @@ export class FakeLlm implements LlmClient {
     } else if (stage === "questions") {
       const ids = [...request.prompt.matchAll(/^(c\d+): /gm)].map((match) => match[1]!);
       answer = this.handlers.questions?.(ids, sources) ?? defaultQuestions(ids, sources);
+    } else if (stage === "test") {
+      const sectionId = sources[0]?.id ?? "0";
+      answer = this.handlers.test?.(request.prompt, sources) ?? {
+        recall: { question: "Which option is right?", options: ["right", "wrong one", "wrong two", "wrong three"], correctIndex: 0, explanation: "The first option is right.", sectionId },
+        explain: { question: "Explain the concept.", keyPoints: ["point"], modelAnswer: "The point.", sectionId },
+        apply: { question: "Use the concept in this case.", keyPoints: ["point"], modelAnswer: "The point, used.", sectionId },
+      };
     } else if (stage === "grade") {
       const learner = request.prompt.split("The answer of the learner:\n")[1] ?? "";
       answer = this.handlers.grade?.(request.prompt) ?? {

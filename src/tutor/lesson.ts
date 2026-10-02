@@ -1,7 +1,7 @@
 import type { Db } from "../db/index.js";
 import type { LlmClient, Message, Reference, Source } from "../llm/index.js";
-import type { LessonMessage, LessonReference, LessonView, SourceInfo, Status } from "../server/api-types.js";
-import { applyMarks, enqueue, readSection, TutorError } from "./diagnosis.js";
+import type { AfterTestAction, LessonMessage, LessonReference, LessonView, SourceInfo, Status } from "../server/api-types.js";
+import { applyMarks, createSession, enqueue, failedTests, readSection, TutorError } from "./diagnosis.js";
 
 // A lesson: the model teaches one concept from all its book sections, with references.
 // After the lesson, the learner can ask questions. The model answers with the same sources.
@@ -104,7 +104,7 @@ function missingPrerequisites(db: Db, concept: ConceptRow): LessonView["missingP
     .map((row) => ({ conceptId: row.conceptId, slug: row.slug, name: row.name, status: row.status, position: row.queue_pos }));
 }
 
-// The opening request of the lesson. The wrong answers of the diagnosis help the model to address the mistakes.
+// The opening request of the lesson. The latest wrong answers of the diagnosis and the tests help the model to address the mistakes.
 function lessonRequest(db: Db, concept: ConceptRow, round: number): string {
   const wrong = db
     .prepare(
@@ -175,7 +175,60 @@ export function lessonView(db: Db, conceptId: number): LessonView {
     missingPrerequisites: missing,
     warning: missing.length > 0 ? `This concept needs ${names}, which you do not know yet.` : null,
     queuePosition: concept.queue_pos,
+    openTestId: openTest(db, conceptId),
+    failedTests: failedTests(db, conceptId),
   };
+}
+
+// The latest test after a lesson that the learner did not finish, or null.
+function openTest(db: Db, conceptId: number): number | null {
+  return (
+    (db
+      .prepare(
+        `SELECT s.id FROM sessions s JOIN session_concepts sc ON sc.session_id = s.id
+         WHERE s.kind = 'test' AND s.status <> 'finished' AND sc.concept_id = ? ORDER BY s.id DESC LIMIT 1`,
+      )
+      .pluck()
+      .get(conceptId) as number | undefined) ?? null
+  );
+}
+
+// Start the test after a lesson: a session with 3 new questions. An unfinished test is used again.
+export function startTest(db: Db, conceptId: number): { sessionId: number; created: boolean } {
+  const concept = conceptRow(db, conceptId);
+  const lessons = db.prepare("SELECT COUNT(*) FROM lessons WHERE concept_id = ?").pluck().get(conceptId) as number;
+  if (lessons === 0) throw new TutorError("Read the lesson first. The test comes after the lesson.", 409);
+  const open = openTest(db, conceptId);
+  if (open !== null) return { sessionId: open, created: false };
+  return { sessionId: createSession(db, concept.theme_id, concept.module_id, [conceptId], "test"), created: true };
+}
+
+// After a failed test, the learner can keep the concept for later or skip it.
+// "Teach it again" needs no call here: it is a new lesson round.
+export function afterTest(db: Db, conceptId: number, action: AfterTestAction): void {
+  conceptRow(db, conceptId);
+  if (action === "later") {
+    // The concept goes to the end of the queue.
+    db.transaction(() => {
+      db.prepare("UPDATE concepts SET queue_pos = NULL WHERE id = ?").run(conceptId);
+      enqueue(db, conceptId);
+    })();
+  } else if (action === "skip") {
+    db.prepare("UPDATE concepts SET status = 'skipped', queue_pos = NULL WHERE id = ?").run(conceptId);
+  } else {
+    throw new TutorError(`"${action}" is not a valid action.`);
+  }
+}
+
+// After repeated failed tests, a weak prerequisite is a frequent cause. Test all prerequisites of the concept.
+export function testPrerequisites(db: Db, conceptId: number): number {
+  const concept = conceptRow(db, conceptId);
+  const prerequisites = db.prepare("SELECT prereq_id FROM concept_prereqs WHERE concept_id = ? ORDER BY prereq_id").pluck().all(conceptId) as number[];
+  if (prerequisites.length === 0) throw new TutorError("This concept has no prerequisites.", 409);
+  return db.transaction(() => {
+    for (const id of prerequisites) db.prepare("UPDATE concepts SET status = 'to_test', queue_pos = NULL WHERE id = ?").run(id);
+    return createSession(db, concept.theme_id, null, prerequisites, "diagnose");
+  })();
 }
 
 // The concept in the lesson has the status "learning". Only one concept of a theme can have it.

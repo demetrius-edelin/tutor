@@ -1,6 +1,6 @@
 # Engineering Skills Tutor: Design
 
-Status: draft 3, revision 8. Date: 2026-10-02. This file replaces `DESIGN.md` (draft 2).
+Status: draft 3, revision 9. Date: 2026-10-02. This file replaces `DESIGN.md` (draft 2).
 
 ## Purpose
 
@@ -290,9 +290,11 @@ A test has 3 new questions on the concept:
 2. Explain: a short answer of 1 to 3 sentences.
 3. Apply: a scenario or a task. If the theme has an exercise runner, the apply question of a `skill` concept is a hands-on exercise.
 
+The model writes the questions from the sections of the concept. The prompt includes the questions that the user saw before, so that each test has new questions. If the user leaves a test before the end, "Test me" opens the same test again.
+
 To pass, the user must answer 2 of the 3 questions correctly. One of the 2 must be the apply question.
 
-After a pass, the concept becomes `mastered`, and the tutor goes to the next concept in the queue.
+After a pass, the concept becomes `mastered` and leaves the queue. The results show the next concept in the queue, with a "Next lesson" button.
 
 After a fail, the tutor shows the wrong answers and offers these actions:
 
@@ -300,7 +302,9 @@ After a fail, the tutor shows the wrong answers and offers these actions:
 - Later: the concept moves to the end of the queue.
 - Skip: the concept becomes `skipped`.
 
-After 3 fails on one concept, the tutor also offers "Test the prerequisites". A weak prerequisite is a frequent cause of repeated fails.
+After a fail, the concept stays `learning` until the user selects an action.
+
+After 3 fails on one concept, the tutor also offers "Test the prerequisites". A weak prerequisite is a frequent cause of repeated fails. This action sets each prerequisite to `to_test` and starts a diagnosis of the prerequisites.
 
 ## Grader
 

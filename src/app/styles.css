@@ -1118,3 +1118,18 @@ button.button {
     animation: none;
   }
 }
+
+/* The test after a lesson */
+
+.result-head {
+  position: relative;
+}
+
+.result-head .margin {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.next-steps li {
+  margin-bottom: 0.6rem;
+}

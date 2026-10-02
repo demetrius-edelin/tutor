@@ -136,3 +136,80 @@ export async function writeQuestions(llm: LlmClient, concepts: QuestionConcept[]
   if (missing.length > 0) await ask(missing);
   return concepts.flatMap((concept) => result.get(concept.id) ?? []);
 }
+
+// Test questions after a lesson: a recall question, an explain question, and an apply question.
+
+const TestQuestionsSchema = z.object({
+  recall: z.object({
+    question: z.string(),
+    options: z.array(z.string()),
+    correctIndex: z.number().int(),
+    explanation: z.string(),
+    sectionId: z.string(),
+  }),
+  explain: z.object({ question: z.string(), keyPoints: z.array(z.string()), modelAnswer: z.string(), sectionId: z.string() }),
+  apply: z.object({ question: z.string(), keyPoints: z.array(z.string()), modelAnswer: z.string(), sectionId: z.string() }),
+});
+
+export const TEST_QUESTIONS_SYSTEM = `You write test questions. The learner had a lesson about one concept. The test checks if the learner understands it now.
+Write three questions:
+- recall: a multiple-choice question with 4 options and exactly one correct option. The wrong options must look correct to a learner who did not understand the lesson. Do not use "all of the above" or "none of the above". The explanation tells in one or two sentences why the correct option is correct.
+- explain: the learner explains an idea of the concept in 1 to 3 sentences.
+- apply: the learner uses the concept in a concrete case, for example writes a query, predicts a result, finds an error, or chooses a solution and gives the reason. The learner can answer in a few lines.
+Rules:
+- Base the questions on the sources. Do not ask about the book, the author, the chapter, page numbers, or exact words.
+- keyPoints: 2 to 4 points that a correct answer must have. modelAnswer: a short correct answer.
+- sectionId: the id of the source that the question uses.
+- Do not repeat a question that the learner saw before. Test other parts of the concept, or the same part in a new way.`;
+
+// Write the three test questions for one concept. The function asks one more time if the answer is not usable.
+export async function writeTestQuestions(llm: LlmClient, concept: QuestionConcept, seen: string[]): Promise<WrittenQuestion[]> {
+  const sources = concept.sources.slice(0, 3).map((section) => ({ id: String(section.sectionId), title: section.title, text: section.markdown }));
+  const sectionOf = (id: string) => {
+    const number = Number(id.replace(/\D/g, ""));
+    return concept.sources.some((source) => source.sectionId === number) ? number : (concept.sources[0]?.sectionId ?? null);
+  };
+  const prompt = [
+    `Write the test questions for this concept: ${concept.name}`,
+    `Objective: ${concept.objective}`,
+    `Kind: ${concept.kind}`,
+    ...(seen.length > 0 ? ["", "The learner saw these questions before:", ...seen.slice(-10).map((text) => `- ${text}`)] : []),
+  ].join("\n");
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const answer = await llm.object({ system: TEST_QUESTIONS_SYSTEM, sources, prompt, schema: TestQuestionsSchema });
+    const options = [...new Set(answer.recall.options.map((option) => option.trim()).filter(Boolean))];
+    const usable =
+      answer.recall.question.trim() !== "" &&
+      options.length >= 2 &&
+      answer.recall.correctIndex >= 0 &&
+      answer.recall.correctIndex < options.length &&
+      answer.explain.question.trim() !== "" &&
+      answer.apply.question.trim() !== "";
+    if (!usable) continue;
+    const shuffled = shuffle(options, answer.recall.correctIndex);
+    const open = (kind: "short" | "apply", item: z.infer<typeof TestQuestionsSchema>["explain"]): WrittenQuestion => ({
+      conceptId: concept.id,
+      kind,
+      text: item.question.trim(),
+      choices: null,
+      answer: item.modelAnswer.trim(),
+      keyPoints: item.keyPoints.map((point) => point.trim()).filter(Boolean),
+      sectionId: sectionOf(item.sectionId),
+    });
+    return [
+      {
+        conceptId: concept.id,
+        kind: "choice",
+        text: answer.recall.question.trim(),
+        choices: shuffled.options,
+        answer: String(shuffled.correct),
+        keyPoints: [answer.recall.explanation.trim()],
+        sectionId: sectionOf(answer.recall.sectionId),
+      },
+      open("short", answer.explain),
+      open("apply", answer.apply),
+    ];
+  }
+  return [];
+}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { AttemptView, Choice, QuestionView, SessionView } from "../../server/api-types";
+import type { AfterTestAction, AttemptView, Choice, QuestionView, SessionView } from "../../server/api-types";
 import { getJson, postJson } from "../api";
 import { Layout, Notice } from "../components/Layout";
 import { SectionPanel } from "../components/SectionPanel";
@@ -28,26 +28,45 @@ export function Session({ id }: { id: number }) {
     return () => window.clearInterval(timer);
   }, [session?.status, load]);
 
-  const crumbs = session
-    ? [
-        { label: "Themes", href: href.home() },
-        { label: session.theme.name, href: href.theme(session.theme.slug) },
-        { label: "Concept map", href: href.map(session.theme.slug) },
-        { label: "Diagnosis" },
-      ]
-    : [{ label: "Themes", href: href.home() }];
+  const crumbs = !session
+    ? [{ label: "Themes", href: href.home() }]
+    : session.kind === "test" && session.concept
+      ? [
+          { label: "Themes", href: href.home() },
+          { label: session.theme.name, href: href.theme(session.theme.slug) },
+          { label: "Study queue", href: href.queue(session.theme.slug) },
+          { label: session.concept.name, href: href.lesson(session.concept.id) },
+          { label: "Test" },
+        ]
+      : [
+          { label: "Themes", href: href.home() },
+          { label: session.theme.name, href: href.theme(session.theme.slug) },
+          { label: "Concept map", href: href.map(session.theme.slug) },
+          { label: "Diagnosis" },
+        ];
 
   return (
     <Layout crumbs={crumbs}>
-      {!session && !error && <p className="quiet">Loading the diagnosis.</p>}
-      {error && !session && <Notice title="The diagnosis did not load">{<p>{error}</p>}</Notice>}
+      {!session && !error && <p className="quiet">Loading the questions.</p>}
+      {error && !session && <Notice title="The questions did not load">{<p>{error}</p>}</Notice>}
       {session && <SessionBody session={session} onChange={setSession} />}
     </Layout>
   );
 }
 
 function SessionBody({ session, onChange }: { session: SessionView; onChange: (session: SessionView) => void }) {
-  const title = session.module ? `Diagnosis: ${session.module.name}` : "Diagnosis";
+  const test = session.kind === "test";
+  const title = test && session.concept ? `Test: ${session.concept.name}` : session.module ? `Diagnosis: ${session.module.name}` : "Diagnosis";
+  if (session.status === "preparing" && test) {
+    return (
+      <>
+        <h1>{title}</h1>
+        <p className="lead" role="status">
+          The tutor writes 3 new questions about the concept. This can take a minute.
+        </p>
+      </>
+    );
+  }
   if (session.status === "preparing") {
     return (
       <>
@@ -63,7 +82,7 @@ function SessionBody({ session, onChange }: { session: SessionView; onChange: (s
     );
   }
   if (session.status === "failed") return <FailedView session={session} title={title} onChange={onChange} />;
-  if (session.status === "finished") return <ResultsView session={session} />;
+  if (session.status === "finished") return test ? <TestResults session={session} /> : <ResultsView session={session} />;
   return <QuestionFlow session={session} title={title} onChange={onChange} />;
 }
 
@@ -122,10 +141,17 @@ function QuestionFlow({ session, title, onChange }: { session: SessionView; titl
     <>
       <h1>{title}</h1>
       <p className="lead">
-        Question {index + 1} of {session.questions.length}. Answer from what you know now. A wrong answer only puts the concept in
-        your study queue.
+        Question {index + 1} of {session.questions.length}.{" "}
+        {session.kind === "test"
+          ? "To pass the test, answer 2 questions correctly. The apply question must be one of them."
+          : "Answer from what you know now. A wrong answer only puts the concept in your study queue."}
       </p>
-      <QuestionCard key={question.id} question={question} onAnswered={updateAttempt} />
+      <QuestionCard
+        key={question.id}
+        question={question}
+        about={session.kind === "test" ? TEST_LABEL[question.kind] : `About: ${question.conceptName}`}
+        onAnswered={updateAttempt}
+      />
       <div className="action-bar">
         <span className="quiet">
           {answered} of {session.questions.length} answered
@@ -155,7 +181,13 @@ function QuestionFlow({ session, title, onChange }: { session: SessionView; titl
 
 const VERDICT: Record<number, string> = { 2: "Correct", 1: "Partly correct", 0: "Not correct" };
 
-function QuestionCard({ question, onAnswered }: { question: QuestionView; onAnswered: (attempt: AttemptView) => void }) {
+const TEST_LABEL: Record<QuestionView["kind"], string> = {
+  choice: "Recall question",
+  short: "Explain question",
+  apply: "Apply question. You must answer this question correctly to pass.",
+};
+
+function QuestionCard({ question, about, onAnswered }: { question: QuestionView; about: string; onAnswered: (attempt: AttemptView) => void }) {
   const [choice, setChoice] = useState<number | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -191,7 +223,7 @@ function QuestionCard({ question, onAnswered }: { question: QuestionView; onAnsw
           <span className={`mark ${attempt.correct ? "mark-known" : "mark-failed"}`}>{attempt.correct ? "✓" : "✗"}</span>
         </div>
       )}
-      <p className="question-about">About: {question.conceptName}</p>
+      <p className="question-about">{about}</p>
       <p className="question-text">{question.text}</p>
 
       {question.kind === "choice" && question.choices && (
@@ -389,6 +421,149 @@ function ResultsView({ session }: { session: SessionView }) {
         </button>
       </div>
       {error && <p className="error">{error}</p>}
+    </>
+  );
+}
+
+// The result of a test after a lesson. A pass makes the concept mastered. After a fail, the learner
+// chooses: teach it again, keep it for later, or skip it. After 3 fails, the tutor offers to test the prerequisites.
+function TestResults({ session }: { session: SessionView }) {
+  const outcome = session.outcome!;
+  const concept = session.concept!;
+  const wrong = session.results?.[0]?.wrong ?? [];
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Do the action, then open the page that the action returns.
+  const run = async (name: string, action: () => Promise<string>) => {
+    setBusy(name);
+    setError(null);
+    try {
+      window.location.hash = await action();
+    } catch (problem) {
+      setError((problem as Error).message);
+      setBusy(null);
+    }
+  };
+
+  const teachAgain = () =>
+    run("again", async () => {
+      await postJson(`/api/concepts/${concept.id}/lesson`, { again: true });
+      return href.lesson(concept.id);
+    });
+  const after = (action: AfterTestAction) =>
+    run(action, async () => {
+      await postJson(`/api/concepts/${concept.id}/after-test`, { action });
+      return href.queue(session.theme.slug);
+    });
+  const testPrerequisites = () =>
+    run("prerequisites", async () => {
+      const { sessionId } = await postJson<{ sessionId: number }>(`/api/concepts/${concept.id}/test-prerequisites`);
+      return href.session(sessionId);
+    });
+
+  const score = `${outcome.correct} of ${outcome.total} answers are correct.`;
+  const wrongList = wrong.length > 0 && (
+    <section aria-labelledby="wrong-heading">
+      <h2 id="wrong-heading">Wrong answers</h2>
+      {wrong.map((item) => (
+        <div key={item.question} className="wrong">
+          <p className="wrong-question">{item.question}</p>
+          <p className="quiet">
+            Your answer: {item.answer}
+            {item.feedback && item.feedback !== "Not correct." ? ` ${item.feedback}` : ""}
+          </p>
+        </div>
+      ))}
+    </section>
+  );
+
+  if (outcome.passed) {
+    return (
+      <>
+        <div className="result-head">
+          <div className="margin" aria-hidden="true">
+            <StatusMark status="mastered" />
+          </div>
+          <h1>You passed the test</h1>
+        </div>
+        <p className="lead">
+          {score} {concept.name} is now mastered, and it left your study queue.
+        </p>
+        {wrongList}
+        <p className="button-row">
+          {outcome.next ? (
+            <a className="button" href={href.lesson(outcome.next.conceptId)}>
+              Next lesson: {outcome.next.name}
+            </a>
+          ) : (
+            <span>Your study queue is empty.</span>
+          )}
+          <a className="text-link" href={outcome.next ? href.queue(session.theme.slug) : href.map(session.theme.slug)}>
+            {outcome.next ? "Open the study queue" : "Open the concept map"}
+          </a>
+        </p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="result-head">
+        <div className="margin" aria-hidden="true">
+          <StatusMark status="failed" />
+        </div>
+        <h1>You did not pass the test</h1>
+      </div>
+      <p className="lead">
+        {score}{" "}
+        {outcome.correct >= 2
+          ? "To pass, the answer to the apply question must be correct."
+          : "To pass, answer 2 questions correctly. The apply question must be one of them."}
+      </p>
+      {wrongList}
+      {outcome.failedTests >= 3 && outcome.hasPrerequisites && (
+        <div className="suggestion">
+          <p>
+            You did not pass this test {outcome.failedTests} times. A gap in a prerequisite is a frequent cause. The tutor can test the
+            prerequisites of {concept.name}.
+          </p>
+          <button className="button" onClick={testPrerequisites} disabled={busy !== null}>
+            {busy === "prerequisites" ? "Starting" : "Test the prerequisites"}
+          </button>
+        </div>
+      )}
+      <h2>What next</h2>
+      <ul className="plain-list next-steps">
+        <li>
+          <button className="text-button strong" onClick={teachAgain} disabled={busy !== null}>
+            {busy === "again" ? "Writing a new lesson" : "Teach it again"}
+          </button>{" "}
+          <span className="quiet">The tutor writes a new lesson from a different angle. Then you take a new test.</span>
+        </li>
+        <li>
+          <button className="text-button" onClick={() => after("later")} disabled={busy !== null}>
+            Later
+          </button>{" "}
+          <span className="quiet">The concept goes to the end of your study queue.</span>
+        </li>
+        <li>
+          <button className="text-button" onClick={() => after("skip")} disabled={busy !== null}>
+            Skip
+          </button>{" "}
+          <span className="quiet">The concept leaves your study queue. You do not learn it.</span>
+        </li>
+      </ul>
+      {busy === "again" && (
+        <p className="quiet" role="status">
+          The tutor writes the lesson. This can take a minute.
+        </p>
+      )}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
     </>
   );
 }

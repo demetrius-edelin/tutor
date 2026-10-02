@@ -14,9 +14,9 @@ import {
   sessionView,
   TutorError,
 } from "../tutor/diagnosis.js";
-import { askAboutLesson, lessonView, moveToTop, startLesson, testConcept } from "../tutor/lesson.js";
+import { afterTest, askAboutLesson, lessonView, moveToTop, startLesson, startTest, testConcept, testPrerequisites } from "../tutor/lesson.js";
 import { applySuggestedOrder, queueView, removeFromQueue, reorderQueue } from "../tutor/queue.js";
-import type { Choice, Mark } from "./api-types.js";
+import type { AfterTestAction, Choice, Mark } from "./api-types.js";
 import { conceptMap, listThemes, section, themeDetail } from "./queries.js";
 
 export interface ServerOptions {
@@ -144,6 +144,27 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError }: Serve
   app.post<{ Params: { id: string } }>("/api/concepts/:id/test", async (request) => {
     const model = requireModel();
     const sessionId = testConcept(db, Number(request.params.id));
+    runInBackground(prepareSession(db, model, dataDir, sessionId));
+    return { sessionId };
+  });
+
+  // The test after a lesson
+
+  app.post<{ Params: { id: string } }>("/api/concepts/:id/check", async (request) => {
+    const model = requireModel();
+    const result = startTest(db, Number(request.params.id));
+    if (result.created) runInBackground(prepareSession(db, model, dataDir, result.sessionId));
+    return { sessionId: result.sessionId };
+  });
+
+  app.post<{ Params: { id: string }; Body: { action: AfterTestAction } }>("/api/concepts/:id/after-test", async (request) => {
+    afterTest(db, Number(request.params.id), request.body?.action);
+    return { ok: true };
+  });
+
+  app.post<{ Params: { id: string } }>("/api/concepts/:id/test-prerequisites", async (request) => {
+    const model = requireModel();
+    const sessionId = testPrerequisites(db, Number(request.params.id));
     runInBackground(prepareSession(db, model, dataDir, sessionId));
     return { sessionId };
   });

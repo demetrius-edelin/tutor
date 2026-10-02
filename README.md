@@ -15,8 +15,9 @@ The project is in phase 1. These parts work now:
 - The diagnosis: you mark the concepts of a module, the tutor tests them, and you choose what to learn.
 - The study queue: the concepts to learn, in an order that you can change.
 - The lessons: the tutor teaches each concept from your books, with references, and answers your questions.
+- The test after each lesson: 3 new questions. A pass makes the concept mastered, and the tutor offers the next lesson.
 
-The test after each lesson comes next. See `PLAN.md` for the build order and `DESIGN-v3.md` for the design.
+Phase 1 is complete. The review schedule and "Add book" in the app come later. See `PLAN.md` for the build order and `DESIGN-v3.md` for the design.
 
 ## Requirements
 
@@ -63,8 +64,9 @@ Then open http://localhost:3000 in a browser. The app has these screens:
 - Study queue: the concepts to learn, in order. Drag a concept, or use Top, Up, and Down, to change the order. A red note shows a prerequisite that comes later or that you did not learn. "Use the suggested order" puts prerequisites first, then the module order, then basic before advanced.
 
 - Lesson: the tutor teaches the concept from all its book sections. A number in the text is a reference: it opens the book section, with the quote. Ask questions in the box below the lesson. "Teach it again" writes a new lesson from a different angle. If a prerequisite is missing, the lesson page offers to learn it first or to test it.
+- Test: after the lesson, click "Test me". The test has a recall question, an explain question, and an apply question. To pass, answer 2 questions correctly. The apply question must be one of them. After a pass, the concept is mastered, and the tutor offers the next lesson. After a fail, choose "Teach it again", "Later", or "Skip". The new lesson starts from your wrong answers. After 3 fails, the tutor also offers to test the prerequisites of the concept.
 
-The diagnosis uses the model in `.env`. The model writes the questions and grades the open answers. If you think that a grade is wrong, use "Dispute the grade". A disputed answer counts as correct.
+The diagnosis and the test use the model in `.env`. The model writes the questions and grades the open answers. If you think that a grade is wrong, use "Dispute the grade". A disputed answer counts as correct.
 
 The server listens only on your computer. To stop it, press Ctrl+C in the terminal.
 

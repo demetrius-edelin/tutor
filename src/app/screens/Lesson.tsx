@@ -143,6 +143,8 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
   const [rewriting, setRewriting] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null);
 
@@ -159,14 +161,26 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
     setAsking(false);
   };
 
+  const startTest = async () => {
+    setTesting(true);
+    setActionError(null);
+    try {
+      const { sessionId } = await postJson<{ sessionId: number }>(`/api/concepts/${view.concept.id}/check`);
+      window.location.hash = href.session(sessionId);
+    } catch (problem) {
+      setActionError((problem as Error).message);
+      setTesting(false);
+    }
+  };
+
   const teachAgain = async () => {
     setRewriting(true);
-    setError(null);
+    setActionError(null);
     try {
       onChange(await postJson<LessonView>(`/api/concepts/${view.concept.id}/lesson`, { again: true }));
       window.scrollTo({ top: 0 });
     } catch (problem) {
-      setError((problem as Error).message);
+      setActionError((problem as Error).message);
     }
     setRewriting(false);
   };
@@ -231,18 +245,36 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
 
       <section aria-labelledby="after-heading">
         <h2 id="after-heading">After the lesson</h2>
-        <p>
-          The test after the lesson comes in the next version of the tutor. If the lesson was not clear, the tutor can teach the concept again
-          from a different angle.
-        </p>
+        {view.concept.status === "mastered" ? (
+          <p>You passed the test. The concept is mastered.</p>
+        ) : (
+          <>
+            <p>
+              The test has 3 new questions: recall, explain, and apply. To pass, answer 2 questions correctly. The apply question must be one
+              of them.
+              {view.failedTests > 0 && ` You did not pass the test ${view.failedTests} ${view.failedTests === 1 ? "time" : "times"}.`}
+            </p>
+            <p>If the lesson was not clear, the tutor can teach the concept again from a different angle.</p>
+          </>
+        )}
         <p className="button-row">
-          <button className="text-button strong" onClick={teachAgain} disabled={rewriting}>
+          {view.concept.status !== "mastered" && (
+            <button className="button" onClick={startTest} disabled={testing || rewriting}>
+              {testing ? "Starting the test" : view.openTestId ? "Continue the test" : "Test me"}
+            </button>
+          )}
+          <button className="text-button strong" onClick={teachAgain} disabled={rewriting || testing}>
             {rewriting ? "Writing a new lesson" : "Teach it again"}
           </button>
           <a className="text-link" href={href.queue(view.concept.theme.slug)}>
             Back to the study queue
           </a>
         </p>
+        {actionError && (
+          <p className="error" role="alert">
+            {actionError}
+          </p>
+        )}
       </section>
 
       {open && <SectionPanel sectionId={open.sectionId} quote={open.quote} onClose={() => setOpen(null)} />}

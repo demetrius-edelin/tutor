@@ -10,9 +10,10 @@ import type {
   QuestionView,
   SessionView,
   Status,
+  TestOutcome,
 } from "../server/api-types.js";
 import { gradeAnswer } from "./grader.js";
-import { questionBatches, writeQuestions, type QuestionConcept } from "./questions.js";
+import { questionBatches, writeQuestions, writeTestQuestions, type QuestionConcept, type WrittenQuestion } from "./questions.js";
 
 // The diagnosis: the learner marks the concepts of a module, the tutor tests the concepts
 // with the mark "test", and the learner chooses what to learn from the results.
@@ -43,6 +44,18 @@ export function enqueue(db: Db, conceptId: number): void {
 
 function setStatus(db: Db, conceptId: number, status: Status): void {
   db.prepare("UPDATE concepts SET status = ?, queue_pos = NULL WHERE id = ?").run(status, conceptId);
+}
+
+// A new session with its concepts. The questions come later, from prepareSession.
+export function createSession(db: Db, themeId: number, moduleId: number | null, conceptIds: number[], kind: "diagnose" | "test"): number {
+  const sessionId = Number(
+    db
+      .prepare("INSERT INTO sessions (theme_id, module_id, kind, status, total) VALUES (?, ?, ?, 'preparing', ?)")
+      .run(themeId, moduleId, kind, conceptIds.length).lastInsertRowid,
+  );
+  const insert = db.prepare("INSERT INTO session_concepts (session_id, concept_id) VALUES (?, ?)");
+  for (const id of conceptIds) insert.run(sessionId, id);
+  return sessionId;
 }
 
 // Apply the marks of the learner for the concepts of one module. A concept without a mark
@@ -81,14 +94,7 @@ export function applyMarks(db: Db, moduleId: number, marks: Record<string, Mark>
       }
     }
     if (toTest.length === 0) return { sessionId: null, queued, skipped };
-    const sessionId = Number(
-      db
-        .prepare("INSERT INTO sessions (theme_id, module_id, kind, status, total) VALUES (?, ?, 'diagnose', 'preparing', ?)")
-        .run(module.theme_id, module.id, toTest.length).lastInsertRowid,
-    );
-    const insert = db.prepare("INSERT INTO session_concepts (session_id, concept_id) VALUES (?, ?)");
-    for (const id of toTest) insert.run(sessionId, id);
-    return { sessionId, queued, skipped };
+    return { sessionId: createSession(db, module.theme_id, module.id, toTest, "diagnose"), queued, skipped };
   })();
 }
 
@@ -115,23 +121,33 @@ function questionConcepts(db: Db, dataDir: string, sessionId: number): QuestionC
 
 // Write the questions of a session. The function runs in the background. It saves the questions
 // of each group of concepts at once, so that the app can show the progress.
+// A diagnosis gets 2 questions for each concept. A test after a lesson gets 3 new questions.
 export async function prepareSession(db: Db, llm: LlmClient, dataDir: string, sessionId: number): Promise<void> {
   try {
     db.prepare("UPDATE sessions SET status = 'preparing', error = NULL WHERE id = ?").run(sessionId);
     db.prepare("DELETE FROM questions WHERE session_id = ?").run(sessionId);
+    const kind = db.prepare("SELECT kind FROM sessions WHERE id = ?").pluck().get(sessionId) as "diagnose" | "test";
     const concepts = questionConcepts(db, dataDir, sessionId);
     const insert = db.prepare(
       `INSERT INTO questions (concept_id, purpose, kind, text, choices, answer, key_points, section_id, session_id, position)
-       VALUES (?, 'diagnose', ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     let position = 0;
     let prepared = 0;
-    for (const batch of questionBatches(concepts)) {
-      const questions = await writeQuestions(llm, batch);
+    const batches: QuestionConcept[][] = kind === "test" ? concepts.map((concept) => [concept]) : questionBatches(concepts);
+    for (const batch of batches) {
+      let questions: WrittenQuestion[];
+      if (kind === "test") {
+        const seen = db.prepare("SELECT text FROM questions WHERE concept_id = ? ORDER BY id").pluck().all(batch[0]!.id) as string[];
+        questions = await writeTestQuestions(llm, batch[0]!, seen);
+      } else {
+        questions = await writeQuestions(llm, batch);
+      }
       db.transaction(() => {
         for (const question of questions) {
           insert.run(
             question.conceptId,
+            kind,
             question.kind,
             question.text,
             question.choices ? JSON.stringify(question.choices) : null,
@@ -265,7 +281,62 @@ export function sessionView(db: Db, sessionId: number): SessionView {
       };
     }),
     results: session.status === "finished" ? sessionResults(db, sessionId) : null,
+    concept: session.kind === "test" ? sessionConcept(db, sessionId) : null,
+    outcome: session.kind === "test" && session.status === "finished" ? testOutcome(db, sessionId) : null,
   };
+}
+
+function sessionConcept(db: Db, sessionId: number): SessionView["concept"] {
+  return (
+    (db
+      .prepare("SELECT c.id, c.slug, c.name FROM session_concepts sc JOIN concepts c ON c.id = sc.concept_id WHERE sc.session_id = ?")
+      .get(sessionId) as SessionView["concept"] | undefined) ?? null
+  );
+}
+
+const isCorrect = (attempt: AttemptRow | undefined) => attempt !== undefined && (attempt.score === 2 || attempt.disputed === 1);
+
+// The pass rule of a test: at least 2 correct answers, and one of them is the apply question.
+function testScore(db: Db, sessionId: number): { correct: number; total: number; applyCorrect: boolean } {
+  const questions = db.prepare("SELECT id, kind FROM questions WHERE session_id = ? ORDER BY position").all(sessionId) as { id: number; kind: string }[];
+  const attempts = latestAttempts(db, questions.map((question) => question.id));
+  return {
+    correct: questions.filter((question) => isCorrect(attempts.get(question.id))).length,
+    total: questions.length,
+    applyCorrect: questions.some((question) => question.kind === "apply" && isCorrect(attempts.get(question.id))),
+  };
+}
+
+function testOutcome(db: Db, sessionId: number): TestOutcome {
+  const concept = sessionConcept(db, sessionId)!;
+  const score = testScore(db, sessionId);
+  const passed = score.correct >= 2 && score.applyCorrect;
+  const themeId = db.prepare("SELECT theme_id FROM concepts WHERE id = ?").pluck().get(concept.id) as number;
+  const next = passed
+    ? ((db
+        .prepare(
+          "SELECT id AS conceptId, name FROM concepts WHERE theme_id = ? AND status IN ('queued', 'learning') AND id <> ? ORDER BY queue_pos, id LIMIT 1",
+        )
+        .get(themeId, concept.id) as TestOutcome["next"] | undefined) ?? null)
+    : null;
+  return {
+    passed,
+    ...score,
+    failedTests: failedTests(db, concept.id),
+    hasPrerequisites: (db.prepare("SELECT COUNT(*) FROM concept_prereqs WHERE concept_id = ?").pluck().get(concept.id) as number) > 0,
+    next,
+  };
+}
+
+// The number of finished tests after a lesson that the learner failed for a concept.
+export function failedTests(db: Db, conceptId: number): number {
+  return db
+    .prepare(
+      `SELECT COUNT(*) FROM sessions s JOIN session_concepts sc ON sc.session_id = s.id
+       WHERE s.kind = 'test' AND s.status = 'finished' AND sc.concept_id = ? AND sc.result = 'failed'`,
+    )
+    .pluck()
+    .get(conceptId) as number;
 }
 
 export async function answerQuestion(db: Db, llm: LlmClient | null, dataDir: string, questionId: number, answer: string): Promise<AttemptView> {
@@ -349,10 +420,24 @@ function sessionResults(db: Db, sessionId: number): ConceptResult[] {
 // End the diagnosis: a concept is known if each of its questions has a correct answer.
 // An unanswered question counts as wrong. A concept with no questions goes back to "new".
 export function finishSession(db: Db, sessionId: number): SessionView {
-  const session = db.prepare("SELECT status FROM sessions WHERE id = ?").get(sessionId) as { status: string } | undefined;
+  const session = db.prepare("SELECT status, kind FROM sessions WHERE id = ?").get(sessionId) as { status: string; kind: string } | undefined;
   if (!session) throw new TutorError(`The session ${sessionId} does not exist.`, 404);
   if (session.status === "finished") return sessionView(db, sessionId);
   if (session.status !== "ready") throw new TutorError("The questions of this session are not ready.", 409);
+
+  // A test after a lesson: a pass makes the concept mastered and takes it out of the queue.
+  // After a fail, the concept stays in its lesson, and the learner chooses the next step.
+  if (session.kind === "test") {
+    const concept = sessionConcept(db, sessionId)!;
+    const score = testScore(db, sessionId);
+    const passed = score.correct >= 2 && score.applyCorrect;
+    db.transaction(() => {
+      if (passed) setStatus(db, concept.id, "mastered");
+      db.prepare("UPDATE session_concepts SET result = ? WHERE session_id = ?").run(passed ? "known" : "failed", sessionId);
+      db.prepare("UPDATE sessions SET status = 'finished' WHERE id = ?").run(sessionId);
+    })();
+    return sessionView(db, sessionId);
+  }
 
   const questions = db.prepare("SELECT id, concept_id FROM questions WHERE session_id = ?").all(sessionId) as { id: number; concept_id: number }[];
   const attempts = latestAttempts(db, questions.map((question) => question.id));

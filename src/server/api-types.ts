@@ -148,6 +148,9 @@ export interface SessionView {
   total: number;
   questions: QuestionView[];
   results: ConceptResult[] | null;
+  // For a test after a lesson: the concept, and the outcome after the end of the test.
+  concept: { id: number; slug: string; name: string } | null;
+  outcome: TestOutcome | null;
 }
 
 // Study queue
@@ -223,4 +226,23 @@ export interface LessonView {
   missingPrerequisites: { conceptId: number; slug: string; name: string; status: Status; position: number | null }[];
   warning: string | null;
   queuePosition: number | null;
+  // A test after the lesson that the learner did not finish, or null.
+  openTestId: number | null;
+  failedTests: number;
 }
+
+// The test after a lesson
+
+export interface TestOutcome {
+  passed: boolean;
+  correct: number;
+  total: number;
+  applyCorrect: boolean;
+  // The finished tests of the concept that the learner failed, this test included.
+  failedTests: number;
+  hasPrerequisites: boolean;
+  // After a pass: the next concept in the study queue, or null.
+  next: { conceptId: number; name: string } | null;
+}
+
+export type AfterTestAction = "later" | "skip";
