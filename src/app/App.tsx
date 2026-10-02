@@ -2,6 +2,7 @@ import { Layout, Notice } from "./components/Layout";
 import { href, useRoute } from "./router";
 import { ConceptMap } from "./screens/ConceptMap";
 import { Home } from "./screens/Home";
+import { Queue } from "./screens/Queue";
 import { Select } from "./screens/Select";
 import { Session } from "./screens/Session";
 import { Theme } from "./screens/Theme";
@@ -17,6 +18,8 @@ export function App() {
       return <ConceptMap key={route.slug} slug={route.slug} focus={route.concept} />;
     case "select":
       return <Select key={`${route.slug}-${route.moduleId}`} slug={route.slug} moduleId={route.moduleId} />;
+    case "queue":
+      return <Queue key={route.slug} slug={route.slug} />;
     case "session":
       return <Session key={route.id} id={route.id} />;
     default:

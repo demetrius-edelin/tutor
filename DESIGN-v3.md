@@ -248,11 +248,12 @@ The tutor suggests an order with these rules:
 
 The queue screen gives the user these tools:
 
-- Drag a concept to a new position.
-- The "Top" button moves a concept to the top.
-- The "Start now" button moves a concept to the top and starts its lesson.
+- Drag a concept to a new position, with the mouse, a finger, or the keyboard.
+- The "Top", "Up", and "Down" buttons move a concept.
+- The "Later" button takes a concept out of the queue and sets it back to not started.
 - The "Skip" button skips a concept.
-- The "Suggested order" button applies the order of the tutor to the full queue.
+- The "Use the suggested order" button applies the order of the tutor to the full queue. If the order of the tutor is the same as the current order, the button does not show.
+- Later, with the lessons: the "Start now" button moves a concept to the top and starts its lesson.
 
 The tutor does not block the order of the user. But it shows a warning on a concept with a prerequisite that is not `known` or `mastered`. Before such a lesson starts, the tutor offers three actions: "Learn the prerequisite first", "Test the prerequisite", or "Continue". The user selects one.
 

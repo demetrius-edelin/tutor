@@ -14,6 +14,7 @@ import {
   sessionView,
   TutorError,
 } from "../tutor/diagnosis.js";
+import { applySuggestedOrder, queueView, removeFromQueue, reorderQueue } from "../tutor/queue.js";
 import type { Choice, Mark } from "./api-types.js";
 import { conceptMap, listThemes, section, themeDetail } from "./queries.js";
 
@@ -103,6 +104,20 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError }: Serve
 
   app.post<{ Params: { id: string }; Body: { choices: Record<string, Choice> } }>("/api/sessions/:id/choices", async (request) =>
     applyChoices(db, Number(request.params.id), request.body?.choices ?? {}),
+  );
+
+  // Study queue
+
+  app.get<{ Params: { slug: string } }>("/api/themes/:slug/queue", async (request) => queueView(db, request.params.slug));
+
+  app.post<{ Params: { slug: string }; Body: { conceptIds: number[] } }>("/api/themes/:slug/queue/order", async (request) =>
+    reorderQueue(db, request.params.slug, (request.body?.conceptIds ?? []).map(Number)),
+  );
+
+  app.post<{ Params: { slug: string } }>("/api/themes/:slug/queue/suggested", async (request) => applySuggestedOrder(db, request.params.slug));
+
+  app.post<{ Params: { slug: string }; Body: { conceptId: number; status: "skipped" | "new" } }>("/api/themes/:slug/queue/remove", async (request) =>
+    removeFromQueue(db, request.params.slug, Number(request.body?.conceptId), request.body?.status),
   );
 
   if (appDir && existsSync(appDir)) {

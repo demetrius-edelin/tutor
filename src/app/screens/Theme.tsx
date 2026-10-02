@@ -29,6 +29,20 @@ function ThemeView({ theme }: { theme: ThemeDetail }) {
         {n(done)} of {plural(total, "concept")}.
       </p>
 
+      {theme.progress.queued + theme.progress.learning > 0 && (
+        <section aria-labelledby="queue-heading" className="queue-summary">
+          <h2 id="queue-heading">Study queue</h2>
+          <p>
+            {plural(theme.progress.queued + theme.progress.learning, "concept")} to learn. Check the order before the lessons.
+          </p>
+          <p>
+            <a className="button" href={href.queue(theme.slug)}>
+              Open the study queue
+            </a>
+          </p>
+        </section>
+      )}
+
       {theme.nextModule && (
         <section aria-labelledby="next-heading" className="next-step">
           <h2 id="next-heading">Next step</h2>

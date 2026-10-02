@@ -779,6 +779,94 @@ button.button {
   }
 }
 
+/* Study queue */
+
+.queue-summary {
+  max-width: var(--measure);
+}
+
+.suggestion {
+  max-width: var(--measure);
+  margin-bottom: 1.5rem;
+  padding: 0.25rem 0 0.25rem 1rem;
+  border-left: 4px solid var(--highlight);
+}
+
+.queue-item {
+  background: var(--paper);
+}
+
+.queue-item.dragging {
+  z-index: 2;
+  box-shadow: 0 0.4rem 1.2rem color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+.queue-number {
+  color: var(--margin-red);
+  font-family: var(--reading);
+  font-size: var(--step-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.queue-item.next .queue-number {
+  color: var(--ink);
+  background: linear-gradient(transparent 20%, var(--highlight) 20%, var(--highlight) 85%, transparent 85%);
+  padding: 0 0.2em;
+}
+
+.queue-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 0.75rem;
+}
+
+.drag-handle {
+  align-self: start;
+  padding: 0.1rem 0.25rem;
+  border: 0;
+  border-radius: 0.2rem;
+  background: none;
+  color: var(--graphite);
+  font-size: 1.1rem;
+  line-height: 1.2;
+  cursor: grab;
+  touch-action: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.queue-item a.concept-title {
+  text-decoration: none;
+}
+
+.queue-item a.concept-title:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--margin-red);
+}
+
+.warning {
+  margin: 0.35rem 0 0;
+  color: var(--margin-red);
+  font-size: var(--step--1);
+  font-weight: 500;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0.45rem 0 0;
+}
+
+.row-actions .text-button:disabled {
+  color: var(--graphite);
+  opacity: 0.45;
+  text-decoration: none;
+  cursor: default;
+}
+
 /* The panel with the text of a book section. */
 
 .panel-backdrop {

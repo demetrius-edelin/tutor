@@ -13,8 +13,9 @@ The project is in phase 1. These parts work now:
 - Ingest finds the concepts of a book and puts them into the concept map of a theme.
 - The app shows the themes, the books, the progress, and the concept map.
 - The diagnosis: you mark the concepts of a module, the tutor tests them, and you choose what to learn.
+- The study queue: the concepts to learn, in an order that you can change.
 
-The study queue, the lessons, and the tests come next. See `PLAN.md` for the build order and `DESIGN-v3.md` for the design.
+The lessons and the tests come next. See `PLAN.md` for the build order and `DESIGN-v3.md` for the design.
 
 ## Requirements
 
@@ -58,6 +59,7 @@ Then open http://localhost:3000 in a browser. The app has these screens:
 - Concept map: the concepts in modules. Open a concept to see its sources and quotes, and read the book section.
 - Choose what to test: mark the concepts of a module as Test, Learn, Skip, or Later. Later keeps a concept for another day. You can also change the mark of a concept that you marked already.
 - Diagnosis: 2 questions for each concept that you marked Test, then the results. A concept that you do not know goes to your study queue, or you skip it.
+- Study queue: the concepts to learn, in order. Drag a concept, or use Top, Up, and Down, to change the order. A red note shows a prerequisite that comes later or that you did not learn. "Use the suggested order" puts prerequisites first, then the module order, then basic before advanced.
 
 The diagnosis uses the model in `.env`. The model writes the questions and grades the open answers. If you think that a grade is wrong, use "Dispute the grade". A disputed answer counts as correct.
 

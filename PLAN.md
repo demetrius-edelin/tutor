@@ -19,6 +19,7 @@ Status: draft 1. Date: 2026-10-02. The design is in `DESIGN-v3.md`. This file gi
 - Milestone 4: done. A preview of one chapter of a book of the user gave a good concept map. The full book can come later with `--replace`.
 - Milestone 5: done, with a smaller scope. The app has the home screen, the theme screen, and the map screen. Ingest stays a command for now. "Add book" and the ingest progress in the app come later.
 - Milestone 6: done. The app has the select screen, the diagnosis with grades and disputes, and the results with the choices. The database has schema migrations now.
+- Milestone 7: done. The study queue has a suggested order, drag and drop, move buttons, prerequisite warnings, and Later and Skip.
 
 ## Milestones
 

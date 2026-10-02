@@ -147,3 +147,34 @@ export interface SessionView {
   questions: QuestionView[];
   results: ConceptResult[] | null;
 }
+
+// Study queue
+
+export interface QueuePrerequisite {
+  slug: string;
+  name: string;
+  status: Status;
+  // The place of the prerequisite in the queue, or null if it is not in the queue.
+  position: number | null;
+}
+
+export interface QueueItem {
+  conceptId: number;
+  slug: string;
+  name: string;
+  objective: string;
+  kind: "knowledge" | "skill";
+  level: "basic" | "intermediate" | "advanced";
+  module: { id: number; position: number; name: string };
+  position: number;
+  prerequisites: QueuePrerequisite[];
+  // A short warning for the learner, for example a prerequisite that comes later. Null if there is no problem.
+  warning: string | null;
+}
+
+export interface QueueView {
+  theme: { slug: string; name: string };
+  items: QueueItem[];
+  // True if the suggested order of the tutor is different from the current order.
+  suggestionDiffers: boolean;
+}
