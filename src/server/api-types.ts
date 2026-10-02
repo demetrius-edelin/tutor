@@ -29,6 +29,7 @@ export interface BookSummary {
 
 export interface ThemeDetail extends ThemeSummary {
   bookList: BookSummary[];
+  nextModule: NextModule | null;
 }
 
 export interface SourceRef {
@@ -73,4 +74,76 @@ export interface SectionView {
   title: string;
   page: string | null;
   markdown: string;
+}
+
+// A theme also suggests the next module to diagnose: the first module in the map order
+// that has concepts that the learner did not mark yet.
+export interface NextModule {
+  id: number;
+  position: number;
+  name: string;
+  newConcepts: number;
+}
+
+// Diagnosis
+
+// "later" sets the concept back to "not started", so that the learner can decide later.
+export type Mark = "test" | "learn" | "skip" | "later";
+export type Choice = "learn" | "skip" | "keep";
+
+export interface SelectionResult {
+  // The session of the diagnosis, or null if no concept has the mark "test".
+  sessionId: number | null;
+  queued: number;
+  skipped: number;
+}
+
+export interface AttemptView {
+  id: number;
+  answer: string;
+  score: number;
+  correct: boolean;
+  disputed: boolean;
+  feedback: string;
+  // For a choice question: the index of the correct option. For an open question: null.
+  correctIndex: number | null;
+  // For a choice question: the explanation. For an open question: the points of a good answer.
+  keyPoints: string[];
+  // For an open question: a model answer.
+  modelAnswer: string | null;
+}
+
+export interface QuestionView {
+  id: number;
+  conceptId: number;
+  conceptName: string;
+  kind: "choice" | "short" | "apply";
+  text: string;
+  choices: string[] | null;
+  source: { sectionId: number; ref: string; title: string; page: string | null } | null;
+  attempt: AttemptView | null;
+}
+
+export interface ConceptResult {
+  conceptId: number;
+  slug: string;
+  name: string;
+  // "none" for a concept that got no usable questions.
+  result: "known" | "failed" | "none";
+  status: Status;
+  wrong: { question: string; answer: string; feedback: string }[];
+}
+
+export interface SessionView {
+  id: number;
+  theme: { slug: string; name: string };
+  module: { id: number; position: number; name: string } | null;
+  kind: "diagnose" | "test" | "review";
+  status: "preparing" | "ready" | "finished" | "failed";
+  error: string | null;
+  // Concepts with questions, and all concepts of the session.
+  prepared: number;
+  total: number;
+  questions: QuestionView[];
+  results: ConceptResult[] | null;
 }

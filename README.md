@@ -12,8 +12,9 @@ The project is in phase 1. These parts work now:
 - The model client sends requests to the model that you select in `.env`.
 - Ingest finds the concepts of a book and puts them into the concept map of a theme.
 - The app shows the themes, the books, the progress, and the concept map.
+- The diagnosis: you mark the concepts of a module, the tutor tests them, and you choose what to learn.
 
-The learning loop comes next: select and diagnose (milestone 6), then the study queue, the lessons, and the tests. See `PLAN.md` for the build order and `DESIGN-v3.md` for the design.
+The study queue, the lessons, and the tests come next. See `PLAN.md` for the build order and `DESIGN-v3.md` for the design.
 
 ## Requirements
 
@@ -55,6 +56,10 @@ Then open http://localhost:3000 in a browser. The app has these screens:
 - Themes: the list of your themes.
 - Theme: the books of the theme and your progress.
 - Concept map: the concepts in modules. Open a concept to see its sources and quotes, and read the book section.
+- Choose what to test: mark the concepts of a module as Test, Learn, Skip, or Later. Later keeps a concept for another day. You can also change the mark of a concept that you marked already.
+- Diagnosis: 2 questions for each concept that you marked Test, then the results. A concept that you do not know goes to your study queue, or you skip it.
+
+The diagnosis uses the model in `.env`. The model writes the questions and grades the open answers. If you think that a grade is wrong, use "Dispute the grade". A disputed answer counts as correct.
 
 The server listens only on your computer. To stop it, press Ctrl+C in the terminal.
 

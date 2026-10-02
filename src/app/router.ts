@@ -6,6 +6,8 @@ export type Route =
   | { name: "home" }
   | { name: "theme"; slug: string }
   | { name: "map"; slug: string; concept: string | null }
+  | { name: "select"; slug: string; moduleId: number }
+  | { name: "session"; id: number }
   | { name: "not-found" };
 
 export function parseHash(hash: string): Route {
@@ -16,6 +18,10 @@ export function parseHash(hash: string): Route {
   if (parts[0] === "themes" && parts[1] && parts[2] === "map" && parts.length === 3) {
     return { name: "map", slug: parts[1], concept: new URLSearchParams(query).get("concept") };
   }
+  if (parts[0] === "themes" && parts[1] && parts[2] === "modules" && parts[3] && parts.length === 4) {
+    return { name: "select", slug: parts[1], moduleId: Number(parts[3]) };
+  }
+  if (parts[0] === "sessions" && parts[1] && parts.length === 2) return { name: "session", id: Number(parts[1]) };
   return { name: "not-found" };
 }
 
@@ -24,6 +30,8 @@ export const href = {
   theme: (slug: string) => `#/themes/${encodeURIComponent(slug)}`,
   map: (slug: string, concept?: string) =>
     `#/themes/${encodeURIComponent(slug)}/map${concept ? `?concept=${encodeURIComponent(concept)}` : ""}`,
+  select: (slug: string, moduleId: number) => `#/themes/${encodeURIComponent(slug)}/modules/${moduleId}`,
+  session: (id: number) => `#/sessions/${id}`,
 };
 
 export function useRoute(): Route {

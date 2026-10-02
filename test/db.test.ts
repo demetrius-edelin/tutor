@@ -25,3 +25,24 @@ describe("openDb", () => {
     expect(() => insert.run("queued")).not.toThrow();
   });
 });
+
+describe("migrations", () => {
+  it("upgrades a version 1 database and keeps its data", async () => {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const Database = (await import("better-sqlite3")).default;
+    const { MIGRATIONS } = await import("../src/db/schema.js");
+    const file = join(mkdtempSync(join(tmpdir(), "tutor-db-")), "old.db");
+    const old = new Database(file);
+    old.exec(MIGRATIONS[0]!);
+    old.pragma("user_version = 1");
+    old.prepare("INSERT INTO themes (slug, name) VALUES ('sql', 'SQL')").run();
+    old.close();
+
+    const db = openDb(file);
+    expect(db.pragma("user_version", { simple: true })).toBe(SCHEMA_VERSION);
+    expect(db.prepare("SELECT name FROM themes").pluck().get()).toBe("SQL");
+    expect(db.prepare("SELECT COUNT(*) FROM sessions").pluck().get()).toBe(0);
+  });
+});

@@ -86,9 +86,18 @@ function MapView({ map, focus }: { map: ConceptMapView; focus: string | null }) 
       {modules.length === 0 && <p className="quiet">No concept matches "{query}".</p>}
       {modules.map((module) => (
         <section key={module.id} className="module" aria-labelledby={`module-${module.id}`}>
-          <h2 id={`module-${module.id}`}>
-            <span className="module-number">{module.position}.</span> {module.name}
-          </h2>
+          <div className="module-head">
+            <h2 id={`module-${module.id}`}>
+              <span className="module-number">{module.position}.</span> {module.name}
+            </h2>
+            <a className="module-action" href={href.select(map.theme.slug, module.id)}>
+              {map.modules
+                .find((item) => item.id === module.id)!
+                .concepts.some((concept) => ["new", "to_test", "failed"].includes(concept.status))
+                ? "Choose what to test"
+                : "Change the marks"}
+            </a>
+          </div>
           <ul className="concepts">
             {module.concepts.map((concept) => (
               <ConceptRow

@@ -64,9 +64,16 @@ export function themeDetail(db: Db, slug: string): ThemeDetail | undefined {
        FROM books b WHERE b.theme_id = ? ORDER BY b.created_at, b.id`,
     )
     .all(theme.id) as (Omit<BookSummary, "format"> & { file: string })[];
+  const next = db
+    .prepare(
+      `SELECT m.id, m.position, m.name, COUNT(c.id) AS newConcepts FROM modules m JOIN concepts c ON c.module_id = m.id
+       WHERE m.theme_id = ? AND c.status = 'new' GROUP BY m.id ORDER BY m.position LIMIT 1`,
+    )
+    .get(theme.id) as ThemeDetail["nextModule"] | undefined;
   return {
     ...summary(db, theme),
     bookList: books.map(({ file, ...book }) => ({ ...book, format: extname(file).toLowerCase() === ".pdf" ? "pdf" : "epub" })),
+    nextModule: next ?? null,
   };
 }
 

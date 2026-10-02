@@ -210,13 +210,16 @@ To measure ingest, select one chapter and write a list of its concepts by hand. 
 
 The user selects one module at a time. The tutor suggests the next module in the map order, but the user can open any module on the map screen. Thus, the user does not take a long test at the start.
 
-The module screen lists the concepts of the module with their objectives. Each concept has a control with three marks: "Test", "Learn", and "Skip". The default mark is "Test". The "Start diagnosis" button sends the marks.
+The module screen lists the concepts of the module with their objectives. Each concept that has no mark yet has a control with four marks: "Test", "Learn", "Skip", and "Later". The default mark is "Later", so that the user tests only the concepts that the user selects. A "Mark all as" control changes all marks in one step. The "Start the test" button sends the marks.
+
+The screen also lists the concepts that the user marked already, with their status. The "Change" button lets the user give such a concept a new mark. Thus, the user can correct a wrong mark.
 
 The marks have these effects:
 
 - Test: the tutor tests the concept in the diagnosis.
 - Learn: the concept goes into the study queue directly, without a test.
-- Skip: the concept becomes `skipped`. The user can undo a skip later on the map screen.
+- Skip: the concept becomes `skipped`. The user can change this mark later.
+- Later: the concept stays `new`, or goes back to `new`. The user decides later.
 
 ## Diagnose
 

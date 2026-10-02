@@ -24,6 +24,8 @@
   --step-3: 2.074rem;
 
   --margin-width: 4.5rem;
+  /* The space between the red margin line and the text. */
+  --gutter: 1.5rem;
   --measure: 46rem;
 
   color-scheme: light;
@@ -137,7 +139,7 @@ p {
   display: flex;
   align-items: baseline;
   gap: 1.5rem;
-  padding: 1.25rem 1.5rem 1rem calc(var(--margin-width) + 1.5rem);
+  padding: 1.25rem 1.5rem 1rem calc(var(--margin-width) + var(--gutter));
   border-bottom: 1px solid var(--rule);
 }
 
@@ -168,7 +170,7 @@ p {
 .page {
   position: relative;
   max-width: calc(var(--measure) + var(--margin-width) + 6rem);
-  padding: 2.5rem 1.5rem 6rem calc(var(--margin-width) + 1.5rem);
+  padding: 2.5rem 1.5rem 6rem calc(var(--margin-width) + var(--gutter));
 }
 
 .notice {
@@ -385,9 +387,6 @@ a.contents-entry:hover .contents-title {
 .module h2 {
   display: flex;
   gap: 0.5rem;
-  max-width: var(--measure);
-  padding-bottom: 0.4rem;
-  border-bottom: 2px solid var(--ink);
 }
 
 .module-number {
@@ -412,7 +411,7 @@ a.contents-entry:hover .contents-title {
 .margin {
   position: absolute;
   top: 0.65rem;
-  left: calc(-1 * var(--margin-width) - 1.5rem);
+  left: calc(-1 * var(--margin-width) - var(--gutter));
   width: var(--margin-width);
   text-align: center;
 }
@@ -491,6 +490,293 @@ a.contents-entry:hover .contents-title {
   background: linear-gradient(transparent 55%, var(--highlight-soft) 55%);
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+}
+
+/* The diagnosis: marks, questions, feedback, and results. */
+
+.module-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 1rem;
+  max-width: var(--measure);
+  border-bottom: 2px solid var(--ink);
+  margin: 2.5rem 0 0;
+}
+
+.module-head h2 {
+  border-bottom: 0;
+  margin: 0;
+  padding-bottom: 0.4rem;
+}
+
+.module-action,
+.text-link {
+  font-size: var(--step--1);
+  font-weight: 500;
+}
+
+.next-step {
+  max-width: var(--measure);
+  padding: 0.25rem 0 0.5rem 1rem;
+  border-left: 4px solid var(--highlight);
+}
+
+.next-step h2 {
+  margin-top: 0.5rem;
+}
+
+.bulk {
+  font-size: var(--step--1);
+  color: var(--graphite);
+}
+
+.concept-select {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem 1.5rem;
+  align-items: start;
+}
+
+.concept-title {
+  font-weight: 600;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--rule);
+  border-radius: 0.3rem;
+  overflow: hidden;
+  font-size: var(--step--1);
+}
+
+.segmented label {
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.segmented label + label {
+  border-left: 1px solid var(--rule);
+}
+
+.segmented input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segmented label.selected {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.segmented label:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.change {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+.check {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: var(--step--1);
+}
+
+.action-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  max-width: var(--measure);
+  margin-top: 1.5rem;
+  padding: 0.9rem 0;
+  border-top: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+/* The bar also covers the margin to the left of the red line, so that no mark of a row behind it shows. */
+.action-bar::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(-1 * var(--margin-width) - var(--gutter));
+  width: var(--margin-width);
+  background: var(--paper);
+}
+
+.action-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+button.button {
+  border: 0;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.error {
+  color: var(--margin-red);
+  font-weight: 500;
+}
+
+.plain-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plain-list li {
+  padding: 0.25rem 0;
+}
+
+.question {
+  position: relative;
+  max-width: var(--measure);
+}
+
+.question .margin {
+  top: 0.1rem;
+}
+
+.question-about {
+  margin: 0 0 0.25rem;
+  color: var(--graphite);
+  font-size: var(--step--1);
+}
+
+.question-text {
+  font-family: var(--reading);
+  font-size: var(--step-1);
+  line-height: 1.55;
+}
+
+.options {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  border: 0;
+}
+
+.option {
+  display: flex;
+  gap: 0.65rem;
+  align-items: baseline;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.3rem;
+  cursor: pointer;
+  font-family: var(--reading);
+}
+
+.options:disabled .option {
+  cursor: default;
+}
+
+.option.picked {
+  border-color: var(--ink);
+}
+
+.option.right {
+  border-color: var(--ink);
+  background: linear-gradient(transparent 0, var(--highlight-soft) 0);
+}
+
+.option.wrong {
+  border-color: var(--margin-red);
+  text-decoration: line-through;
+  text-decoration-color: var(--margin-red);
+}
+
+.open-answer label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-weight: 500;
+}
+
+.open-answer textarea {
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.3rem;
+  background: var(--panel);
+  color: var(--ink);
+  font-family: var(--reading);
+  font-size: var(--step-0);
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.feedback {
+  margin-top: 1rem;
+  padding: 0.25rem 0 0.25rem 1rem;
+  border-left: 3px solid var(--highlight);
+}
+
+.verdict {
+  font-weight: 600;
+}
+
+.feedback-label {
+  font-weight: 500;
+}
+
+.feedback ul {
+  margin-top: 0;
+  font-family: var(--reading);
+}
+
+.wrong {
+  margin-top: 0.5rem;
+}
+
+.wrong-question {
+  margin: 0;
+  font-family: var(--reading);
+  font-style: italic;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 40rem) {
+  .concept-select {
+    grid-template-columns: 1fr;
+  }
+  .concept-select .segmented,
+  .concept-select > .text-button {
+    justify-self: start;
+  }
+  .change {
+    align-items: flex-start;
+  }
 }
 
 /* The panel with the text of a book section. */
@@ -589,18 +875,14 @@ a.contents-entry:hover .contents-title {
 @media (max-width: 40rem) {
   :root {
     --margin-width: 2.5rem;
+    --gutter: 1rem;
   }
   .topbar {
     flex-wrap: wrap;
     gap: 0.25rem 1rem;
-    padding-left: calc(var(--margin-width) + 1rem);
   }
   .page {
-    padding-left: calc(var(--margin-width) + 1rem);
     padding-right: 1rem;
-  }
-  .margin {
-    left: calc(-1 * var(--margin-width) - 1rem);
   }
   .panel {
     padding: 1rem 1.25rem 3rem;

@@ -1,6 +1,6 @@
 import type { LlmClient, ObjectRequest, Source, TextRequest, TextResult } from "../../src/llm/index.js";
 
-export type Stage = "extract" | "review" | "merge";
+export type Stage = "extract" | "review" | "merge" | "questions" | "grade";
 
 export interface FakeCall {
   stage: Stage;
@@ -23,6 +23,31 @@ export interface FakeHandlers {
   extract?: (sources: Source[], call: number) => unknown;
   review?: (sources: Source[], prompt: string) => unknown;
   merge?: (ids: string[], prompt: string) => unknown;
+  questions?: (conceptIds: string[], sources: Source[]) => unknown;
+  grade?: (prompt: string) => unknown;
+}
+
+// Default questions: the first option is correct, and a good open answer contains "point".
+export function defaultQuestions(conceptIds: string[], sources: Source[]) {
+  return {
+    concepts: conceptIds.map((conceptId) => ({
+      conceptId,
+      choice: {
+        question: `Which option is right for ${conceptId}?`,
+        options: ["right", "wrong one", "wrong two", "wrong three"],
+        correctIndex: 0,
+        explanation: "The first option is right.",
+        sectionId: sources[0]?.id ?? "0",
+      },
+      open: {
+        kind: "short",
+        question: `Explain ${conceptId}.`,
+        keyPoints: ["point"],
+        modelAnswer: "The point.",
+        sectionId: sources[0]?.id ?? "0",
+      },
+    })),
+  };
 }
 
 // A model for the tests. It answers each stage with JSON that the handlers make from the request.
@@ -40,7 +65,11 @@ export class FakeLlm implements LlmClient {
       ? "extract"
       : request.system.startsWith("You check the list")
         ? "review"
-        : "merge";
+        : request.system.startsWith("You write diagnosis questions")
+          ? "questions"
+          : request.system.startsWith("You grade the answer")
+            ? "grade"
+            : "merge";
     this.calls.push({ stage, request: request as ObjectRequest<unknown> });
     const sources = request.sources ?? [];
     let answer: unknown;
@@ -50,6 +79,15 @@ export class FakeLlm implements LlmClient {
       };
     } else if (stage === "review") {
       answer = this.handlers.review?.(sources, request.prompt) ?? { items: [], newConcepts: [] };
+    } else if (stage === "questions") {
+      const ids = [...request.prompt.matchAll(/^(c\d+): /gm)].map((match) => match[1]!);
+      answer = this.handlers.questions?.(ids, sources) ?? defaultQuestions(ids, sources);
+    } else if (stage === "grade") {
+      const learner = request.prompt.split("The answer of the learner:\n")[1] ?? "";
+      answer = this.handlers.grade?.(request.prompt) ?? {
+        score: learner.includes("point") ? 2 : 0,
+        feedback: learner.includes("point") ? "You have the point." : "You miss the point.",
+      };
     } else {
       const ids = [...request.prompt.matchAll(/^(n\d+): /gm)].map((match) => match[1]!);
       answer = this.handlers.merge?.(ids, request.prompt) ?? {

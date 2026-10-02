@@ -2,6 +2,8 @@ import { Layout, Notice } from "./components/Layout";
 import { href, useRoute } from "./router";
 import { ConceptMap } from "./screens/ConceptMap";
 import { Home } from "./screens/Home";
+import { Select } from "./screens/Select";
+import { Session } from "./screens/Session";
 import { Theme } from "./screens/Theme";
 
 export function App() {
@@ -13,6 +15,10 @@ export function App() {
       return <Theme slug={route.slug} />;
     case "map":
       return <ConceptMap key={route.slug} slug={route.slug} focus={route.concept} />;
+    case "select":
+      return <Select key={`${route.slug}-${route.moduleId}`} slug={route.slug} moduleId={route.moduleId} />;
+    case "session":
+      return <Session key={route.id} id={route.id} />;
     default:
       return (
         <Layout crumbs={[]}>

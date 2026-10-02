@@ -29,12 +29,27 @@ function ThemeView({ theme }: { theme: ThemeDetail }) {
         {n(done)} of {plural(total, "concept")}.
       </p>
 
+      {theme.nextModule && (
+        <section aria-labelledby="next-heading" className="next-step">
+          <h2 id="next-heading">Next step</h2>
+          <p>
+            Module {theme.nextModule.position}, {theme.nextModule.name}, has {plural(theme.nextModule.newConcepts, "concept")} that you
+            did not mark yet. Choose which concepts to test, to learn, or to skip.
+          </p>
+          <p>
+            <a className="button" href={href.select(theme.slug, theme.nextModule.id)}>
+              Choose what to test
+            </a>
+          </p>
+        </section>
+      )}
+
       <section aria-labelledby="progress-heading">
         <h2 id="progress-heading">Progress</h2>
         <ProgressBar progress={theme.progress} />
         <ProgressLegend progress={theme.progress} />
         <p>
-          <a className="button" href={href.map(theme.slug)}>
+          <a className={theme.nextModule ? "text-link" : "button"} href={href.map(theme.slug)}>
             Open the concept map
           </a>
         </p>

@@ -7,6 +7,18 @@ export async function getJson<T>(url: string): Promise<T> {
   return body as T;
 }
 
+export async function postJson<T>(url: string, body: unknown = {}): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  } catch {
+    throw new Error("The tutor server does not answer. Start it with npm start.");
+  }
+  const result = (await response.json().catch(() => null)) as (T & { error?: string }) | null;
+  if (!response.ok) throw new Error(result?.error ?? `The server answered ${response.status}.`);
+  return result as T;
+}
+
 export type Loadable<T> = { state: "loading" } | { state: "error"; message: string } | { state: "ready"; data: T };
 
 // Load JSON from the API. A new URL loads again.

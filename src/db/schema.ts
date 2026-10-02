@@ -1,7 +1,7 @@
-// Increase SCHEMA_VERSION for each change to SCHEMA.
-export const SCHEMA_VERSION = 1;
+// Each migration changes the schema from one version to the next. Add a new migration
+// for each change, and do not change the old migrations: databases of users have them already.
 
-export const SCHEMA = `
+const V1 = `
 CREATE TABLE themes (
   id         INTEGER PRIMARY KEY,
   slug       TEXT NOT NULL UNIQUE,
@@ -119,3 +119,32 @@ CREATE TABLE exercises (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 `;
+
+// Version 2: sessions group the questions of a diagnosis, a test, or a review.
+const V2 = `
+CREATE TABLE sessions (
+  id         INTEGER PRIMARY KEY,
+  theme_id   INTEGER NOT NULL REFERENCES themes(id) ON DELETE CASCADE,
+  module_id  INTEGER REFERENCES modules(id) ON DELETE SET NULL,
+  kind       TEXT NOT NULL CHECK (kind IN ('diagnose', 'test', 'review')),
+  status     TEXT NOT NULL CHECK (status IN ('preparing', 'ready', 'finished', 'failed')),
+  error      TEXT,
+  prepared   INTEGER NOT NULL DEFAULT 0,
+  total      INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE session_concepts (
+  session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  concept_id INTEGER NOT NULL REFERENCES concepts(id) ON DELETE CASCADE,
+  result     TEXT CHECK (result IN ('known', 'failed')),
+  PRIMARY KEY (session_id, concept_id)
+);
+
+ALTER TABLE questions ADD COLUMN session_id INTEGER REFERENCES sessions(id) ON DELETE CASCADE;
+ALTER TABLE questions ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
+`;
+
+export const MIGRATIONS = [V1, V2];
+export const SCHEMA_VERSION = MIGRATIONS.length;
+

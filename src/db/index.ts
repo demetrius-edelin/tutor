@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { SCHEMA, SCHEMA_VERSION } from "./schema.js";
+import { MIGRATIONS, SCHEMA_VERSION } from "./schema.js";
 
 export type Db = Database.Database;
 
@@ -12,14 +12,16 @@ export function openDb(file: string): Db {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
 
+  // Apply the migrations that the database does not have yet, in order.
   const version = db.pragma("user_version", { simple: true }) as number;
-  if (version === 0) {
+  if (version > SCHEMA_VERSION) {
+    throw new Error(`The database has schema version ${version}. This version of the tutor knows only up to ${SCHEMA_VERSION}.`);
+  }
+  for (let next = version + 1; next <= SCHEMA_VERSION; next++) {
     db.transaction(() => {
-      db.exec(SCHEMA);
-      db.pragma(`user_version = ${SCHEMA_VERSION}`);
+      db.exec(MIGRATIONS[next - 1]!);
+      db.pragma(`user_version = ${next}`);
     })();
-  } else if (version !== SCHEMA_VERSION) {
-    throw new Error(`Database schema version ${version} is not supported. Expected ${SCHEMA_VERSION}.`);
   }
   return db;
 }
