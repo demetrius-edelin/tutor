@@ -21,7 +21,7 @@ export function Queue({ slug }: { slug: string }) {
   const loaded = useApi<QueueView>(`/api/themes/${encodeURIComponent(slug)}/queue`);
   const name = loaded.state === "ready" ? loaded.data.theme.name : slug;
   return (
-    <Layout crumbs={[{ label: "Themes", href: href.home() }, { label: name, href: href.theme(slug) }, { label: "Study queue" }]}>
+    <Layout theme={{ slug, name }} tab="queue">
       {loaded.state === "loading" && <p className="quiet">Loading the study queue.</p>}
       {loaded.state === "error" && <Notice title="The study queue did not load">{<p>{loaded.message}</p>}</Notice>}
       {loaded.state === "ready" && <QueueEditor slug={slug} initial={loaded.data} />}
@@ -88,8 +88,8 @@ function QueueEditor({ slug, initial }: { slug: string; initial: QueueView }) {
     return (
       <Notice title="Your study queue is empty">
         <p>
-          To add concepts, open a module on the <a href={href.map(slug)}>concept map</a> and use Choose what to test. Mark a concept Learn,
-          or choose Learn after a diagnosis.
+          To add a concept, open the <a href={href.map(slug)}>concept map</a> and use Add to the study queue under the concept. A concept
+          that you do not know after a diagnosis can also go into the queue.
         </p>
       </Notice>
     );

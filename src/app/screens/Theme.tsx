@@ -11,7 +11,7 @@ export function Theme({ slug }: { slug: string }) {
   const theme = useApi<ThemeDetail>(`/api/themes/${encodeURIComponent(slug)}`);
   const name = theme.state === "ready" ? theme.data.name : slug;
   return (
-    <Layout crumbs={[{ label: "Themes", href: href.home() }, { label: name }]}>
+    <Layout theme={{ slug, name }} tab="theme">
       {theme.state === "loading" && <p className="quiet">Loading the theme.</p>}
       {theme.state === "error" && <Notice title="The theme did not load">{<p>{theme.message}</p>}</Notice>}
       {theme.state === "ready" && <ThemeView theme={theme.data} />}

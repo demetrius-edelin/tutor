@@ -9,7 +9,7 @@ const plural = (count: number, word: string) => `${count.toLocaleString("en-US")
 export function Home() {
   const themes = useApi<ThemeSummary[]>("/api/themes");
   return (
-    <Layout crumbs={[]}>
+    <Layout>
       {themes.state === "loading" && <p className="quiet">Loading the themes.</p>}
       {themes.state === "error" && <Notice title="The themes did not load">{<p>{themes.message}</p>}</Notice>}
       {themes.state === "ready" && themes.data.length === 0 && (

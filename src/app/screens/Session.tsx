@@ -28,25 +28,14 @@ export function Session({ id }: { id: number }) {
     return () => window.clearInterval(timer);
   }, [session?.status, load]);
 
-  const crumbs = !session
-    ? [{ label: "Themes", href: href.home() }]
-    : session.kind === "test" && session.concept
-      ? [
-          { label: "Themes", href: href.home() },
-          { label: session.theme.name, href: href.theme(session.theme.slug) },
-          { label: "Study queue", href: href.queue(session.theme.slug) },
-          { label: session.concept.name, href: href.lesson(session.concept.id) },
-          { label: "Test" },
-        ]
-      : [
-          { label: "Themes", href: href.home() },
-          { label: session.theme.name, href: href.theme(session.theme.slug) },
-          { label: "Concept map", href: href.map(session.theme.slug) },
-          { label: "Diagnosis" },
-        ];
-
+  // A test after a lesson belongs to the study queue. A diagnosis belongs to the concept map.
   return (
-    <Layout crumbs={crumbs}>
+    <Layout theme={session?.theme} tab={session?.kind === "test" ? "queue" : "map"}>
+      {session?.kind === "test" && session.concept && (
+        <p className="back-link">
+          <a href={href.lesson(session.concept.id)}>Back to the lesson: {session.concept.name}</a>
+        </p>
+      )}
       {!session && !error && <p className="quiet">Loading the questions.</p>}
       {error && !session && <Notice title="The questions did not load">{<p>{error}</p>}</Notice>}
       {session && <SessionBody session={session} onChange={setSession} />}

@@ -27,7 +27,7 @@ export function App() {
       return <Session key={route.id} id={route.id} />;
     default:
       return (
-        <Layout crumbs={[]}>
+        <Layout>
           <Notice title="This page does not exist">
             <p>
               <a href={href.home()}>Go to the themes</a>

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ConceptMapView, ConceptView } from "../../server/api-types";
-import { useApi } from "../api";
+import type { ConceptMapView, ConceptView, Status } from "../../server/api-types";
+import { postJson, useApi } from "../api";
 import { Layout, Notice } from "../components/Layout";
 import { SectionPanel } from "../components/SectionPanel";
-import { StatusMark } from "../components/StatusMark";
+import { STATUS_INFO, StatusMark } from "../components/StatusMark";
 import { href } from "../router";
 
 const LEVEL: Record<ConceptView["level"], string> = { basic: "Basic", intermediate: "Intermediate", advanced: "Advanced" };
@@ -13,7 +13,7 @@ export function ConceptMap({ slug, focus }: { slug: string; focus: string | null
   const map = useApi<ConceptMapView>(`/api/themes/${encodeURIComponent(slug)}/map`);
   const name = map.state === "ready" ? map.data.theme.name : slug;
   return (
-    <Layout crumbs={[{ label: "Themes", href: href.home() }, { label: name, href: href.theme(slug) }, { label: "Concept map" }]}>
+    <Layout theme={{ slug, name }} tab="map">
       {map.state === "loading" && <p className="quiet">Loading the concept map.</p>}
       {map.state === "error" && <Notice title="The concept map did not load">{<p>{map.message}</p>}</Notice>}
       {map.state === "ready" && <MapView map={map.data} focus={focus} />}
@@ -30,7 +30,8 @@ function matches(concept: ConceptView, query: string): boolean {
     .every((word) => text.includes(word));
 }
 
-function MapView({ map, focus }: { map: ConceptMapView; focus: string | null }) {
+function MapView({ map: loaded, focus }: { map: ConceptMapView; focus: string | null }) {
+  const [map, setMap] = useState(loaded);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<Set<string>>(() => new Set(focus ? [focus] : []));
   const [section, setSection] = useState<number | null>(null);
@@ -52,6 +53,16 @@ function MapView({ map, focus }: { map: ConceptMapView; focus: string | null }) 
   );
   const shown = modules.reduce((sum, module) => sum + module.concepts.length, 0);
 
+  // Show the new status of a concept after an action, without a new load of the map.
+  const setStatus = (id: number, status: Status) =>
+    setMap((current) => ({
+      ...current,
+      modules: current.modules.map((module) => ({
+        ...module,
+        concepts: module.concepts.map((concept) => (concept.id === id ? { ...concept, status } : concept)),
+      })),
+    }));
+
   const toggle = (slug: string) =>
     setOpen((current) => {
       const next = new Set(current);
@@ -64,7 +75,8 @@ function MapView({ map, focus }: { map: ConceptMapView; focus: string | null }) 
     <>
       <h1>Concept map</h1>
       <p className="lead">
-        {map.modules.length} modules and {total} concepts from the books of {map.theme.name}. Open a concept to see its sources.
+        {map.modules.length} modules and {total} concepts from the books of {map.theme.name}. Open a concept to see its sources. Use
+        the links under a concept to learn it or to test it.
       </p>
       <div className="search">
         <label htmlFor="concept-search">Find a concept</label>
@@ -103,10 +115,12 @@ function MapView({ map, focus }: { map: ConceptMapView; focus: string | null }) 
               <ConceptRow
                 key={concept.slug}
                 concept={concept}
+                moduleId={module.id}
                 themeSlug={map.theme.slug}
                 open={open.has(concept.slug)}
                 onToggle={() => toggle(concept.slug)}
                 onRead={setSection}
+                onStatus={(status) => setStatus(concept.id, status)}
               />
             ))}
           </ul>
@@ -120,10 +134,12 @@ function MapView({ map, focus }: { map: ConceptMapView; focus: string | null }) 
 
 function ConceptRow(props: {
   concept: ConceptView;
+  moduleId: number;
   themeSlug: string;
   open: boolean;
   onToggle: () => void;
   onRead: (sectionId: number) => void;
+  onStatus: (status: Status) => void;
 }) {
   const { concept, open } = props;
   const detailsId = `details-${concept.slug}`;
@@ -139,9 +155,11 @@ function ConceptRow(props: {
           </button>
           <span className="concept-meta">
             {LEVEL[concept.level]} {KIND[concept.kind]}
+            {concept.status !== "new" && `. ${STATUS_INFO[concept.status].label}`}
           </span>
         </div>
         <p className="objective">{concept.objective}</p>
+        <ConceptActions concept={concept} moduleId={props.moduleId} onStatus={props.onStatus} />
         {open && (
           <div className="concept-details" id={detailsId}>
             {concept.prerequisites.length > 0 && (
@@ -175,5 +193,77 @@ function ConceptRow(props: {
         )}
       </div>
     </li>
+  );
+}
+
+// The actions on one concept. A concept with a lesson opens the lesson. Other concepts can go into the study queue or get a test.
+function ConceptActions({ concept, moduleId, onStatus }: { concept: ConceptView; moduleId: number; onStatus: (status: Status) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // An action that opens a different page keeps the links disabled until the page changes.
+  const run = async (action: () => Promise<string | null>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await action();
+      if (next) {
+        window.location.hash = next;
+        return;
+      }
+    } catch (problem) {
+      setError((problem as Error).message);
+    }
+    setBusy(false);
+  };
+
+  const learnNow = () =>
+    run(async () => {
+      await postJson(`/api/concepts/${concept.id}/top`);
+      return href.lesson(concept.id);
+    });
+  const addToQueue = () =>
+    run(async () => {
+      await postJson(`/api/modules/${moduleId}/selection`, { marks: { [concept.id]: "learn" } });
+      onStatus("queued");
+      return null;
+    });
+  const testIt = () =>
+    run(async () => {
+      const { sessionId } = await postJson<{ sessionId: number }>(`/api/concepts/${concept.id}/test`);
+      return href.session(sessionId);
+    });
+
+  return (
+    <>
+      <p className="row-actions">
+        {concept.status === "learning" || concept.status === "mastered" ? (
+          <a className="text-button strong" href={href.lesson(concept.id)}>
+            {concept.status === "learning" ? "Continue the lesson" : "Open the lesson"}
+          </a>
+        ) : (
+          <>
+            <button className="text-button strong" onClick={learnNow} disabled={busy}>
+              Learn now
+            </button>
+            {concept.status !== "queued" && (
+              <button className="text-button" onClick={addToQueue} disabled={busy}>
+                Add to the study queue
+              </button>
+            )}
+            {concept.status !== "queued" && (
+              <button className="text-button" onClick={testIt} disabled={busy}>
+                Test it
+              </button>
+            )}
+          </>
+        )}
+      </p>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </>
   );
 }

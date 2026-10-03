@@ -18,14 +18,9 @@ const UNMARKED = new Set(["new", "to_test", "failed"]);
 export function Select({ slug, moduleId }: { slug: string; moduleId: number }) {
   const map = useApi<ConceptMapView>(`/api/themes/${encodeURIComponent(slug)}/map`);
   const module = map.state === "ready" ? map.data.modules.find((item) => item.id === moduleId) : undefined;
-  const crumbs = [
-    { label: "Themes", href: href.home() },
-    { label: map.state === "ready" ? map.data.theme.name : slug, href: href.theme(slug) },
-    { label: "Concept map", href: href.map(slug) },
-    { label: module ? module.name : "Module" },
-  ];
+  const name = map.state === "ready" ? map.data.theme.name : slug;
   return (
-    <Layout crumbs={crumbs}>
+    <Layout theme={{ slug, name }} tab="map">
       {map.state === "loading" && <p className="quiet">Loading the module.</p>}
       {map.state === "error" && <Notice title="The module did not load">{<p>{map.message}</p>}</Notice>}
       {map.state === "ready" && !module && <Notice title="This module does not exist" />}

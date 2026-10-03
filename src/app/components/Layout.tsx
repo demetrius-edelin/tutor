@@ -1,27 +1,40 @@
 import type { ReactNode } from "react";
-import { href } from "../router";
+import { href, useRoute } from "../router";
 
-export interface Crumb {
-  label: string;
-  href?: string;
-}
+export type ThemeTab = "theme" | "map" | "queue";
 
-export function Layout({ crumbs, children }: { crumbs: Crumb[]; children: ReactNode }) {
+const TABS: { tab: ThemeTab; label: string; href: (slug: string) => string }[] = [
+  { tab: "theme", label: "Overview", href: href.theme },
+  { tab: "map", label: "Concept map", href: (slug) => href.map(slug) },
+  { tab: "queue", label: "Study queue", href: href.queue },
+];
+
+// A page in a theme shows the tabs of the theme. The tab of the page has a mark.
+// A lesson, a test, or a module page has the mark on the tab that it belongs to.
+export function Layout({ theme, tab, children }: { theme?: { slug: string; name: string }; tab?: ThemeTab; children: ReactNode }) {
+  const route = useRoute();
   return (
     <div className="shell">
       <header className="topbar">
-        <a className="wordmark" href={href.home()}>
+        <a className="wordmark" href={href.home()} title="All themes">
           Tutor
         </a>
-        {crumbs.length > 0 && (
-          <nav aria-label="Location">
-            <ol className="crumbs">
-              {crumbs.map((crumb, i) => (
-                <li key={`${crumb.label}-${i}`}>
-                  {crumb.href ? <a href={crumb.href}>{crumb.label}</a> : <span aria-current="page">{crumb.label}</span>}
+        {theme && (
+          <nav className="theme-nav" aria-label={`Theme ${theme.name}`}>
+            <span className="theme-name">{theme.name}</span>
+            <ul className="tabs">
+              {TABS.map((item) => (
+                <li key={item.tab}>
+                  <a
+                    href={item.href(theme.slug)}
+                    className={item.tab === tab ? "active" : undefined}
+                    aria-current={route.name === item.tab ? "page" : item.tab === tab ? "true" : undefined}
+                  >
+                    {item.label}
+                  </a>
                 </li>
               ))}
-            </ol>
+            </ul>
           </nav>
         )}
       </header>

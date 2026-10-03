@@ -19,17 +19,8 @@ export function Lesson({ conceptId }: { conceptId: number }) {
       .catch((problem: unknown) => setError((problem as Error).message));
   }, [conceptId]);
 
-  const crumbs = view
-    ? [
-        { label: "Themes", href: href.home() },
-        { label: view.concept.theme.name, href: href.theme(view.concept.theme.slug) },
-        { label: "Study queue", href: href.queue(view.concept.theme.slug) },
-        { label: view.concept.name },
-      ]
-    : [{ label: "Themes", href: href.home() }];
-
   return (
-    <Layout crumbs={crumbs}>
+    <Layout theme={view?.concept.theme} tab="queue">
       {!view && !error && <p className="quiet">Loading the lesson.</p>}
       {!view && error && <Notice title="The lesson did not load">{<p>{error}</p>}</Notice>}
       {view && !view.lesson && <LessonStart view={view} onStarted={setView} />}
