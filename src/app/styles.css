@@ -28,6 +28,15 @@
   --gutter: 1.5rem;
   --measure: 46rem;
 
+  /* The ruled lines of the paper. The value is in pixels, so that each line is sharp. */
+  --line-gap: 28px;
+  --line: color-mix(in srgb, var(--rule) 60%, var(--paper));
+  --margin-line: color-mix(in srgb, var(--margin-red) 80%, var(--paper));
+
+  /* The spiral binding: one ring for each ruled line. */
+  --binding-width: 20px;
+  --binding: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='28'%3E%3Cpath d='M15 16C10 21.5 3 21.5 -1 18.5' fill='none' stroke='%23a7aeba' stroke-width='2.4' stroke-linecap='round'/%3E%3Crect x='13' y='9' width='6' height='9' rx='1.5' fill='%233a4150'/%3E%3Cpath d='M-1 5.5C4 3 12 4 15.5 11' fill='none' stroke='%235f6878' stroke-width='3.4' stroke-linecap='round'/%3E%3Cpath d='M-1 5.5C4 3 12 4 15.5 11' fill='none' stroke='%23eceff3' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+
   color-scheme: light;
 }
 
@@ -42,6 +51,8 @@
     --highlight-soft: #4d4516;
     --panel: #1c2944;
     --focus: #8ab4ff;
+    --line: color-mix(in srgb, var(--rule) 80%, var(--paper));
+    --binding: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='28'%3E%3Cpath d='M15 16C10 21.5 3 21.5 -1 18.5' fill='none' stroke='%233d4a66' stroke-width='2.4' stroke-linecap='round'/%3E%3Crect x='13' y='9' width='6' height='9' rx='1.5' fill='%230a1020'/%3E%3Cpath d='M-1 5.5C4 3 12 4 15.5 11' fill='none' stroke='%230a1020' stroke-width='3.4' stroke-linecap='round'/%3E%3Cpath d='M-1 5.5C4 3 12 4 15.5 11' fill='none' stroke='%238793a8' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
     color-scheme: dark;
   }
 }
@@ -116,31 +127,54 @@ p {
   margin-bottom: 2rem;
 }
 
-/* The page: a notebook page with a red margin line on the left. */
+/* The page: a sheet of ruled notebook paper with a spiral binding and a red margin line on the left. */
 
-/* The red margin line runs down the full page, also through the top bar. */
 .shell {
   position: relative;
   min-height: 100vh;
+  background-color: var(--paper);
+  background-image: linear-gradient(transparent calc(var(--line-gap) - 1px), var(--line) calc(var(--line-gap) - 1px));
+  background-size: 100% var(--line-gap);
 }
 
+/* The red margin line runs down the full page, also through the top bar and the action bar. */
 .shell::before {
   content: "";
   position: absolute;
+  z-index: 1;
   top: 0;
   bottom: 0;
   left: var(--margin-width);
   width: 2px;
-  background: color-mix(in srgb, var(--margin-red) 80%, var(--paper));
+  background: var(--margin-line);
   pointer-events: none;
 }
 
+.shell::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--binding-width);
+  background: var(--binding) repeat-y;
+  background-size: var(--binding-width) var(--line-gap);
+  pointer-events: none;
+}
+
+/* The top bar is the blank band at the top of the sheet. Its height is three ruled lines,
+   so that its bottom border is on a ruled line. */
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 1.5rem;
-  padding: 1.25rem 1.5rem 1rem calc(var(--margin-width) + var(--gutter));
+  align-content: center;
+  gap: 0.25rem 1.5rem;
+  min-height: calc(3 * var(--line-gap));
+  padding: 0.75rem 1.5rem 0.75rem calc(var(--margin-width) + var(--gutter));
   border-bottom: 1px solid var(--rule);
+  background: var(--paper);
 }
 
 .wordmark {
@@ -148,6 +182,18 @@ p {
   font-size: var(--step-1);
   font-weight: 600;
   text-decoration: none;
+}
+
+/* The logo is a mask, so that it has the color of the text. */
+.wordmark::before {
+  content: "";
+  display: inline-block;
+  width: 1.33em;
+  height: 1em;
+  margin-right: 0.4em;
+  vertical-align: -0.15em;
+  background: currentColor;
+  mask: url("/logo.svg") center / contain no-repeat;
 }
 
 .crumbs {
@@ -182,7 +228,7 @@ p {
   overflow-x: auto;
   padding: 0.75rem 1rem;
   border-left: 3px solid var(--rule);
-  background: color-mix(in srgb, var(--rule) 25%, transparent);
+  background: color-mix(in srgb, var(--rule) 25%, var(--paper));
   font-family: var(--code);
   font-size: 0.85rem;
   line-height: 1.5;
@@ -199,7 +245,6 @@ p {
 
 .contents li {
   padding: 0.6rem 0;
-  border-bottom: 1px solid var(--rule);
 }
 
 .contents-entry {
@@ -404,7 +449,6 @@ a.contents-entry:hover .contents-title {
 .concept {
   position: relative;
   padding: 0.75rem 0 0.6rem;
-  border-bottom: 1px solid var(--rule);
 }
 
 /* The margin column is to the left of the red line. */
@@ -604,17 +648,9 @@ a.contents-entry:hover .contents-title {
   padding: 0.9rem 0;
   border-top: 1px solid var(--rule);
   background: var(--paper);
-}
-
-/* The bar also covers the margin to the left of the red line, so that no mark of a row behind it shows. */
-.action-bar::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: calc(-1 * var(--margin-width) - var(--gutter));
-  width: var(--margin-width);
-  background: var(--paper);
+  /* The paper of the bar goes across the full width of the page, so that no row or mark behind it shows. */
+  box-shadow: 0 0 0 100vmax var(--paper);
+  clip-path: inset(0 -100vmax);
 }
 
 .action-group {
@@ -686,6 +722,7 @@ button.button {
   padding: 0.6rem 0.8rem;
   border: 1px solid var(--rule);
   border-radius: 0.3rem;
+  background: var(--panel);
   cursor: pointer;
   font-family: var(--reading);
 }
@@ -792,12 +829,10 @@ button.button {
   border-left: 4px solid var(--highlight);
 }
 
-.queue-item {
-  background: var(--paper);
-}
-
+/* Only the row that moves has paper, so that it covers the rows below it. */
 .queue-item.dragging {
   z-index: 2;
+  background: var(--paper);
   box-shadow: 0 0.4rem 1.2rem color-mix(in srgb, var(--ink) 18%, transparent);
 }
 
@@ -909,7 +944,7 @@ button.button {
   overflow-x: auto;
   padding: 0.75rem 1rem;
   border-left: 3px solid var(--rule);
-  background: color-mix(in srgb, var(--rule) 25%, transparent);
+  background: color-mix(in srgb, var(--rule) 25%, var(--paper));
   font-family: var(--code);
   font-size: 0.85rem;
   line-height: 1.5;
@@ -1097,8 +1132,11 @@ button.button {
     --margin-width: 2.5rem;
     --gutter: 1rem;
   }
+  /* The narrow margin has no space for the binding next to the status marks. */
+  .shell::after {
+    display: none;
+  }
   .topbar {
-    flex-wrap: wrap;
     gap: 0.25rem 1rem;
   }
   .page {
