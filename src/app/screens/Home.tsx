@@ -36,6 +36,7 @@ export function Home() {
                   </a>
                   <p className="contents-note">
                     {plural(theme.books, "book")}, {plural(theme.modules, "module")}
+                    {theme.progress.skipped > 0 && `, ${plural(theme.progress.skipped, "skipped concept")}`}
                   </p>
                 </li>
               );

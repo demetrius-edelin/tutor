@@ -28,8 +28,10 @@ function ThemeView({ theme }: { theme: ThemeDetail }) {
     <>
       <h1>{theme.name}</h1>
       <p className="lead">
-        You know {n(done)} of {plural(total, "concept")}. The concepts come from {plural(theme.books, "book")}, in{" "}
-        {plural(theme.modules, "module")}.
+        You know {n(done)} of {plural(total, "concept")}.
+        {theme.progress.skipped > 0 &&
+          ` The ${plural(theme.progress.skipped, "skipped concept")} ${theme.progress.skipped === 1 ? "does" : "do"} not count.`} The concepts come from{" "}
+        {plural(theme.books, "book")}, in {plural(theme.modules, "module")}.
       </p>
       <ProgressBar progress={theme.progress} />
       <ProgressLegend progress={theme.progress} />
