@@ -594,16 +594,6 @@ a.contents-entry:hover .contents-title {
   font-weight: 500;
 }
 
-.next-step {
-  max-width: var(--measure);
-  padding: 0.25rem 0 0.5rem 1rem;
-  border-left: 4px solid var(--highlight);
-}
-
-.next-step h2 {
-  margin-top: 0.5rem;
-}
-
 .bulk {
   font-size: var(--step--1);
   color: var(--graphite);
@@ -849,17 +839,234 @@ button.button {
   }
 }
 
-/* Study queue */
+/* Overview of a theme */
 
-.queue-summary {
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem 1.5rem;
   max-width: var(--measure);
+  margin: 0 0 2rem;
+  padding: 0;
+  list-style: none;
+  color: var(--graphite);
+  font-size: var(--step--1);
+  line-height: 1.45;
 }
+
+.steps li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 0.6rem;
+}
+
+.steps strong {
+  color: var(--ink);
+}
+
+.step-number {
+  display: inline-grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* The card of the next concept to learn is the main action of the overview. */
+.next-card {
+  max-width: var(--measure);
+  margin: 0 0 1rem;
+  padding: 1.1rem 1.5rem 1.25rem;
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--highlight);
+  border-radius: 0.4rem;
+  background: var(--panel);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.next-card .button-row {
+  margin: 1rem 0 0;
+}
+
+.eyebrow {
+  margin: 0 0 0.35rem;
+  color: var(--graphite);
+  font-size: var(--step--1);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.next-name {
+  margin: 0;
+  font-family: var(--reading);
+  font-size: var(--step-2);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.next-meta {
+  margin: 0.2rem 0 0.4rem;
+  color: var(--graphite);
+  font-size: var(--step--1);
+}
+
+.section-intro {
+  max-width: var(--measure);
+  color: var(--graphite);
+}
+
+.module-list {
+  max-width: var(--measure);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.module-row {
+  display: grid;
+  grid-template-columns: 1.75rem 1fr;
+  gap: 0 0.5rem;
+  padding: 0.75rem 0;
+}
+
+.module-row .module-number {
+  font-family: var(--reading);
+  font-size: var(--step-1);
+}
+
+.module-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.module-name {
+  font-family: var(--reading);
+  font-size: var(--step-1);
+  font-weight: 500;
+}
+
+.module-status {
+  margin: 0.4rem 0 0;
+  color: var(--graphite);
+  font-size: var(--step--1);
+}
+
+.button.small {
+  padding: 0.3rem 0.8rem;
+  font-size: var(--step--1);
+}
+
+/* A second button next to the main action has only an outline. */
+.button.secondary {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--ink);
+  color: var(--ink);
+}
+
+.button.secondary:hover {
+  background: color-mix(in srgb, var(--rule) 40%, var(--paper));
+}
+
+/* Study queue */
 
 .suggestion {
   max-width: var(--measure);
   margin-bottom: 1.5rem;
   padding: 0.25rem 0 0.25rem 1rem;
   border-left: 4px solid var(--highlight);
+}
+
+.queue-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0;
+  max-width: var(--measure);
+  margin: -1rem 0 1.5rem;
+  color: var(--graphite);
+  font-size: var(--step--1);
+}
+
+.queue-facts span + span::before {
+  content: "·";
+  margin: 0 0.6rem;
+}
+
+.queue-facts strong {
+  color: var(--ink);
+}
+
+.queue-help {
+  max-width: var(--measure);
+  color: var(--graphite);
+  font-size: var(--step--1);
+}
+
+.tag {
+  padding: 0.05rem 0.45rem;
+  border-radius: 0.25rem;
+  background: var(--highlight-soft);
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.queue-item p.concept-meta {
+  margin: 0.1rem 0 0;
+}
+
+.queue-source {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 0.4rem;
+  align-items: start;
+  margin: 0.3rem 0 0;
+  color: var(--graphite);
+  font-size: var(--step--1);
+}
+
+.queue-source .text-button {
+  color: var(--graphite);
+  font-weight: 400;
+  line-height: inherit;
+  text-align: left;
+}
+
+/* The actions of a row are in groups: start, move, and take out. */
+.action-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.75rem;
+  padding-left: 1rem;
+  border-left: 1px solid var(--rule);
+}
+
+.action-label {
+  color: var(--graphite);
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.add-concepts {
+  max-width: var(--measure);
+  margin-top: 1.5rem;
+  padding: 0 1.25rem 0.25rem;
+  border: 2px dashed var(--rule);
+  border-radius: 0.4rem;
+}
+
+.add-concepts h2 {
+  margin: 0.9rem 0 0.4rem;
 }
 
 /* Only the row that moves has paper, so that it covers the rows below it. */
@@ -1175,6 +1382,9 @@ button.button {
   .theme-name {
     padding-left: 0;
     border-left: 0;
+  }
+  .steps {
+    grid-template-columns: 1fr;
   }
   .tabs a {
     padding: 0.45rem 0.5rem;

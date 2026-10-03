@@ -1,5 +1,5 @@
 import type { Db } from "../db/index.js";
-import type { QueueItem, QueueView, Status } from "../server/api-types.js";
+import type { QueueItem, QueueView, SourceInfo, Status } from "../server/api-types.js";
 import { TutorError } from "./diagnosis.js";
 
 // The study queue of a theme: the concepts that the learner wants to learn, in order.
@@ -15,6 +15,7 @@ interface QueueRow {
   objective: string;
   kind: QueueItem["kind"];
   level: QueueItem["level"];
+  status: QueueItem["status"];
   queue_pos: number;
   module_id: number;
   module_position: number;
@@ -30,7 +31,7 @@ function themeOf(db: Db, slug: string): { id: number; slug: string; name: string
 function queueRows(db: Db, themeId: number): QueueRow[] {
   return db
     .prepare(
-      `SELECT c.id, c.slug, c.name, c.objective, c.kind, c.level, c.queue_pos, m.id AS module_id, m.position AS module_position, m.name AS module_name
+      `SELECT c.id, c.slug, c.name, c.objective, c.kind, c.level, c.status, c.queue_pos, m.id AS module_id, m.position AS module_position, m.name AS module_name
        FROM concepts c JOIN modules m ON m.id = c.module_id
        WHERE c.theme_id = ? AND c.status IN ('queued', 'learning') ORDER BY c.queue_pos, c.id`,
     )
@@ -51,6 +52,34 @@ function prerequisitesOf(db: Db, themeId: number): Map<number, { id: number; slu
     result.set(row.concept_id, list);
   }
   return result;
+}
+
+function sourcesOf(db: Db, themeId: number): Map<number, SourceInfo[]> {
+  const rows = db
+    .prepare(
+      `SELECT cs.concept_id, s.id AS sectionId, s.chapter, s.number, s.title, s.page, b.title AS book
+       FROM concept_sources cs JOIN sections s ON s.id = cs.section_id JOIN books b ON b.id = s.book_id
+       WHERE b.theme_id = ? ORDER BY b.id, s.chapter, s.number`,
+    )
+    .all(themeId) as { concept_id: number; sectionId: number; chapter: number; number: number; title: string; page: string | null; book: string }[];
+  const result = new Map<number, SourceInfo[]>();
+  for (const row of rows) {
+    const list = result.get(row.concept_id) ?? [];
+    list.push({ sectionId: row.sectionId, ref: `${row.chapter}.${row.number}`, title: row.title, book: row.book, page: row.page });
+    result.set(row.concept_id, list);
+  }
+  return result;
+}
+
+// The concepts that the learner did not choose yet. A concept to test or a failed concept counts too:
+// the learner chooses again on the page of the module.
+function notChosen(db: Db, themeId: number): QueueView["notChosen"] {
+  return db
+    .prepare(
+      `SELECT COUNT(*) AS concepts, COUNT(DISTINCT module_id) AS modules FROM concepts
+       WHERE theme_id = ? AND status IN ('new', 'to_test', 'failed')`,
+    )
+    .get(themeId) as QueueView["notChosen"];
 }
 
 // The suggested order: a prerequisite in the queue comes before the concepts that need it.
@@ -80,6 +109,7 @@ export function queueView(db: Db, slug: string): QueueView {
   const theme = themeOf(db, slug);
   const rows = queueRows(db, theme.id);
   const prerequisites = prerequisitesOf(db, theme.id);
+  const sources = sourcesOf(db, theme.id);
   const place = new Map(rows.map((row, i) => [row.id, i + 1]));
   const items = rows.map((row, i): QueueItem => {
     const own = (prerequisites.get(row.id) ?? []).map((prerequisite) => ({
@@ -105,7 +135,9 @@ export function queueView(db: Db, slug: string): QueueView {
       kind: row.kind,
       level: row.level,
       module: { id: row.module_id, position: row.module_position, name: row.module_name },
+      status: row.status,
       position: i + 1,
+      sources: sources.get(row.id) ?? [],
       prerequisites: own,
       warning,
     };
@@ -115,6 +147,7 @@ export function queueView(db: Db, slug: string): QueueView {
     theme: { slug: theme.slug, name: theme.name },
     items,
     suggestionDiffers: suggestion.some((id, i) => id !== rows[i]?.id),
+    notChosen: notChosen(db, theme.id),
   };
 }
 

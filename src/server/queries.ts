@@ -5,6 +5,7 @@ import {
   STATUSES,
   type BookSummary,
   type ConceptMapView,
+  type ModuleSummary,
   type ConceptView,
   type SectionView,
   type Status,
@@ -19,8 +20,10 @@ interface ThemeRow {
   name: string;
 }
 
+const noProgress = () => Object.fromEntries(STATUSES.map((status) => [status, 0])) as StatusCounts;
+
 function progress(db: Db, themeId: number): StatusCounts {
-  const counts = Object.fromEntries(STATUSES.map((status) => [status, 0])) as StatusCounts;
+  const counts = noProgress();
   const rows = db.prepare("SELECT status, COUNT(*) AS n FROM concepts WHERE theme_id = ? GROUP BY status").all(themeId) as {
     status: Status;
     n: number;
@@ -66,21 +69,43 @@ export function themeDetail(db: Db, slug: string): ThemeDetail | undefined {
     .all(theme.id) as (Omit<BookSummary, "format"> & { file: string })[];
   const next = db
     .prepare(
-      `SELECT m.id, m.position, m.name, COUNT(c.id) AS newConcepts FROM modules m JOIN concepts c ON c.module_id = m.id
-       WHERE m.theme_id = ? AND c.status = 'new' GROUP BY m.id ORDER BY m.position LIMIT 1`,
+      `SELECT c.id AS conceptId, c.name, c.objective, c.status, m.position AS modulePosition, m.name AS moduleName
+       FROM concepts c JOIN modules m ON m.id = c.module_id
+       WHERE c.theme_id = ? AND c.status IN ('queued', 'learning') ORDER BY c.queue_pos, c.id LIMIT 1`,
     )
-    .get(theme.id) as ThemeDetail["nextModule"] | undefined;
+    .get(theme.id) as
+    | { conceptId: number; name: string; objective: string; status: Status; modulePosition: number; moduleName: string }
+    | undefined;
   return {
     ...summary(db, theme),
     bookList: books.map(({ file, ...book }) => ({ ...book, format: extname(file).toLowerCase() === ".pdf" ? "pdf" : "epub" })),
-    nextModule: next ?? null,
-    nextToLearn:
-      (db
-        .prepare(
-          "SELECT id AS conceptId, name, status FROM concepts WHERE theme_id = ? AND status IN ('queued', 'learning') ORDER BY queue_pos, id LIMIT 1",
-        )
-        .get(theme.id) as ThemeDetail["nextToLearn"] | undefined) ?? null,
+    moduleList: moduleList(db, theme.id),
+    nextToLearn: next
+      ? {
+          conceptId: next.conceptId,
+          name: next.name,
+          objective: next.objective,
+          status: next.status,
+          module: { position: next.modulePosition, name: next.moduleName },
+        }
+      : null,
   };
+}
+
+function moduleList(db: Db, themeId: number): ModuleSummary[] {
+  const modules = db.prepare("SELECT id, position, name FROM modules WHERE theme_id = ? ORDER BY position").all(themeId) as {
+    id: number;
+    position: number;
+    name: string;
+  }[];
+  const rows = db
+    .prepare("SELECT module_id, status, COUNT(*) AS n FROM concepts WHERE theme_id = ? GROUP BY module_id, status")
+    .all(themeId) as { module_id: number; status: Status; n: number }[];
+  return modules.map((module) => {
+    const counts = noProgress();
+    for (const row of rows) if (row.module_id === module.id) counts[row.status] = row.n;
+    return { ...module, concepts: STATUSES.reduce((sum, status) => sum + counts[status], 0), progress: counts };
+  });
 }
 
 export function conceptMap(db: Db, slug: string): ConceptMapView | undefined {

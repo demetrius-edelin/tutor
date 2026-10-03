@@ -49,6 +49,13 @@ describe("API", () => {
     ]);
   });
 
+  it("gives the status of each module", async () => {
+    const { body } = await get<ThemeDetail>("/api/themes/git");
+    expect(body.moduleList).toEqual([expect.objectContaining({ position: 1, name: "Basics", concepts: body.concepts })]);
+    expect(body.moduleList[0]!.progress.new).toBe(body.concepts);
+    expect(body.nextToLearn).toBeNull();
+  });
+
   it("gives the concept map with prerequisites and sources", async () => {
     const { body } = await get<ConceptMapView>("/api/themes/git/map");
     const concepts = body.modules.flatMap((module) => module.concepts);

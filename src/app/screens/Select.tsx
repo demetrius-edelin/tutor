@@ -20,7 +20,7 @@ export function Select({ slug, moduleId }: { slug: string; moduleId: number }) {
   const module = map.state === "ready" ? map.data.modules.find((item) => item.id === moduleId) : undefined;
   const name = map.state === "ready" ? map.data.theme.name : slug;
   return (
-    <Layout theme={{ slug, name }} tab="map">
+    <Layout theme={{ slug, name }} tab="theme">
       {map.state === "loading" && <p className="quiet">Loading the module.</p>}
       {map.state === "error" && <Notice title="The module did not load">{<p>{map.message}</p>}</Notice>}
       {map.state === "ready" && !module && <Notice title="This module does not exist" />}
@@ -74,7 +74,7 @@ function SelectView(props: { slug: string; moduleId: number; moduleName: string;
     setError(null);
     try {
       const result = await postJson<SelectionResult>(`/api/modules/${props.moduleId}/selection`, { marks: changes });
-      window.location.hash = result.sessionId !== null ? href.session(result.sessionId) : href.map(props.slug);
+      window.location.hash = result.sessionId !== null ? href.session(result.sessionId) : href.theme(props.slug);
     } catch (problem) {
       setError((problem as Error).message);
       setSending(false);
@@ -90,17 +90,17 @@ function SelectView(props: { slug: string; moduleId: number; moduleName: string;
 
   return (
     <>
-      <h1>Choose what to test</h1>
+      <h1>Choose concepts</h1>
       <p className="lead">
-        Module {props.position}, {props.moduleName}. Mark the concepts that you want to work on now. The tutor asks 2 questions about each
-        concept that you mark Test. Learn puts a concept in your study queue without a test. Later keeps a concept for another day.
+        Module {props.position}, {props.moduleName}. Choose what to do with each concept. Test asks 2 questions about the concept. Learn puts the
+        concept in your study queue without a test. Skip means that you do not want to learn it. Later keeps it for another day.
       </p>
 
       {unmarked.length > 0 && (
         <section aria-labelledby="unmarked-heading">
-          <h2 id="unmarked-heading">Not marked yet</h2>
+          <h2 id="unmarked-heading">Not chosen yet</h2>
           <p className="bulk">
-            Mark all as{" "}
+            Choose for all:{" "}
             {MARKS.map((mark, i) => (
               <span key={mark.value}>
                 {i > 0 && ", "}
@@ -140,8 +140,8 @@ function SelectView(props: { slug: string; moduleId: number; moduleName: string;
 
       {marked.length > 0 && (
         <section aria-labelledby="marked-heading">
-          <h2 id="marked-heading">Marked already</h2>
-          <p className="bulk">To change a mark, use Change. Later sets the concept back to not started.</p>
+          <h2 id="marked-heading">Chosen already</h2>
+          <p className="bulk">To change a choice, use Change. Later sets the concept back to not chosen.</p>
           <ul className="concepts">
             {marked.map((concept) => (
               <li key={concept.id} className="concept concept-select">
@@ -179,9 +179,9 @@ function SelectView(props: { slug: string; moduleId: number; moduleName: string;
       )}
 
       <div className="action-bar">
-        <span className="quiet">{summary.length > 0 ? summary.join(", ") : "No marks yet"}</span>
+        <span className="quiet">{summary.length > 0 ? summary.join(", ") : "Nothing chosen yet"}</span>
         <button className="button" onClick={submit} disabled={sending || total === 0}>
-          {sending ? "Starting" : counts.test > 0 ? "Start the test" : "Save the marks"}
+          {sending ? "Starting" : counts.test > 0 ? "Start the test" : "Save the choices"}
         </button>
       </div>
       {error && (

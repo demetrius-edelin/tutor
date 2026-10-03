@@ -1,4 +1,4 @@
-import type { ThemeDetail } from "../../server/api-types";
+import type { ModuleSummary, StatusCounts, ThemeDetail } from "../../server/api-types";
 import { useApi } from "../api";
 import { Layout, Notice } from "../components/Layout";
 import { knownShare, ProgressBar, ProgressLegend } from "../components/Progress";
@@ -6,6 +6,9 @@ import { href } from "../router";
 
 const n = (value: number) => value.toLocaleString("en-US");
 const plural = (count: number, word: string) => `${n(count)} ${word}${count === 1 ? "" : "s"}`;
+
+// A concept to test or a failed concept also needs a choice: the module page shows it as not chosen.
+const notChosen = (progress: StatusCounts) => progress.new + progress.to_test + progress.failed;
 
 export function Theme({ slug }: { slug: string }) {
   const theme = useApi<ThemeDetail>(`/api/themes/${encodeURIComponent(slug)}`);
@@ -25,54 +28,46 @@ function ThemeView({ theme }: { theme: ThemeDetail }) {
     <>
       <h1>{theme.name}</h1>
       <p className="lead">
-        {plural(theme.books, "book")}, {plural(theme.modules, "module")}, {plural(theme.concepts, "concept")}. You know{" "}
-        {n(done)} of {plural(total, "concept")}.
+        You know {n(done)} of {plural(total, "concept")}. The concepts come from {plural(theme.books, "book")}, in{" "}
+        {plural(theme.modules, "module")}.
       </p>
+      <ProgressBar progress={theme.progress} />
+      <ProgressLegend progress={theme.progress} />
 
-      {theme.progress.queued + theme.progress.learning > 0 && (
-        <section aria-labelledby="queue-heading" className="queue-summary">
-          <h2 id="queue-heading">Study queue</h2>
-          <p>
-            {plural(theme.progress.queued + theme.progress.learning, "concept")} to learn.
-            {theme.nextToLearn ? ` Next: ${theme.nextToLearn.name}.` : ""}
-          </p>
-          <p className="button-row">
-            {theme.nextToLearn && (
-              <a className="button" href={href.lesson(theme.nextToLearn.conceptId)}>
-                {theme.nextToLearn.status === "learning" ? "Continue the lesson" : "Start the lesson"}
-              </a>
-            )}
-            <a className="text-link" href={href.queue(theme.slug)}>
-              Open the study queue
-            </a>
-          </p>
-        </section>
-      )}
+      <ol className="steps" aria-label="How the tutor works">
+        <li>
+          <span className="step-number">1</span>
+          <span>
+            <strong>Choose</strong> concepts from any module, in any order. Test a concept, learn it, or skip it.
+          </span>
+        </li>
+        <li>
+          <span className="step-number">2</span>
+          <span>
+            <strong>Learn</strong> the concepts in your study queue. The tutor teaches one concept at a time from your books.
+          </span>
+        </li>
+        <li>
+          <span className="step-number">3</span>
+          <span>
+            <strong>Pass the test</strong> after the lesson. The concept is then mastered.
+          </span>
+        </li>
+      </ol>
 
-      {theme.nextModule && (
-        <section aria-labelledby="next-heading" className="next-step">
-          <h2 id="next-heading">Next step</h2>
-          <p>
-            Module {theme.nextModule.position}, {theme.nextModule.name}, has {plural(theme.nextModule.newConcepts, "concept")} that you
-            did not mark yet. Choose which concepts to test, to learn, or to skip.
-          </p>
-          <p>
-            <a className="button" href={href.select(theme.slug, theme.nextModule.id)}>
-              Choose what to test
-            </a>
-          </p>
-        </section>
-      )}
+      <NextCard theme={theme} />
 
-      <section aria-labelledby="progress-heading">
-        <h2 id="progress-heading">Progress</h2>
-        <ProgressBar progress={theme.progress} />
-        <ProgressLegend progress={theme.progress} />
-        <p>
-          <a className={theme.nextModule ? "text-link" : "button"} href={href.map(theme.slug)}>
-            Open the concept map
-          </a>
+      <section aria-labelledby="modules-heading">
+        <h2 id="modules-heading">Choose what to learn</h2>
+        <p className="section-intro">
+          The concepts are in modules. You can choose concepts from any module, in any order. To find one concept, use the{" "}
+          <a href={href.map(theme.slug)}>concept map</a>.
         </p>
+        <ol className="module-list">
+          {theme.moduleList.map((module) => (
+            <ModuleRow key={module.id} slug={theme.slug} module={module} />
+          ))}
+        </ol>
       </section>
 
       <section aria-labelledby="books-heading">
@@ -95,5 +90,70 @@ function ThemeView({ theme }: { theme: ThemeDetail }) {
         </ol>
       </section>
     </>
+  );
+}
+
+// The first concept of the study queue, with the button that opens its lesson.
+function NextCard({ theme }: { theme: ThemeDetail }) {
+  const next = theme.nextToLearn;
+  const toLearn = theme.progress.queued + theme.progress.learning;
+  return (
+    <section className="next-card" aria-labelledby="next-heading">
+      <h2 id="next-heading" className="eyebrow">
+        Next to learn
+      </h2>
+      {next ? (
+        <>
+          <p className="next-name">{next.name}</p>
+          <p className="next-meta">
+            Module {next.module.position}, {next.module.name}. {next.status === "learning" ? "You started the lesson." : "First in your study queue."}
+          </p>
+          <p className="objective">{next.objective}</p>
+          <p className="button-row">
+            <a className="button" href={href.lesson(next.conceptId)}>
+              {next.status === "learning" ? "Continue the lesson" : "Start the lesson"}
+            </a>
+            <a className="text-link" href={href.queue(theme.slug)}>
+              Open the study queue ({plural(toLearn, "concept")})
+            </a>
+          </p>
+        </>
+      ) : (
+        <p className="objective">Your study queue is empty. Choose concepts to learn from a module below.</p>
+      )}
+    </section>
+  );
+}
+
+function ModuleRow({ slug, module }: { slug: string; module: ModuleSummary }) {
+  const { progress } = module;
+  const open = notChosen(progress);
+  const toLearn = progress.queued + progress.learning;
+  const parts = [
+    progress.new + progress.failed > 0 && `${n(progress.new + progress.failed)} not chosen yet`,
+    progress.to_test > 0 && `${n(progress.to_test)} to test`,
+    toLearn > 0 && `${n(toLearn)} in the study queue`,
+    progress.known > 0 && `${n(progress.known)} known`,
+    progress.mastered > 0 && `${n(progress.mastered)} mastered`,
+    progress.skipped > 0 && `${n(progress.skipped)} skipped`,
+  ].filter(Boolean);
+  const state = open > 0 ? "" : toLearn > 0 ? "All concepts are chosen. " : "Done. ";
+  return (
+    <li className="module-row">
+      <span className="module-number">{module.position}.</span>
+      <div>
+        <div className="module-title-row">
+          <span className="module-name">{module.name}</span>
+          <a className={open > 0 ? "button small secondary" : "text-link"} href={href.select(slug, module.id)}>
+            {open > 0 ? "Choose concepts" : "Change the choices"}
+          </a>
+        </div>
+        <ProgressBar progress={progress} />
+        <p className="module-status">
+          {state}
+          {plural(module.concepts, "concept")}: {parts.join(", ")}.
+        </p>
+      </div>
+    </li>
   );
 }

@@ -29,9 +29,18 @@ export interface BookSummary {
 
 export interface ThemeDetail extends ThemeSummary {
   bookList: BookSummary[];
-  nextModule: NextModule | null;
+  moduleList: ModuleSummary[];
   // The first concept of the study queue, or null if the queue is empty.
-  nextToLearn: { conceptId: number; name: string; status: Status } | null;
+  nextToLearn: { conceptId: number; name: string; objective: string; status: Status; module: { position: number; name: string } } | null;
+}
+
+// A module of a theme, with the number of its concepts in each status.
+export interface ModuleSummary {
+  id: number;
+  position: number;
+  name: string;
+  concepts: number;
+  progress: StatusCounts;
 }
 
 export interface SourceRef {
@@ -76,15 +85,6 @@ export interface SectionView {
   title: string;
   page: string | null;
   markdown: string;
-}
-
-// A theme also suggests the next module to diagnose: the first module in the map order
-// that has concepts that the learner did not mark yet.
-export interface NextModule {
-  id: number;
-  position: number;
-  name: string;
-  newConcepts: number;
 }
 
 // Diagnosis
@@ -171,7 +171,10 @@ export interface QueueItem {
   kind: "knowledge" | "skill";
   level: "basic" | "intermediate" | "advanced";
   module: { id: number; position: number; name: string };
+  status: "queued" | "learning";
   position: number;
+  // The book sections that teach the concept.
+  sources: SourceInfo[];
   prerequisites: QueuePrerequisite[];
   // A short warning for the learner, for example a prerequisite that comes later. Null if there is no problem.
   warning: string | null;
@@ -182,6 +185,8 @@ export interface QueueView {
   items: QueueItem[];
   // True if the suggested order of the tutor is different from the current order.
   suggestionDiffers: boolean;
+  // The concepts of the theme that the learner did not choose yet, and the number of their modules.
+  notChosen: { concepts: number; modules: number };
 }
 
 // Lessons

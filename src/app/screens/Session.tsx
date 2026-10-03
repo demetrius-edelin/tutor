@@ -28,9 +28,9 @@ export function Session({ id }: { id: number }) {
     return () => window.clearInterval(timer);
   }, [session?.status, load]);
 
-  // A test after a lesson belongs to the study queue. A diagnosis belongs to the concept map.
+  // A test after a lesson belongs to the study queue. A diagnosis of a module belongs to the overview.
   return (
-    <Layout theme={session?.theme} tab={session?.kind === "test" ? "queue" : "map"}>
+    <Layout theme={session?.theme} tab={session?.kind === "test" ? "queue" : "theme"}>
       {session?.kind === "test" && session.concept && (
         <p className="back-link">
           <a href={href.lesson(session.concept.id)}>Back to the lesson: {session.concept.name}</a>

@@ -54,6 +54,14 @@ describe("study queue", () => {
     expect(view.suggestionDiffers).toBe(true);
   });
 
+  it("gives the status of each concept and counts the concepts that are not chosen yet", async () => {
+    db.prepare("UPDATE concepts SET status = 'learning' WHERE id = ?").run(ids["advanced-filter"]);
+    const view = await get();
+    expect(view.items.map((item) => item.status)).toEqual(["learning", "queued", "queued", "queued", "queued"]);
+    expect(view.items[0]!.sources).toEqual([]);
+    expect(view.notChosen).toEqual({ concepts: 1, modules: 1 });
+  });
+
   it("applies the suggested order: prerequisites first, then modules, then levels", async () => {
     const { body } = await post<QueueView>("/api/themes/sql/queue/suggested");
     expect(names(body)).toEqual(["select-basics", "having", "advanced-filter", "joins", "subqueries"]);
@@ -87,7 +95,7 @@ describe("study queue", () => {
   it("orders a cycle of prerequisites without a loop", () => {
     const row = (id: number, position: number) => ({
       id, slug: `c${id}`, name: `c${id}`, objective: "", kind: "knowledge" as const, level: "basic" as const,
-      queue_pos: position, module_id: 1, module_position: 1, module_name: "m",
+      status: "queued" as const, queue_pos: position, module_id: 1, module_position: 1, module_name: "m",
     });
     const order = suggestedOrder([row(1, 1), row(2, 2)], new Map([[1, [{ id: 2 }]], [2, [{ id: 1 }]]]));
     expect(order.sort()).toEqual([1, 2]);

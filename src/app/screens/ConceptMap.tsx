@@ -106,8 +106,8 @@ function MapView({ map: loaded, focus }: { map: ConceptMapView; focus: string | 
               {map.modules
                 .find((item) => item.id === module.id)!
                 .concepts.some((concept) => ["new", "to_test", "failed"].includes(concept.status))
-                ? "Choose what to test"
-                : "Change the marks"}
+                ? "Choose concepts"
+                : "Change the choices"}
             </a>
           </div>
           <ul className="concepts">
