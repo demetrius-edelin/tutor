@@ -30,6 +30,28 @@ export function Queue({ slug }: { slug: string }) {
   );
 }
 
+// One order for the whole queue. The two orders are equal options: the learner chooses one, or keeps an own order.
+// The order that the queue has now shows a mark in place of the button.
+function OrderOption(props: { name: string; hint: string; inUse: boolean; busy: boolean; onUse: () => void }) {
+  return (
+    <div className="order-option">
+      {props.inUse ? (
+        <p className="order-current">
+          <span className="order-check" aria-hidden="true">
+            ✓
+          </span>
+          The {props.name} is in use
+        </p>
+      ) : (
+        <button className="button secondary" disabled={props.busy} onClick={props.onUse}>
+          Use the {props.name}
+        </button>
+      )}
+      <p className="quiet small">{props.hint}</p>
+    </div>
+  );
+}
+
 function QueueEditor({ slug, initial }: { slug: string; initial: QueueView }) {
   const [queue, setQueue] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -136,29 +158,22 @@ function QueueEditor({ slug, initial }: { slug: string; initial: QueueView }) {
         )}
       </p>
 
-      {queue.suggestionDiffers && (
-        <div className="suggestion">
-          <p>The tutor suggests a different order: prerequisites first, then the module order, then from basic to advanced.</p>
-          <button
-            className="button"
-            disabled={busy}
-            onClick={() => save(`/api/themes/${encodeURIComponent(slug)}/queue/suggested`, {})}
-          >
-            Use the suggested order
-          </button>
-        </div>
-      )}
-
-      {queue.bookOrderDiffers ? (
-        <p className="button-row">
-          <button className="button secondary" disabled={busy} onClick={() => save(`/api/themes/${encodeURIComponent(slug)}/queue/book`, {})}>
-            Use the book order
-          </button>
-          <span className="quiet small">The order of the sections in your books, from the first chapter to the last.</span>
-        </p>
-      ) : (
-        <p className="quiet small">The queue is in the order of the sections in your books.</p>
-      )}
+      <div className="order-options" role="group" aria-label="Order of the whole queue">
+        <OrderOption
+          name="suggested order"
+          hint="Prerequisites first, then the module order, then from basic to advanced."
+          inUse={!queue.suggestionDiffers}
+          busy={busy}
+          onUse={() => save(`/api/themes/${encodeURIComponent(slug)}/queue/suggested`, {})}
+        />
+        <OrderOption
+          name="book order"
+          hint="The order of the sections in your books, from the first chapter to the last."
+          inUse={!queue.bookOrderDiffers}
+          busy={busy}
+          onUse={() => save(`/api/themes/${encodeURIComponent(slug)}/queue/book`, {})}
+        />
+      </div>
 
       {error && (
         <p className="error" role="alert">

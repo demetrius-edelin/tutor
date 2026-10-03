@@ -1249,6 +1249,47 @@ button.button {
   border-left: 4px solid var(--highlight);
 }
 
+/* The two orders for the whole queue: two cards of the same size, side by side on a wide screen. */
+.order-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.75rem;
+  max-width: var(--measure);
+  margin-bottom: 1.25rem;
+}
+
+.order-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.4rem;
+  background: var(--panel);
+}
+
+.order-option p {
+  margin: 0;
+}
+
+.order-option .button,
+.order-current {
+  width: 100%;
+  text-align: center;
+}
+
+.order-check {
+  margin-right: 0.4rem;
+}
+
+.order-current {
+  padding: 0.55rem 1.1rem;
+  border-radius: 0.3rem;
+  background: color-mix(in srgb, var(--green-soft) 70%, var(--panel));
+  color: var(--green);
+  font-weight: 500;
+}
+
 .queue-facts {
   display: flex;
   flex-wrap: wrap;
