@@ -1,4 +1,4 @@
-import { loadEnvFile, modelConfig } from "../config.js";
+import { describeModel, loadEnvFile, modelConfig } from "../config.js";
 import { openDb } from "../db/index.js";
 import { createClient, setModelLog, type LlmClient } from "../llm/index.js";
 import { buildServer } from "./app.js";
@@ -14,7 +14,7 @@ try {
   const config = modelConfig();
   llm = createClient(config);
   setModelLog((line) => console.log(line));
-  console.log(`Model: ${config.provider} ${config.model}`);
+  console.log(`Model: ${describeModel(config)}`);
 } catch (error) {
   llmError = error instanceof Error ? error.message : String(error);
   console.log(`No model: ${llmError}`);

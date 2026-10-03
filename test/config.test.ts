@@ -7,13 +7,20 @@ import { ConfigError, loadEnvFile, modelConfig } from "../src/config.js";
 describe("modelConfig", () => {
   it("reads the provider, the model, and the key of the provider", () => {
     const config = modelConfig({ LLM_PROVIDER: "OpenRouter", LLM_MODEL: "vendor/model", OPENROUTER_API_KEY: "key-1" });
-    expect(config).toEqual({ provider: "openrouter", model: "vendor/model", apiKey: "key-1", reasoning: null });
+    expect(config).toEqual({ provider: "openrouter", model: "vendor/model", apiKey: "key-1", reasoning: null, providers: [] });
   });
 
   it("reads the reasoning level, and rejects an unknown level", () => {
     const base = { LLM_PROVIDER: "openai", LLM_MODEL: "m", OPENAI_API_KEY: "k" };
     expect(modelConfig({ ...base, LLM_REASONING: "High" }).reasoning).toBe("high");
     expect(() => modelConfig({ ...base, LLM_REASONING: "extreme" })).toThrow(/LLM_REASONING/);
+  });
+
+  it("reads the OpenRouter providers in order, only for OpenRouter", () => {
+    const base = { LLM_PROVIDER: "openrouter", LLM_MODEL: "vendor/model", OPENROUTER_API_KEY: "key" };
+    expect(modelConfig({ ...base, OPENROUTER_PROVIDERS: " DeepInfra/turbo, together ,," }).providers).toEqual(["deepinfra/turbo", "together"]);
+    expect(modelConfig(base).providers).toEqual([]);
+    expect(modelConfig({ LLM_PROVIDER: "openai", LLM_MODEL: "m", OPENAI_API_KEY: "key", OPENROUTER_PROVIDERS: "together" }).providers).toEqual([]);
   });
 
   it("has no default model", () => {

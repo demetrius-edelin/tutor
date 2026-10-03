@@ -19,10 +19,18 @@ export interface ModelConfig {
   apiKey: string;
   // Null means the default of the model.
   reasoning: ReasoningLevel | null;
+  // OpenRouter only: the providers that can serve the model, in order. Empty means that OpenRouter selects.
+  providers?: string[];
 }
 
 export class ConfigError extends Error {
   override name = "ConfigError";
+}
+
+// The selected model in one line, for example "openrouter vendor/model, providers deepinfra, together".
+export function describeModel(config: ModelConfig): string {
+  const providers = config.providers?.length ? `, providers ${config.providers.join(", ")} (no others)` : "";
+  return `${config.provider} ${config.model}${providers}`;
 }
 
 // Read the .env file. A value in .env replaces a value from the shell.
@@ -58,5 +66,13 @@ export function modelConfig(env: NodeJS.ProcessEnv = process.env): ModelConfig {
       `LLM_REASONING "${reasoning}" is not valid. Use ${REASONING_LEVELS.join(", ")}, or leave it empty for the default of the model.`,
     );
   }
-  return { provider: provider as Provider, model, apiKey, reasoning: (reasoning || null) as ReasoningLevel | null };
+  // Other providers ignore OPENROUTER_PROVIDERS, so that the user can switch the provider and keep the list.
+  const providers =
+    provider === "openrouter"
+      ? (env.OPENROUTER_PROVIDERS ?? "")
+          .split(",")
+          .map((slug) => slug.trim().toLowerCase())
+          .filter(Boolean)
+      : [];
+  return { provider: provider as Provider, model, apiKey, reasoning: (reasoning || null) as ReasoningLevel | null, providers };
 }

@@ -434,10 +434,13 @@ The tutor uses one model for all of its work. The user selects the model in the 
 LLM_PROVIDER=        # anthropic, openai, or openrouter
 LLM_MODEL=           # the model name, exactly as the provider writes it
 LLM_REASONING=       # none, minimal, low, medium, high, xhigh, or max. Empty: the default of the model.
+OPENROUTER_PROVIDERS= # OpenRouter only: the providers that can serve the model, in order. Empty: OpenRouter selects.
 ANTHROPIC_API_KEY=
 OPENAI_API_KEY=
 OPENROUTER_API_KEY=
 ```
+
+OpenRouter sends each request to one of several providers that serve the model. The providers differ in speed, price, and quality. With `OPENROUTER_PROVIDERS`, the user selects the providers. The tutor sends them as the `order` list with `allow_fallbacks: false`, so no other provider gets the request.
 
 The tutor has no default model. The tutor sends `LLM_REASONING` to the reasoning setting of the provider. Each model accepts only some of the levels. If the model does not accept the level, the tutor shows the error message of the provider.
 
@@ -482,6 +485,7 @@ The two classes do the same work in different ways:
 - Prompt cache: each client puts the sources at the start of the prompt, in the same order for each call. `AnthropicClient` adds a cache marker after the sources. OpenAI caches long prompt prefixes without a marker.
 - Reasoning level: `OpenAiClient` sends `reasoning_effort` to OpenAI. OpenRouter uses a different format, so the client sends `reasoning: { effort }` to OpenRouter.
 - Empty answers: some reasoning models on OpenRouter sometimes return an empty answer with a normal finish. The text is then only in the reasoning field. After an empty answer, `OpenAiClient` asks one more time. After a second empty answer, it shows an error with the finish reason, the token counts, and the provider. The tutor never saves an empty lesson or an empty chat answer.
+- Log: each client writes one line for each model call, with the time and the result. The server and `npm run llm:check` print the lines. The tests print nothing.
 
 For each provider, the tutor checks that each quote is in the text of its source. If a quote is not in the source, the tutor removes the reference. If a lesson has no valid reference, the tutor shows a warning on the lesson.
 

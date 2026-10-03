@@ -38,7 +38,7 @@ Phase 1 is complete. The review schedule and "Add book" in the app come later. S
    cp .env.example .env
    ```
 
-3. In `.env`, set the provider, the model, the reasoning level, and the API key. The file explains each value. The tutor has no default model.
+3. In `.env`, set the provider, the model, the reasoning level, and the API key. For OpenRouter, you can also select the providers that serve the model. The file explains each value. The tutor has no default model.
 
 4. Check the model:
 
@@ -67,6 +67,8 @@ Then open http://localhost:3000 in a browser. The app has these screens:
 - Test: after the lesson, click "Test me". The test has a recall question, an explain question, and an apply question. To pass, answer 2 questions correctly. The apply question must be one of them. After a pass, the concept is mastered, and the tutor offers the next lesson. After a fail, choose "Teach it again", "Later", or "Skip". The new lesson starts from your wrong answers. After 3 fails, the tutor also offers to test the prerequisites of the concept.
 
 The diagnosis and the test use the model in `.env`. The model writes the questions and grades the open answers. If you think that a grade is wrong, use "Dispute the grade". A disputed answer counts as correct.
+
+The terminal shows one line for each model call: the time, the finish reason, the token counts, and the provider behind OpenRouter. These lines show the steps that wait for the model. A high reasoning level makes each call slower.
 
 The server listens only on your computer. To stop it, press Ctrl+C in the terminal.
 

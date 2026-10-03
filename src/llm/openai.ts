@@ -45,6 +45,12 @@ export function reasoningParams(config: ModelConfig): Record<string, unknown> {
   return config.provider === "openrouter" ? { reasoning: { effort: config.reasoning } } : { reasoning_effort: config.reasoning };
 }
 
+// The providers of OpenRouter that can serve the model, in order. No other provider gets the request.
+export function routingParams(config: ModelConfig): Record<string, unknown> {
+  if (config.provider !== "openrouter" || !config.providers?.length) return {};
+  return { provider: { order: config.providers, allow_fallbacks: false } };
+}
+
 // Facts about an answer for an error message: the finish reason, the tokens, and the provider behind OpenRouter.
 function answerDetails(response: OpenAI.Chat.Completions.ChatCompletion): string {
   const choice = response.choices[0];
@@ -91,6 +97,7 @@ export class OpenAiClient implements LlmClient {
           model: this.config.model,
           messages,
           ...reasoningParams(this.config),
+          ...routingParams(this.config),
           ...(responseFormat ? { response_format: responseFormat } : {}),
         } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming);
       } catch (error) {

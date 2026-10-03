@@ -16,7 +16,8 @@ const source: Source = {
 async function main(): Promise<void> {
   loadEnvFile();
   const config = modelConfig();
-  console.log(`\nProvider: ${config.provider}\nModel: ${config.model}\nReasoning: ${config.reasoning ?? "default of the model"}\n`);
+  const providers = config.providers?.length ? `\nOpenRouter providers: ${config.providers.join(", ")} (no others)` : "";
+  console.log(`\nProvider: ${config.provider}\nModel: ${config.model}${providers}\nReasoning: ${config.reasoning ?? "default of the model"}\n`);
   const client = createClient(config);
   setModelLog((line) => console.log(`   (${line})`));
 

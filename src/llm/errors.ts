@@ -18,6 +18,11 @@ export function toLlmError(error: unknown, config: ModelConfig): Error {
     return new LlmError(`${where}: the API key has no access to this model.`);
   }
   if (is(Anthropic.NotFoundError, OpenAI.NotFoundError)) {
+    if (config.providers?.length) {
+      return new LlmError(
+        `${where}: no provider in OPENROUTER_PROVIDERS (${config.providers.join(", ")}) serves the model. Check OPENROUTER_PROVIDERS and LLM_MODEL in .env. ${(error as Error).message}`,
+      );
+    }
     return new LlmError(`${where}: the model was not found. Check LLM_MODEL in .env.`);
   }
   if (is(Anthropic.RateLimitError, OpenAI.RateLimitError)) {

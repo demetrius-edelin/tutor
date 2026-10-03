@@ -181,6 +181,21 @@ describe("OpenAiClient", () => {
     expect(requests[0]).not.toHaveProperty("reasoning_effort");
   });
 
+  it("sends the OpenRouter providers in order, with no fallback to other providers", async () => {
+    const { sdk, requests } = fakeOpenAi([chat('{"facts":["a"]}'), chat('{"facts":["b"]}')]);
+    await new OpenAiClient({ ...config, provider: "openrouter", providers: ["deepinfra", "together"] }, sdk).object({ system: "s", prompt: "p", schema });
+    expect(requests[0]).toMatchObject({ provider: { order: ["deepinfra", "together"], allow_fallbacks: false } });
+    await new OpenAiClient({ ...config, providers: ["deepinfra"] }, sdk).object({ system: "s", prompt: "p", schema });
+    expect(requests[1]).not.toHaveProperty("provider");
+  });
+
+  it("names the providers if no provider serves the model", async () => {
+    const notFound = new OpenAI.NotFoundError(404, undefined, "No endpoints found", new Headers());
+    const { sdk } = fakeOpenAi([notFound]);
+    const client = new OpenAiClient({ ...config, provider: "openrouter", providers: ["deepinfra"] }, sdk);
+    await expect(client.object({ system: "s", prompt: "p", schema })).rejects.toThrow(/no provider in OPENROUTER_PROVIDERS \(deepinfra\)/);
+  });
+
   it("asks one more time after an empty answer", async () => {
     const { sdk, requests } = fakeOpenAi([chat(null, "stop", "The answer is in the reasoning."), chat("Indexes cost space.")]);
     const result = await new OpenAiClient(config, sdk).text({ system: "s", sources: [], messages: [{ role: "user", content: "q" }] });
