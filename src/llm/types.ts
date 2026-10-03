@@ -32,8 +32,6 @@ export interface TextRequest {
   sources: Source[];
   // The conversation. The first message must come from the user.
   messages: Message[];
-  // False for a text without references to the sources. The default is true.
-  cite?: boolean;
 }
 
 export interface TextResult {

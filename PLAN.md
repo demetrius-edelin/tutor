@@ -23,7 +23,9 @@ Status: draft 2. Date: 2026-10-03. The design is in `DESIGN-v3.md`. This file gi
 - Milestone 8: done. Lessons with checked references, the chat box, Teach it again, Start now in the queue, and the prerequisite actions.
 - Milestone 9: done. The test after a lesson has the pass rule, mastered concepts, and the next lesson. After a fail, the user selects an action. After 3 fails, the tutor offers a prerequisite test. Phase 1 is complete.
 - Milestone 10: done. The star button is on the lesson page and in the concept map. The columns of the review schedule are gone. The database of the user opens with no error.
+- Lesson length fix: done. The tutor writes one lesson with references in one call. The length follows the concept, and the prompt has no minimum length. The "Explain in more detail" button is gone. Schema version 6 keeps the detailed version of each old lesson.
 - Milestones 11 and 12: planned. See "Phase 2 milestones".
+- Milestone 13: planned. See "Later milestones".
 
 ## Milestones
 
@@ -62,6 +64,21 @@ Phase 2 adds the review board and the stars. See "Review board" in `DESIGN-v3.md
     - Exit test: click "Learn again" on the board. The Overview shows the concept as "Next to learn", and its lesson page shows the last lesson.
 
 After milestone 12, phase 2 is complete.
+
+## Later milestones
+
+13. Read the images of a book.
+    - Some books show code, tables, or query results as images. The parser cannot read an image, so the section text has only "[Image]". The lesson then misses the content. For example, one PDF book of the user has 96 images, and most of them show code.
+    - The parser keeps the data of each image, for EPUB and PDF. For a PDF, the parser finds the image of each `Figure` element.
+    - During ingest, the model reads each image one time. Code becomes a code block. A table becomes a Markdown table. Any other image gets a description of one sentence. A cache in the `work` folder of the book keeps the results, so each image costs one model call only one time.
+    - The model client can send an image to Anthropic and to OpenAI. If the model in `.env` does not accept images, ingest keeps the placeholder and shows a warning. `npm run llm:check` also tests image input.
+    - The parse report shows a warning for each image with no useful alt text. Alt text such as "A black screen with white text" is not useful.
+    - Add `npm run refresh -- <theme> <book>`. The command parses the book again and reads its images. It writes only the section files and the word counts of the sections. Concepts, statuses, the queue, stars, lessons, and test answers do not change. If a section does not match its row in the database, the command stops and changes nothing.
+    - Do not use `npm run ingest -- --replace` for an existing book. It removes the book row, so the IDs of all sections change. Then the references of the old lessons and the sections of the questions break.
+    - Old lessons do not change. For a concept with an image in its sections, use "Teach it again" to get a lesson with the content of the image.
+    - Exit test: run `refresh` on a book with code images. A section with a code image contains the code as a code block. The progress in the app is the same as before.
+
+## Options
 
 If the user asks for them, these options can come later:
 

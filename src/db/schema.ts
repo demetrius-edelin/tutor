@@ -167,6 +167,14 @@ ALTER TABLE concepts DROP COLUMN review_step;
 ALTER TABLE concepts DROP COLUMN review_at;
 `;
 
-export const MIGRATIONS = [V1, V2, V3, V4, V5];
+// Version 6: a lesson has one text, with references. The length of the lesson follows the concept.
+// A detailed lesson replaces its short lesson. A short lesson with no detailed lesson stays, with no references.
+const V6 = `
+UPDATE lessons SET text = detail, refs = detail_refs WHERE detail IS NOT NULL;
+ALTER TABLE lessons DROP COLUMN detail;
+ALTER TABLE lessons DROP COLUMN detail_refs;
+`;
+
+export const MIGRATIONS = [V1, V2, V3, V4, V5, V6];
 export const SCHEMA_VERSION = MIGRATIONS.length;
 

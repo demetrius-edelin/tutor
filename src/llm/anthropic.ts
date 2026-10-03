@@ -128,7 +128,7 @@ export class AnthropicClient implements LlmClient {
       type: "document",
       source: { type: "text", media_type: "text/plain", data: source.text },
       title: source.title,
-      citations: { enabled: request.cite !== false },
+      citations: { enabled: true },
       ...(i === request.sources.length - 1 ? { cache_control: { type: "ephemeral" as const } } : {}),
     }));
     const messages: Anthropic.MessageParam[] = [

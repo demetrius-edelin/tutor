@@ -46,7 +46,7 @@ describe("migrations", () => {
     expect(db.prepare("SELECT COUNT(*) FROM sessions").pluck().get()).toBe(0);
   });
 
-  it("keeps a lesson from version 3 as the detailed lesson", async () => {
+  it("keeps a lesson from version 3, with its references", async () => {
     const { mkdtempSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
@@ -65,7 +65,7 @@ describe("migrations", () => {
     old.close();
 
     const db = openDb(file);
-    expect(db.prepare("SELECT detail, detail_refs FROM lessons").get()).toEqual({ detail: "A long lesson [1].", detail_refs: '[{"number":1}]' });
+    expect(db.prepare("SELECT text, refs FROM lessons").get()).toEqual({ text: "A long lesson [1].", refs: '[{"number":1}]' });
 
     // Version 5 adds the star and removes the columns of the review schedule.
     const columns = db.prepare("SELECT name FROM pragma_table_info('concepts')").pluck().all();
@@ -73,5 +73,35 @@ describe("migrations", () => {
     expect(columns).not.toContain("review_step");
     expect(columns).not.toContain("review_at");
     expect(db.prepare("SELECT name, starred FROM concepts").get()).toEqual({ name: "LIKE", starred: 0 });
+  });
+
+  it("replaces a short lesson with its detailed lesson in version 6", async () => {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const Database = (await import("better-sqlite3")).default;
+    const { MIGRATIONS } = await import("../src/db/schema.js");
+    const file = join(mkdtempSync(join(tmpdir(), "tutor-db-")), "old.db");
+    const old = new Database(file);
+    for (const migration of MIGRATIONS.slice(0, 5)) old.exec(migration);
+    old.pragma("user_version = 5");
+    old.prepare("INSERT INTO themes (slug, name) VALUES ('sql', 'SQL')").run();
+    old.prepare("INSERT INTO modules (theme_id, position, name) VALUES (1, 1, 'Basics')").run();
+    old
+      .prepare("INSERT INTO concepts (theme_id, module_id, slug, name, objective, kind, level) VALUES (1, 1, 'like', 'LIKE', 'Use LIKE.', 'skill', 'basic')")
+      .run();
+    const insert = old.prepare("INSERT INTO lessons (concept_id, round, text, detail, detail_refs) VALUES (1, ?, ?, ?, ?)");
+    insert.run(1, "Short.", "A long lesson [1].", '[{"number":1}]');
+    insert.run(2, "Short, with no detail.", null, "[]");
+    old.close();
+
+    const db = openDb(file);
+    expect(db.prepare("SELECT text, refs FROM lessons ORDER BY round").all()).toEqual([
+      { text: "A long lesson [1].", refs: '[{"number":1}]' },
+      { text: "Short, with no detail.", refs: "[]" },
+    ]);
+    const columns = db.prepare("SELECT name FROM pragma_table_info('lessons')").pluck().all();
+    expect(columns).not.toContain("detail");
+    expect(columns).not.toContain("detail_refs");
   });
 });

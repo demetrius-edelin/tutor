@@ -168,9 +168,8 @@ export class OpenAiClient implements LlmClient {
     // so that the provider can cache them.
     const ids = request.sources.map((_, i) => `S${i + 1}`);
     const sources = request.sources.length > 0 ? `${formatSources(request.sources, ids)}\n\n` : "";
-    const cite = request.sources.length > 0 && request.cite !== false;
     const messages: ChatMessage[] = [
-      { role: "system", content: cite ? `${request.system}\n\n${REFERENCE_INSTRUCTIONS}` : request.system },
+      { role: "system", content: request.sources.length > 0 ? `${request.system}\n\n${REFERENCE_INSTRUCTIONS}` : request.system },
       { role: "user", content: `${sources}${first.content}` },
       ...rest.map((message): ChatMessage => ({ role: message.role, content: message.content })),
     ];

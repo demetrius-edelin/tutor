@@ -37,36 +37,21 @@ const get = async <T>(url: string) => (await app.inject({ method: "GET", url }))
 const statusOf = (id: number) => db.prepare("SELECT status FROM concepts WHERE id = ?").pluck().get(id);
 
 describe("lessons", () => {
-  it("writes a short lesson without references, and marks the concept as learning", async () => {
+  it("writes a lesson with references in one call, and marks the concept as learning", async () => {
     const id = conceptIds[1]!;
     expect((await get<LessonView>(`/api/concepts/${id}/lesson`)).lesson).toBeNull();
 
     const { body } = await post<LessonView>(`/api/concepts/${id}/lesson`);
-    expect(body.lesson).toMatchObject({ round: 1, text: "The concept, in short.", references: [], detail: null });
-    expect(body.concept.status).toBe("learning");
-    expect(statusOf(id)).toBe("learning");
-    expect(body.queuePosition).toBe(1);
-    expect(llm.calls[0]!.textRequest!.cite).toBe(false);
-    expect(llm.calls[0]!.textRequest!.sources[0]!.text).toContain("## First Section");
-  });
-
-  it("writes the detailed lesson with references on request, one time", async () => {
-    const id = conceptIds[1]!;
-    const lesson = (await post<LessonView>(`/api/concepts/${id}/lesson`)).body.lesson!;
-    const { body } = await post<LessonView>(`/api/lessons/${lesson.id}/detail`);
-    expect(body.lesson).toMatchObject({ id: lesson.id, text: "The concept, in short." });
-    expect(body.lesson!.detail).toEqual({
+    expect(body.lesson).toMatchObject({
+      round: 1,
       text: "## Explanation\n\nThe concept, from the book [1].",
       references: [expect.objectContaining({ number: 1, ref: "1.2", title: "First Section", book: "Fixture Book", page: "5" })],
     });
-    const request = llm.calls.find((call) => call.stage === "detail")!.textRequest!;
-    expect(request.cite).toBeUndefined();
-    expect(request.messages.map((message) => message.role)).toEqual(["user", "assistant", "user"]);
-    expect(request.messages[1]!.content).toBe("The concept, in short.");
-
-    await post(`/api/lessons/${lesson.id}/detail`);
-    expect(llm.count("detail")).toBe(1);
-    expect((await post(`/api/lessons/999/detail`)).status).toBe(404);
+    expect(body.concept.status).toBe("learning");
+    expect(statusOf(id)).toBe("learning");
+    expect(body.queuePosition).toBe(1);
+    expect(llm.calls.length).toBe(1);
+    expect(llm.calls[0]!.textRequest!.sources[0]!.text).toContain("## First Section");
   });
 
   it("uses an existing lesson again, and writes a new round on request", async () => {
@@ -116,11 +101,6 @@ describe("lessons", () => {
     expect(messages.map((message) => message.role)).toEqual(["user", "assistant", "user", "assistant", "user"]);
     expect(messages[1]!.content).toBe(lesson.text);
     expect((await post(`/api/lessons/${lesson.id}/messages`, { text: " " })).status).toBe(400);
-
-    // The detailed lesson replaces the short lesson in the conversation.
-    const detail = (await post<LessonView>(`/api/lessons/${lesson.id}/detail`)).body.lesson!.detail!;
-    await post(`/api/lessons/${lesson.id}/messages`, { text: "One more?" });
-    expect(llm.calls.at(-1)!.textRequest!.messages[1]!.content).toBe(detail.text);
   });
 
   it("shows missing prerequisites, and can put a prerequisite at the top or test it", async () => {

@@ -3,41 +3,39 @@ import type { LlmClient, Message, Reference, Source } from "../llm/index.js";
 import type { AfterTestAction, LessonMessage, LessonReference, LessonView, SourceInfo, Status } from "../server/api-types.js";
 import { applyMarks, createSession, enqueue, failedTests, readSection, TutorError } from "./diagnosis.js";
 
-// A lesson: the model teaches one concept from all its book sections. The lesson is short and has no references.
-// On request, the model writes a detailed lesson with references. After the lesson, the learner can ask questions.
-// The model answers with the same sources.
+// A lesson: the model teaches one concept from all its book sections, with references.
+// The length of the lesson follows the concept, so a simple concept gets a short lesson.
+// After the lesson, the learner can ask questions. The model answers with the same sources.
+
+// The rules for the sources. The lesson and the answers in the chat use the same rules.
+const SOURCE_RULES = `- Base the text on the sources. If you add a fact or a claim that is not in the sources, mark it with "(not from the books)".
+- Put the marker one time at the end of the paragraph or the list item, not after each sentence.
+- Do not mark the standard behavior of a language or a tool. Do not mark the step-by-step explanation of an example.
+- If a source has an error or contradicts itself, say so in one sentence. Then teach the correct form. Do not discuss the source more.
+- A source can contain "[Image]" or "[Image: description]". The content of the image is not available. Do not guess what it shows.`;
 
 export const LESSON_SYSTEM = `You are a tutor. You teach one concept to one learner, from the sources of the books of the learner.
-Write a short lesson in Markdown:
-- Explain the concept in 1 to 3 short paragraphs. Start with what the learner must know first.
-- Give one short example, for example a query or a code sample. Explain it in 1 or 2 sentences.
-Rules:
-- Use a maximum of 200 words. The code of the example does not count.
-- Do not use headings. Do not add a summary, a list of common mistakes, or references.
-- Base the lesson on the sources. If you add content that is not in the sources, mark it with "(not from the books)".
-- The learner is an experienced software developer. Do not explain basic programming.`;
-
-export const DETAIL_SYSTEM = `You are a tutor. The learner read your short lesson and asks for more detail. Teach the same concept in full, from the sources of the books of the learner.
 Write the lesson in Markdown with these parts, in this order:
 ## Explanation
 An explanation in plain words. Start with what the learner must know first.
 ## Example
-One or two examples. Choose the type of example from the sources, for example a query, a code sample, or a worked case. Explain each example.
+One example. Add a second example only for a complex concept. Choose the type of example from the sources, for example a query, a code sample, or a worked case. Explain each example.
 ## Common mistakes
-2 to 4 short points.
+0 to 4 short points. Write only the mistakes that learners really make with this concept. If there is no such mistake, do not write this part.
 ## Summary
-2 or 3 sentences.
+1 or 2 sentences. Write this part only for a lesson of more than 600 words.
+Length:
+- The length follows the concept. A simple concept needs about 150 to 300 words. Use up to 1200 words only for a complex concept. The code of the examples does not count.
+- Do not add content to reach a length. Stop when the concept is clear.
 Rules:
-- Base the lesson on the sources. If you add content that is not in the sources, mark it with "(not from the books)".
-- The learner is an experienced software developer. Do not explain basic programming.
-- The lesson takes 5 to 10 minutes to read: about 600 to 1200 words.`;
-
-const DETAIL_REQUEST = "Teach the concept again in more detail.";
+${SOURCE_RULES}
+- The learner is an experienced software developer. Do not explain basic programming.`;
 
 export const CHAT_SYSTEM = `You are a tutor. The learner read your lesson and asks a question about it.
 Answer in 1 to 3 short paragraphs. Use an example if it helps.
-Base the answer on the sources. If you add content that is not in the sources, mark it with "(not from the books)".
-If the question is not about the concept, answer it briefly and lead back to the concept.`;
+If the question is not about the concept, answer it briefly and lead back to the concept.
+Rules:
+${SOURCE_RULES}`;
 
 // The maximum number of book sections in a lesson, so that the request stays small.
 const MAX_SECTIONS = 6;
@@ -145,8 +143,6 @@ interface LessonRow {
   round: number;
   text: string;
   refs: string;
-  detail: string | null;
-  detail_refs: string;
   created_at: string;
 }
 
@@ -155,7 +151,7 @@ export function lessonView(db: Db, conceptId: number): LessonView {
   const sources = sourcesOf(db, conceptId);
   const lesson = db
     .prepare(
-      "SELECT id, round, text, refs, detail, detail_refs, created_at FROM lessons WHERE concept_id = ? ORDER BY round DESC, id DESC LIMIT 1",
+      "SELECT id, round, text, refs, created_at FROM lessons WHERE concept_id = ? ORDER BY round DESC, id DESC LIMIT 1",
     )
     .get(conceptId) as LessonRow | undefined;
   const messages = lesson
@@ -187,7 +183,6 @@ export function lessonView(db: Db, conceptId: number): LessonView {
           round: lesson.round,
           text: lesson.text,
           references: JSON.parse(lesson.refs) as LessonReference[],
-          detail: lesson.detail === null ? null : { text: lesson.detail, references: JSON.parse(lesson.detail_refs) as LessonReference[] },
           createdAt: lesson.created_at,
         }
       : null,
@@ -301,12 +296,10 @@ export function startLesson(db: Db, llm: LlmClient | null, dataDir: string, conc
     const sources = sourcesOf(db, conceptId);
     if (sources.length === 0) throw new TutorError("The concept has no book sections to teach from.", 409);
     const round = (existing ?? 0) + 1;
-    // The short lesson has no references, so that the answer of the model stays short.
     const result = await llm.text({
       system: LESSON_SYSTEM,
       sources: toSources(dataDir, sources),
       messages: [{ role: "user", content: lessonRequest(db, concept, round) }],
-      cite: false,
     });
     if (result.text.trim() === "") throw new TutorError("The model returned an empty lesson. Try again.", 502);
     db.transaction(() => {
@@ -329,53 +322,15 @@ interface StoredLesson {
   concept_id: number;
   round: number;
   text: string;
-  detail: string | null;
 }
 
 function storedLesson(db: Db, lessonId: number): StoredLesson {
-  const lesson = db.prepare("SELECT id, concept_id, round, text, detail FROM lessons WHERE id = ?").get(lessonId) as StoredLesson | undefined;
+  const lesson = db.prepare("SELECT id, concept_id, round, text FROM lessons WHERE id = ?").get(lessonId) as StoredLesson | undefined;
   if (!lesson) throw new TutorError(`The lesson ${lessonId} does not exist.`, 404);
   return lesson;
 }
 
-// Two requests for the same detailed lesson at the same time get the same result.
-const detailing = new Map<number, Promise<LessonView>>();
-
-// Write the detailed lesson, with references. The conversation starts with the short lesson, so that the model expands it.
-// An existing detailed lesson is used again.
-export function detailLesson(db: Db, llm: LlmClient | null, dataDir: string, lessonId: number): Promise<LessonView> {
-  const lesson = storedLesson(db, lessonId);
-  if (lesson.detail !== null) return Promise.resolve(lessonView(db, lesson.concept_id));
-  if (!llm) throw new TutorError("No model is set. Set the model in .env and start the tutor again.", 503);
-  const running = detailing.get(lessonId);
-  if (running) return running;
-
-  const job = (async () => {
-    const concept = conceptRow(db, lesson.concept_id);
-    const sources = sourcesOf(db, lesson.concept_id);
-    const result = await llm.text({
-      system: DETAIL_SYSTEM,
-      sources: toSources(dataDir, sources),
-      messages: [
-        { role: "user", content: lessonRequest(db, concept, lesson.round) },
-        { role: "assistant", content: lesson.text },
-        { role: "user", content: DETAIL_REQUEST },
-      ],
-    });
-    if (result.text.trim() === "") throw new TutorError("The model returned an empty lesson. Try again.", 502);
-    db.prepare("UPDATE lessons SET detail = ?, detail_refs = ? WHERE id = ?").run(
-      result.text,
-      JSON.stringify(toReferences(result.references, sources)),
-      lessonId,
-    );
-    return lessonView(db, lesson.concept_id);
-  })().finally(() => detailing.delete(lessonId));
-  detailing.set(lessonId, job);
-  return job;
-}
-
 // Answer a question of the learner about a lesson. The conversation starts with the lesson request and the lesson.
-// The detailed lesson includes the content of the short lesson, so it replaces the short lesson in the conversation.
 export async function askAboutLesson(db: Db, llm: LlmClient | null, dataDir: string, lessonId: number, question: string): Promise<LessonView> {
   if (!llm) throw new TutorError("No model is set. Set the model in .env and start the tutor again.", 503);
   if (question.trim() === "") throw new TutorError("The question is empty.");
@@ -388,7 +343,7 @@ export async function askAboutLesson(db: Db, llm: LlmClient | null, dataDir: str
   }[];
   const messages: Message[] = [
     { role: "user", content: lessonRequest(db, concept, lesson.round) },
-    { role: "assistant", content: lesson.detail ?? lesson.text },
+    { role: "assistant", content: lesson.text },
     ...history.map((message) => ({ role: message.role, content: message.text })),
     { role: "user", content: question.trim() },
   ];

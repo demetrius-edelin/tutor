@@ -127,19 +127,6 @@ describe("AnthropicClient", () => {
     expect(document).toMatchObject({ type: "document", citations: { enabled: true }, cache_control: { type: "ephemeral" } });
   });
 
-  it("turns off citations for a text without references", async () => {
-    const { sdk, requests } = fakeAnthropic([{ stop_reason: "end_turn", content: [{ type: "text", text: "Short." }] }]);
-    const result = await new AnthropicClient(anthropicConfig(), sdk).text({
-      system: "s",
-      sources: [source],
-      messages: [{ role: "user", content: "q" }],
-      cite: false,
-    });
-    expect(result).toEqual({ text: "Short.", references: [] });
-    const document = (requests[0]!.params.messages as { content: Record<string, unknown>[] }[])[0]!.content[0]!;
-    expect(document).toMatchObject({ type: "document", citations: { enabled: false } });
-  });
-
   it("gives a clear message for a key that is not valid", async () => {
     const { sdk } = fakeAnthropic([new Anthropic.AuthenticationError(401, undefined, "invalid x-api-key", new Headers())]);
     await expect(new AnthropicClient(anthropicConfig(), sdk).object({ system: "s", prompt: "p", schema })).rejects.toThrow(
@@ -180,15 +167,6 @@ describe("OpenAiClient", () => {
     });
     expect(result.text).toBe("Reads get faster [1] and disks fill.");
     expect(result.references).toEqual([{ number: 1, sourceId: "3.2", quote: "An index makes the lookup of rows faster." }]);
-  });
-
-  it("does not ask for reference markers for a text without references", async () => {
-    const { sdk, requests } = fakeOpenAi([chat("Short.")]);
-    const result = await new OpenAiClient(config, sdk).text({ system: "s", sources: [source], messages: [{ role: "user", content: "q" }], cite: false });
-    expect(result).toEqual({ text: "Short.", references: [] });
-    const messages = requests[0]!.messages as { role: string; content: string }[];
-    expect(messages[0]).toEqual({ role: "system", content: "s" });
-    expect(messages[1]!.content).toContain("An index makes the lookup of rows faster.");
   });
 
   it("reports an answer that is too long", async () => {

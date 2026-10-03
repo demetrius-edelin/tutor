@@ -19,7 +19,6 @@ import {
 import {
   afterTest,
   askAboutLesson,
-  detailLesson,
   lessonView,
   moveToTop,
   skipTest,
@@ -153,9 +152,6 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError }: Serve
   app.post<{ Params: { id: string }; Body: { again?: boolean } }>("/api/concepts/:id/lesson", async (request) =>
     startLesson(db, llm, dataDir, Number(request.params.id), Boolean(request.body?.again)),
   );
-
-  // Write the detailed lesson, with references to the books.
-  app.post<{ Params: { id: string } }>("/api/lessons/:id/detail", async (request) => detailLesson(db, llm, dataDir, Number(request.params.id)));
 
   app.post<{ Params: { id: string }; Body: { text: string } }>("/api/lessons/:id/messages", async (request) =>
     askAboutLesson(db, llm, dataDir, Number(request.params.id), String(request.body?.text ?? "")),

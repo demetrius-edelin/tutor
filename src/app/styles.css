@@ -1459,11 +1459,6 @@ button.button {
   margin-top: 2rem;
 }
 
-.lesson-more {
-  max-width: var(--measure);
-  margin-top: 1.5rem;
-}
-
 .lesson pre,
 .chat-answer pre {
   overflow-x: auto;

@@ -150,28 +150,11 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
   const [asking, setAsking] = useState(false);
   const [rewriting, setRewriting] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [detailing, setDetailing] = useState(false);
   const [skipping, setSkipping] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [detailError, setDetailError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null);
-  const article = useRef<HTMLElement>(null);
-  // The detailed lesson replaces the short lesson, because it includes its content.
-  const shown = lesson.detail ?? { text: lesson.text, references: lesson.references };
   const mastered = view.concept.status === "mastered";
-
-  const showDetail = async () => {
-    setDetailing(true);
-    setDetailError(null);
-    try {
-      onChange(await postJson<LessonView>(`/api/lessons/${lesson.id}/detail`));
-      requestAnimationFrame(() => article.current?.scrollIntoView({ block: "start" }));
-    } catch (problem) {
-      setDetailError((problem as Error).message);
-    }
-    setDetailing(false);
-  };
 
   const ask = async () => {
     setAsking(true);
@@ -225,45 +208,17 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
   return (
     <>
       <ConceptHeader view={view} onChange={onChange} />
-      {lesson.detail && lesson.detail.references.length === 0 && (
+      {lesson.references.length === 0 && (
         <p className="warning">This lesson has no reference that the tutor could find in your books. Check it against the book sections.</p>
       )}
-      <article className="reading lesson" ref={article}>
-        <CitedMarkdown text={shown.text} references={shown.references} onOpen={setOpen} />
+      <article className="reading lesson">
+        <CitedMarkdown text={lesson.text} references={lesson.references} onOpen={setOpen} />
       </article>
 
-      {!lesson.detail && (
-        <div className="lesson-more">
-          <p className="button-row">
-            <button className="button secondary" onClick={showDetail} disabled={detailing || rewriting}>
-              {detailing ? (
-                <>
-                  <Spinner />
-                  Writing the detailed lesson
-                </>
-              ) : (
-                "Explain in more detail"
-              )}
-            </button>
-            <span className="quiet small">A longer lesson, with more examples, common mistakes, and references to your books.</span>
-          </p>
-          {detailing && (
-            <p className="quiet" role="status">
-              The tutor writes the detailed lesson. This can take a minute.
-            </p>
-          )}
-          {detailError && (
-            <p className="error" role="alert">
-              {detailError}
-            </p>
-          )}
-        </div>
-      )}
-
-      {shown.references.length > 0 && (
+      {lesson.references.length > 0 && (
         <section aria-labelledby="references-heading">
           <h2 id="references-heading">References</h2>
-          <ReferenceList references={shown.references} onOpen={setOpen} />
+          <ReferenceList references={lesson.references} onOpen={setOpen} />
         </section>
       )}
 
@@ -346,7 +301,7 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
               </button>
             </>
           )}
-          <button className="text-button strong" onClick={teachAgain} disabled={rewriting || testing || detailing || skipping}>
+          <button className="text-button strong" onClick={teachAgain} disabled={rewriting || testing || skipping}>
             {rewriting ? (
               <>
                 <Spinner />

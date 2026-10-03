@@ -240,13 +240,11 @@ export interface LessonView {
     module: { id: number; position: number; name: string };
   };
   // The latest lesson about the concept, or null if the tutor did not teach it yet.
-  // The text is short and has no references. The detail is null until the learner asks for it.
   lesson: {
     id: number;
     round: number;
     text: string;
     references: LessonReference[];
-    detail: { text: string; references: LessonReference[] } | null;
     createdAt: string;
   } | null;
   messages: LessonMessage[];
