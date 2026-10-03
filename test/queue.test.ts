@@ -76,6 +76,30 @@ describe("study queue", () => {
     expect(body.suggestionDiffers).toBe(false);
   });
 
+  it("applies the book order: the first source section first, and a concept with no source at the end", async () => {
+    db.prepare("INSERT INTO books (theme_id, slug, title, file) VALUES (1, 'b1', 'First Book', 'b1.epub'), (1, 'b2', 'Second Book', 'b2.epub')").run();
+    const section = (book: number, chapter: number, number: number) =>
+      Number(
+        db
+          .prepare("INSERT INTO sections (book_id, chapter, number, chapter_title, title, path, words) VALUES (?, ?, ?, 'C', 'S', 'p', 1)")
+          .run(book, chapter, number).lastInsertRowid,
+      );
+    const source = (slug: string, sectionId: number) =>
+      db.prepare("INSERT INTO concept_sources (concept_id, section_id, quote) VALUES (?, ?, 'q')").run(ids[slug], sectionId);
+    source("having", section(1, 1, 2));
+    source("joins", section(1, 2, 1));
+    source("subqueries", section(1, 1, 1));
+    // A second source in a later section does not change the place of a concept.
+    const later = section(2, 1, 1);
+    source("subqueries", later);
+    source("select-basics", later);
+    expect((await get()).bookOrderDiffers).toBe(true);
+
+    const { body } = await post<QueueView>("/api/themes/sql/queue/book");
+    expect(names(body)).toEqual(["subqueries", "having", "joins", "select-basics", "advanced-filter"]);
+    expect(body.bookOrderDiffers).toBe(false);
+  });
+
   it("sets an order of the learner, and rejects an order that does not match the queue", async () => {
     const order = [ids["having"]!, ids["joins"]!, ids["subqueries"]!, ids["select-basics"]!, ids["advanced-filter"]!];
     expect(names((await post<QueueView>("/api/themes/sql/queue/order", { conceptIds: order })).body)).toEqual([

@@ -13,7 +13,7 @@ Phase 1 is complete, and phase 2 is in progress. These parts work now:
 - Ingest finds the concepts of a book and puts them into the concept map of a theme.
 - The app shows the themes, the books, the progress, and the concept map.
 - The diagnosis: you mark the concepts of a module, the tutor tests them, and you choose what to learn.
-- The study queue: the concepts to learn, in an order that you can change.
+- The study queue: the concepts to learn, in an order that you can change. Use the suggested order of the tutor, or the order of the sections in your books.
 - The lessons: the tutor teaches each concept from your books, with references, and answers your questions.
 - The test after each lesson: 3 new questions. A pass makes the concept mastered, and the tutor offers the next lesson.
 - The stars: star the important concepts on the lesson page or in the concept map.

@@ -115,6 +115,31 @@ export function suggestedOrder(rows: QueueRow[], prerequisites: Map<number, { id
   return order;
 }
 
+// The place of each concept in the books of the theme: the books in the order of ingest, then the chapters and the sections.
+// A concept with more than one source section takes the place of its first section.
+function bookPlaces(db: Db, themeId: number): Map<number, number> {
+  const ids = db
+    .prepare(
+      `SELECT cs.concept_id FROM concept_sources cs JOIN sections s ON s.id = cs.section_id JOIN books b ON b.id = s.book_id
+       WHERE b.theme_id = ? ORDER BY b.id, s.chapter, s.number, cs.concept_id`,
+    )
+    .pluck()
+    .all(themeId) as number[];
+  const places = new Map<number, number>();
+  ids.forEach((id, i) => {
+    if (!places.has(id)) places.set(id, i);
+  });
+  return places;
+}
+
+// The book order: the order of the sections in the books. A concept with no source goes to the end, in the current order.
+export function bookOrder(rows: QueueRow[], places: Map<number, number>): number[] {
+  const place = (row: QueueRow) => places.get(row.id) ?? Number.MAX_SAFE_INTEGER;
+  return [...rows].sort((a, b) => place(a) - place(b) || a.queue_pos - b.queue_pos || a.id - b.id).map((row) => row.id);
+}
+
+const differs = (order: number[], rows: QueueRow[]) => order.some((id, i) => id !== rows[i]?.id);
+
 export function queueView(db: Db, slug: string): QueueView {
   const theme = themeOf(db, slug);
   const rows = queueRows(db, theme.id);
@@ -153,11 +178,11 @@ export function queueView(db: Db, slug: string): QueueView {
       warning,
     };
   });
-  const suggestion = suggestedOrder(rows, prerequisites);
   return {
     theme: { slug: theme.slug, name: theme.name },
     items,
-    suggestionDiffers: suggestion.some((id, i) => id !== rows[i]?.id),
+    suggestionDiffers: differs(suggestedOrder(rows, prerequisites), rows),
+    bookOrderDiffers: differs(bookOrder(rows, bookPlaces(db, theme.id)), rows),
     notChosen: notChosen(db, theme.id),
   };
 }
@@ -180,6 +205,12 @@ export function reorderQueue(db: Db, slug: string, conceptIds: number[]): QueueV
 export function applySuggestedOrder(db: Db, slug: string): QueueView {
   const theme = themeOf(db, slug);
   writeOrder(db, suggestedOrder(queueRows(db, theme.id), prerequisitesOf(db, theme.id)));
+  return queueView(db, slug);
+}
+
+export function applyBookOrder(db: Db, slug: string): QueueView {
+  const theme = themeOf(db, slug);
+  writeOrder(db, bookOrder(queueRows(db, theme.id), bookPlaces(db, theme.id)));
   return queueView(db, slug);
 }
 

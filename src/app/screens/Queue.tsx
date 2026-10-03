@@ -149,6 +149,17 @@ function QueueEditor({ slug, initial }: { slug: string; initial: QueueView }) {
         </div>
       )}
 
+      {queue.bookOrderDiffers ? (
+        <p className="button-row">
+          <button className="button secondary" disabled={busy} onClick={() => save(`/api/themes/${encodeURIComponent(slug)}/queue/book`, {})}>
+            Use the book order
+          </button>
+          <span className="quiet small">The order of the sections in your books, from the first chapter to the last.</span>
+        </p>
+      ) : (
+        <p className="quiet small">The queue is in the order of the sections in your books.</p>
+      )}
+
       {error && (
         <p className="error" role="alert">
           {error}

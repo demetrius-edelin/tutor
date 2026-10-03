@@ -198,6 +198,8 @@ export interface QueueView {
   items: QueueItem[];
   // True if the suggested order of the tutor is different from the current order.
   suggestionDiffers: boolean;
+  // True if the order of the sections in the books is different from the current order.
+  bookOrderDiffers: boolean;
   // The concepts of the theme that the learner did not choose yet, and the number of their modules.
   notChosen: { concepts: number; modules: number };
 }

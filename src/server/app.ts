@@ -29,7 +29,7 @@ import {
   testConcept,
   testPrerequisites,
 } from "../tutor/lesson.js";
-import { applySuggestedOrder, queueView, removeFromQueue, reorderQueue } from "../tutor/queue.js";
+import { applyBookOrder, applySuggestedOrder, queueView, removeFromQueue, reorderQueue } from "../tutor/queue.js";
 import type { AfterTestAction, Choice, Mark } from "./api-types.js";
 import { conceptMap, listThemes, section, themeDetail } from "./queries.js";
 
@@ -137,6 +137,9 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError }: Serve
   );
 
   app.post<{ Params: { slug: string } }>("/api/themes/:slug/queue/suggested", async (request) => applySuggestedOrder(db, request.params.slug));
+
+  // Put the queue in the order of the sections in the books.
+  app.post<{ Params: { slug: string } }>("/api/themes/:slug/queue/book", async (request) => applyBookOrder(db, request.params.slug));
 
   app.post<{ Params: { slug: string }; Body: { conceptId: number; status: "skipped" | "new" } }>("/api/themes/:slug/queue/remove", async (request) =>
     removeFromQueue(db, request.params.slug, Number(request.body?.conceptId), request.body?.status),

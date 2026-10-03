@@ -253,6 +253,7 @@ The queue screen gives the user these tools:
 - The "Later" button takes a concept out of the queue and sets it back to not started.
 - The "Skip" button skips a concept.
 - The "Use the suggested order" button applies the order of the tutor to the full queue. If the order of the tutor is the same as the current order, the button does not show.
+- The "Use the book order" button puts the queue in the order of the sections in the books. The books come in the order of ingest. A concept with more than one source takes the place of its first section. A concept with no source goes to the end. If the book order is the same as the current order, the button does not show.
 - The "Start now" button moves a concept to the top and opens its lesson.
 
 The tutor does not block the order of the user. But it shows a warning on a concept with a prerequisite that is not `known` or `mastered`. Before such a lesson starts, the tutor offers three actions: "Learn the prerequisite first", "Test the prerequisite", or "Continue". The user selects one.
