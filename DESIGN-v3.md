@@ -296,6 +296,8 @@ The model writes the questions from the sections of the concept. The prompt incl
 
 To pass, the user must answer 2 of the 3 questions correctly. One of the 2 must be the apply question.
 
+After an answer, the user can click "Retake the question". The tutor then removes the answers of the question and shows the empty question again. This also works in a diagnosis. After the results, the answers of the session do not change, because the results come from them.
+
 After a pass, the concept becomes `mastered` and leaves the queue. The results show the next concept in the queue, with a "Next lesson" button.
 
 For a simple concept, the user can click "Skip the test" on the lesson page. Then the concept becomes `mastered` and leaves the queue, with no model call. The lesson page shows the "Next lesson" button.

@@ -12,6 +12,7 @@ import {
   failInterruptedSessions,
   finishSession,
   prepareSession,
+  retakeQuestion,
   sessionView,
   TutorError,
 } from "../tutor/diagnosis.js";
@@ -113,6 +114,12 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError }: Serve
   );
 
   app.post<{ Params: { id: string } }>("/api/attempts/:id/dispute", async (request) => disputeAttempt(db, Number(request.params.id)));
+
+  // Retake a question: its answers go, and the question is open again.
+  app.post<{ Params: { id: string } }>("/api/questions/:id/retake", async (request) => {
+    retakeQuestion(db, Number(request.params.id));
+    return { ok: true };
+  });
 
   app.post<{ Params: { id: string } }>("/api/sessions/:id/finish", async (request) => finishSession(db, Number(request.params.id)));
 

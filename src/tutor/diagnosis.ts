@@ -381,6 +381,17 @@ export async function answerQuestion(db: Db, llm: LlmClient | null, dataDir: str
   return attemptView({ id, question_id: questionId, answer, score, feedback, disputed: 0 }, question);
 }
 
+// Retake a question: remove its answers, so that the learner can answer it again.
+// The answers of a finished session stay, because the results come from them.
+export function retakeQuestion(db: Db, questionId: number): void {
+  const question = db
+    .prepare("SELECT s.status FROM questions q LEFT JOIN sessions s ON s.id = q.session_id WHERE q.id = ?")
+    .get(questionId) as { status: string | null } | undefined;
+  if (!question) throw new TutorError(`The question ${questionId} does not exist.`, 404);
+  if (question.status === "finished") throw new TutorError("You cannot retake a question after the results.", 409);
+  db.prepare("DELETE FROM attempts WHERE question_id = ?").run(questionId);
+}
+
 // A disputed answer counts as correct. The record of the case helps to improve the grader.
 export function disputeAttempt(db: Db, attemptId: number): AttemptView {
   const attempt = db.prepare("SELECT id, question_id, answer, score, feedback, disputed FROM attempts WHERE id = ?").get(attemptId) as

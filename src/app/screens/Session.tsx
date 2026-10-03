@@ -128,7 +128,8 @@ function QuestionFlow({ session, title, onChange }: { session: SessionView; titl
   const question = session.questions[index];
   if (!question) return <Notice title="This diagnosis has no questions" />;
 
-  const updateAttempt = (attempt: AttemptView) =>
+  // The attempt is null after a retake: the question is open again.
+  const updateAttempt = (attempt: AttemptView | null) =>
     onChange({
       ...session,
       questions: session.questions.map((item) => (item.id === question.id ? { ...item, attempt } : item)),
@@ -196,10 +197,19 @@ const TEST_LABEL: Record<QuestionView["kind"], string> = {
   apply: "Apply question. You must answer this question correctly to pass.",
 };
 
-function QuestionCard({ question, about, onAnswered }: { question: QuestionView; about: string; onAnswered: (attempt: AttemptView) => void }) {
+function QuestionCard({
+  question,
+  about,
+  onAnswered,
+}: {
+  question: QuestionView;
+  about: string;
+  onAnswered: (attempt: AttemptView | null) => void;
+}) {
   const [choice, setChoice] = useState<number | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [retaking, setRetaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [panel, setPanel] = useState(false);
   const attempt = question.attempt;
@@ -214,6 +224,21 @@ function QuestionCard({ question, about, onAnswered }: { question: QuestionView;
       setError((problem as Error).message);
     }
     setSending(false);
+  };
+
+  // Remove the answer, and show the empty question again.
+  const retake = async () => {
+    setRetaking(true);
+    setError(null);
+    try {
+      await postJson(`/api/questions/${question.id}/retake`);
+      setChoice(null);
+      setText("");
+      onAnswered(null);
+    } catch (problem) {
+      setError((problem as Error).message);
+    }
+    setRetaking(false);
   };
 
   const dispute = async () => {
@@ -336,6 +361,11 @@ function QuestionCard({ question, about, onAnswered }: { question: QuestionView;
               </span>
             </p>
           )}
+          <p>
+            <button className="button secondary small" onClick={retake} disabled={retaking}>
+              Retake the question
+            </button>
+          </p>
         </div>
       )}
       {panel && question.source && <SectionPanel sectionId={question.source.sectionId} onClose={() => setPanel(false)} />}

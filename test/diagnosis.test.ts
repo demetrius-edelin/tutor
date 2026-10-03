@@ -132,6 +132,24 @@ describe("diagnosis", () => {
     expect((await post<SessionView>(`/api/sessions/${session.id}/finish`)).body.results![0]!.result).toBe("known");
   });
 
+  it("retakes a question: the answer goes, and a new answer counts", async () => {
+    const session = await startSession([conceptIds[0]!]);
+    const [choice, open] = session.questions;
+    const right = correctIndex(choice!.id);
+    await post(`/api/questions/${choice!.id}/answer`, { answer: String(right === 0 ? 1 : 0) });
+    await post(`/api/questions/${open!.id}/answer`, { answer: "The point." });
+
+    expect((await post(`/api/questions/${choice!.id}/retake`)).status).toBe(200);
+    const reopened = (await get<SessionView>(`/api/sessions/${session.id}`)).questions[0]!;
+    expect(reopened.attempt).toBeNull();
+    expect((await post<{ correct: boolean }>(`/api/questions/${choice!.id}/answer`, { answer: String(right) })).body.correct).toBe(true);
+    expect((await post<SessionView>(`/api/sessions/${session.id}/finish`)).body.results![0]!.result).toBe("known");
+
+    // After the results, the answers stay.
+    expect((await post(`/api/questions/${choice!.id}/retake`)).status).toBe(409);
+    expect((await post(`/api/questions/999/retake`)).status).toBe(404);
+  });
+
   it("counts an unanswered question as wrong", async () => {
     const session = await startSession([conceptIds[0]!]);
     expect((await post<SessionView>(`/api/sessions/${session.id}/finish`)).body.results![0]).toMatchObject({ result: "failed" });
