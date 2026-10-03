@@ -1247,6 +1247,22 @@ button.button {
   font-weight: 500;
 }
 
+.warning p {
+  margin: 0;
+}
+
+.warning a {
+  color: inherit;
+  text-decoration-color: currentColor;
+}
+
+.warning-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1rem;
+  margin-top: 0.2rem;
+}
+
 .row-actions {
   display: flex;
   flex-wrap: wrap;

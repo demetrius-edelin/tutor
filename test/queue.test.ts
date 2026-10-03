@@ -48,8 +48,14 @@ describe("study queue", () => {
     const view = await get();
     expect(names(view)).toEqual(["advanced-filter", "subqueries", "joins", "select-basics", "having"]);
     const warning = (slug: string) => view.items.find((item) => item.slug === slug)!.warning;
-    expect(warning("subqueries")).toBe("Needs joins, which comes later in the queue.");
-    expect(warning("having")).toBe("Needs group by, which you did not learn yet.");
+    expect(warning("subqueries")).toEqual({
+      kind: "later",
+      prerequisites: [{ conceptId: ids["joins"], slug: "joins", name: "joins", status: "queued", module: { position: 2, name: "Joins" }, position: 3 }],
+    });
+    expect(warning("having")).toEqual({
+      kind: "missing",
+      prerequisites: [expect.objectContaining({ slug: "group-by", status: "new", module: { position: 1, name: "Queries" }, position: null })],
+    });
     expect(warning("select-basics")).toBeNull();
     expect(view.suggestionDiffers).toBe(true);
   });

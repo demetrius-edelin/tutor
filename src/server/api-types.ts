@@ -156,11 +156,22 @@ export interface SessionView {
 // Study queue
 
 export interface QueuePrerequisite {
+  conceptId: number;
   slug: string;
   name: string;
   status: Status;
+  // The module of the prerequisite. It can be a different module from the module of the concept.
+  module: { position: number; name: string };
   // The place of the prerequisite in the queue, or null if it is not in the queue.
   position: number | null;
+}
+
+// A problem with the prerequisites of a concept in the queue.
+// "later": the prerequisites come later in the queue.
+// "missing": the prerequisites are not in the queue, and the learner does not know them.
+export interface QueueWarning {
+  kind: "later" | "missing";
+  prerequisites: QueuePrerequisite[];
 }
 
 export interface QueueItem {
@@ -176,8 +187,8 @@ export interface QueueItem {
   // The book sections that teach the concept.
   sources: SourceInfo[];
   prerequisites: QueuePrerequisite[];
-  // A short warning for the learner, for example a prerequisite that comes later. Null if there is no problem.
-  warning: string | null;
+  // A problem with the prerequisites, or null if there is no problem.
+  warning: QueueWarning | null;
 }
 
 export interface QueueView {

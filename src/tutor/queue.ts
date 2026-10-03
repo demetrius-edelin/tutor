@@ -1,5 +1,5 @@
 import type { Db } from "../db/index.js";
-import type { QueueItem, QueueView, SourceInfo, Status } from "../server/api-types.js";
+import type { QueueItem, QueueView, QueueWarning, SourceInfo, Status } from "../server/api-types.js";
 import { TutorError } from "./diagnosis.js";
 
 // The study queue of a theme: the concepts that the learner wants to learn, in order.
@@ -38,18 +38,28 @@ function queueRows(db: Db, themeId: number): QueueRow[] {
     .all(themeId) as QueueRow[];
 }
 
-function prerequisitesOf(db: Db, themeId: number): Map<number, { id: number; slug: string; name: string; status: Status }[]> {
+interface PrerequisiteRow {
+  id: number;
+  slug: string;
+  name: string;
+  status: Status;
+  module_position: number;
+  module_name: string;
+}
+
+function prerequisitesOf(db: Db, themeId: number): Map<number, PrerequisiteRow[]> {
   const rows = db
     .prepare(
-      `SELECT p.concept_id, c.id, c.slug, c.name, c.status FROM concept_prereqs p JOIN concepts c ON c.id = p.prereq_id
+      `SELECT p.concept_id, c.id, c.slug, c.name, c.status, m.position AS module_position, m.name AS module_name
+       FROM concept_prereqs p JOIN concepts c ON c.id = p.prereq_id JOIN modules m ON m.id = c.module_id
        WHERE c.theme_id = ? ORDER BY c.id`,
     )
-    .all(themeId) as { concept_id: number; id: number; slug: string; name: string; status: Status }[];
-  const result = new Map<number, { id: number; slug: string; name: string; status: Status }[]>();
-  for (const row of rows) {
-    const list = result.get(row.concept_id) ?? [];
-    list.push({ id: row.id, slug: row.slug, name: row.name, status: row.status });
-    result.set(row.concept_id, list);
+    .all(themeId) as (PrerequisiteRow & { concept_id: number })[];
+  const result = new Map<number, PrerequisiteRow[]>();
+  for (const { concept_id: conceptId, ...row } of rows) {
+    const list = result.get(conceptId) ?? [];
+    list.push(row);
+    result.set(conceptId, list);
   }
   return result;
 }
@@ -113,20 +123,21 @@ export function queueView(db: Db, slug: string): QueueView {
   const place = new Map(rows.map((row, i) => [row.id, i + 1]));
   const items = rows.map((row, i): QueueItem => {
     const own = (prerequisites.get(row.id) ?? []).map((prerequisite) => ({
+      conceptId: prerequisite.id,
       slug: prerequisite.slug,
       name: prerequisite.name,
       status: prerequisite.status,
+      module: { position: prerequisite.module_position, name: prerequisite.module_name },
       position: place.get(prerequisite.id) ?? null,
     }));
     const later = own.filter((prerequisite) => prerequisite.position !== null && prerequisite.position > i + 1);
     const missing = own.filter((prerequisite) => prerequisite.position === null && !READY.includes(prerequisite.status));
-    const names = (list: typeof own) => list.map((prerequisite) => prerequisite.name).join(", ");
-    let warning: string | null = null;
-    if (later.length > 0) warning = `Needs ${names(later)}, which comes later in the queue.`;
-    else if (missing.length > 0) {
-      const skipped = missing.every((prerequisite) => prerequisite.status === "skipped");
-      warning = `Needs ${names(missing)}, which you ${skipped ? "skipped" : "did not learn yet"}.`;
-    }
+    const warning: QueueWarning | null =
+      later.length > 0
+        ? { kind: "later", prerequisites: later }
+        : missing.length > 0
+          ? { kind: "missing", prerequisites: missing }
+          : null;
     return {
       conceptId: row.id,
       slug: row.slug,

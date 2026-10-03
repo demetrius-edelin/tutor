@@ -10,8 +10,8 @@ import {
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useEffect, useState } from "react";
-import type { QueueItem, QueueView } from "../../server/api-types";
-import { postJson, useApi } from "../api";
+import type { QueueItem, QueueView, QueueWarning } from "../../server/api-types";
+import { getJson, postJson, useApi } from "../api";
 import { Layout, Notice } from "../components/Layout";
 import { SectionPanel } from "../components/SectionPanel";
 import { href } from "../router";
@@ -81,6 +81,19 @@ function QueueEditor({ slug, initial }: { slug: string; initial: QueueView }) {
       setError((problem as Error).message);
       setBusy(false);
     }
+  };
+
+  // Put a prerequisite at the top of the queue. The queue stays open, with the new order.
+  const putFirst = async (conceptId: number) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await postJson(`/api/concepts/${conceptId}/top`);
+      setQueue(await getJson<QueueView>(`/api/themes/${encodeURIComponent(slug)}/queue`));
+    } catch (problem) {
+      setError((problem as Error).message);
+    }
+    setBusy(false);
   };
 
   const remove = (item: QueueItem, status: "skipped" | "new") =>
@@ -165,6 +178,7 @@ function QueueEditor({ slug, initial }: { slug: string; initial: QueueView }) {
                 onLater={() => remove(item, "new")}
                 onStart={() => startNow(item)}
                 onRead={setSection}
+                onPutFirst={putFirst}
               />
             ))}
           </ol>
@@ -206,6 +220,7 @@ function QueueRow(props: {
   onLater: () => void;
   onStart: () => void;
   onRead: (sectionId: number) => void;
+  onPutFirst: (conceptId: number) => void;
 }) {
   const { item } = props;
   const [source, ...more] = item.sources;
@@ -243,7 +258,7 @@ function QueueRow(props: {
               </span>
             </p>
           )}
-          {item.warning && <p className="warning">{item.warning}</p>}
+          {item.warning && <PrerequisiteWarning slug={props.slug} warning={item.warning} busy={props.busy} onPutFirst={props.onPutFirst} />}
           <div className="row-actions">
             <button className="text-button strong" onClick={props.onStart} disabled={props.busy}>
               {item.status === "learning" ? "Continue the lesson" : props.first ? "Start the lesson" : "Start now"}
@@ -273,5 +288,42 @@ function QueueRow(props: {
         </div>
       </div>
     </li>
+  );
+}
+
+// The prerequisites that the learner needs before a concept. Each name links to the concept on the concept map,
+// and the module tells where to find it.
+function PrerequisiteWarning(props: { slug: string; warning: QueueWarning; busy: boolean; onPutFirst: (conceptId: number) => void }) {
+  const { prerequisites } = props.warning;
+  const one = prerequisites.length === 1;
+  const reason =
+    props.warning.kind === "later"
+      ? `${one ? "comes" : "come"} later in the queue`
+      : prerequisites.every((prerequisite) => prerequisite.status === "skipped")
+        ? "you skipped"
+        : "you did not learn yet";
+  return (
+    <div className="warning">
+      <p>
+        Needs{" "}
+        {prerequisites.map((prerequisite, i) => (
+          <span key={prerequisite.slug}>
+            {i > 0 && (i === prerequisites.length - 1 ? " and " : ", ")}
+            <a href={href.map(props.slug, prerequisite.slug)}>{prerequisite.name}</a> (module {prerequisite.module.position},{" "}
+            {prerequisite.module.name})
+          </span>
+        ))}
+        , which {reason}.
+      </p>
+      {props.warning.kind === "missing" && (
+        <p className="warning-actions">
+          {prerequisites.map((prerequisite) => (
+            <button key={prerequisite.slug} className="text-button" onClick={() => props.onPutFirst(prerequisite.conceptId)} disabled={props.busy}>
+              Put {one ? "it" : prerequisite.name} first in the queue
+            </button>
+          ))}
+        </p>
+      )}
+    </div>
   );
 }
