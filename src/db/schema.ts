@@ -151,6 +151,14 @@ ALTER TABLE lessons ADD COLUMN refs TEXT NOT NULL DEFAULT '[]';
 ALTER TABLE lesson_messages ADD COLUMN refs TEXT NOT NULL DEFAULT '[]';
 `;
 
-export const MIGRATIONS = [V1, V2, V3];
+// Version 4: a lesson is short. On request, the tutor writes a detailed lesson with references.
+// A lesson from before this version is already detailed.
+const V4 = `
+ALTER TABLE lessons ADD COLUMN detail TEXT;
+ALTER TABLE lessons ADD COLUMN detail_refs TEXT NOT NULL DEFAULT '[]';
+UPDATE lessons SET detail = text, detail_refs = refs;
+`;
+
+export const MIGRATIONS = [V1, V2, V3, V4];
 export const SCHEMA_VERSION = MIGRATIONS.length;
 

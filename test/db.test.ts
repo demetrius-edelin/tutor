@@ -45,4 +45,26 @@ describe("migrations", () => {
     expect(db.prepare("SELECT name FROM themes").pluck().get()).toBe("SQL");
     expect(db.prepare("SELECT COUNT(*) FROM sessions").pluck().get()).toBe(0);
   });
+
+  it("keeps a lesson from version 3 as the detailed lesson", async () => {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const Database = (await import("better-sqlite3")).default;
+    const { MIGRATIONS } = await import("../src/db/schema.js");
+    const file = join(mkdtempSync(join(tmpdir(), "tutor-db-")), "old.db");
+    const old = new Database(file);
+    for (const migration of MIGRATIONS.slice(0, 3)) old.exec(migration);
+    old.pragma("user_version = 3");
+    old.prepare("INSERT INTO themes (slug, name) VALUES ('sql', 'SQL')").run();
+    old.prepare("INSERT INTO modules (theme_id, position, name) VALUES (1, 1, 'Basics')").run();
+    old
+      .prepare("INSERT INTO concepts (theme_id, module_id, slug, name, objective, kind, level) VALUES (1, 1, 'like', 'LIKE', 'Use LIKE.', 'skill', 'basic')")
+      .run();
+    old.prepare("INSERT INTO lessons (concept_id, round, text, refs) VALUES (1, 1, 'A long lesson [1].', '[{\"number\":1}]')").run();
+    old.close();
+
+    const db = openDb(file);
+    expect(db.prepare("SELECT detail, detail_refs FROM lessons").get()).toEqual({ detail: "A long lesson [1].", detail_refs: '[{"number":1}]' });
+  });
 });

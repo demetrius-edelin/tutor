@@ -265,14 +265,16 @@ The model gets these inputs:
 - The text of all source sections for the concept, from all books of the theme.
 - The wrong answers of the user in the diagnosis, for a concept that the user tested. The lesson can then address the specific mistakes.
 
-The lesson contains these parts:
+The lesson is short: an explanation in 1 to 3 paragraphs and one example, with a maximum of 200 words. The short lesson has no references. A short answer costs less, because the model writes fewer output tokens.
+
+For a complex concept, the user clicks "Explain in more detail". Then the model writes the detailed lesson in a second call. The conversation of this call contains the short lesson, so the model expands it. The detailed lesson replaces the short lesson on the page. The detailed lesson contains these parts:
 
 - An explanation in plain words.
 - One or two examples. The model selects the type of example from the sources, for example a query, a code sample, or a worked case.
 - The common mistakes.
 - The references: book, chapter, section, and a short quote.
 
-A lesson takes 5 to 10 minutes to read. The app shows the lesson as formatted Markdown.
+A detailed lesson takes 5 to 10 minutes to read. The app shows each lesson as formatted Markdown.
 
 After the lesson, the user can ask questions in a chat box below the lesson. The model answers with the same sources in the prompt. Then the user clicks "Test me".
 
@@ -395,7 +397,7 @@ concept_sources  (concept_id, section_id, quote)
 concept_prereqs  (concept_id, prereq_id)
 questions        (id, concept_id, purpose, kind, text, choices, answer, key_points, section_id)
 attempts         (id, question_id, answer, score, feedback, disputed, created_at)
-lessons          (id, concept_id, round, text, created_at)
+lessons          (id, concept_id, round, text, refs, detail, detail_refs, created_at)
 lesson_messages  (id, lesson_id, role, text, created_at)
 exercises        (id, concept_id, runner, spec, status, created_at)
 ```
@@ -487,7 +489,7 @@ The two classes do the same work in different ways:
 - Empty answers: some reasoning models on OpenRouter sometimes return an empty answer with a normal finish. The text is then only in the reasoning field. After an empty answer, `OpenAiClient` asks one more time. After a second empty answer, it shows an error with the finish reason, the token counts, and the provider. The tutor never saves an empty lesson or an empty chat answer.
 - Log: each client writes one line for each model call, with the time and the result. The server and `npm run llm:check` print the lines. The tests print nothing.
 
-For each provider, the tutor checks that each quote is in the text of its source. If a quote is not in the source, the tutor removes the reference. If a lesson has no valid reference, the tutor shows a warning on the lesson.
+For each provider, the tutor checks that each quote is in the text of its source. If a quote is not in the source, the tutor removes the reference. If a detailed lesson has no valid reference, the tutor shows a warning on the lesson. The short lesson asks for no references: `AnthropicClient` turns off the citations, and `OpenAiClient` does not ask for reference markers.
 
 For some Claude models (Claude Fable 5.1, Claude Opus 5.5, Claude Opus 5, and Claude Sonnet 5.5), `AnthropicClient` turns on the server-side fallback. If the model refuses a request, the API runs the request again on a different Claude model.
 

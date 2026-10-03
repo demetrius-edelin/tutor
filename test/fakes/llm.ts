@@ -1,7 +1,7 @@
 import type { LlmClient, ObjectRequest, Source, TextRequest, TextResult } from "../../src/llm/index.js";
 import { checkReferences } from "../../src/llm/references.js";
 
-export type Stage = "extract" | "review" | "merge" | "questions" | "test" | "grade" | "lesson" | "chat";
+export type Stage = "extract" | "review" | "merge" | "questions" | "test" | "grade" | "lesson" | "detail" | "chat";
 
 export interface FakeCall {
   stage: Stage;
@@ -119,13 +119,19 @@ export class FakeLlm implements LlmClient {
   }
 
   async text(request: TextRequest): Promise<TextResult> {
-    const stage: Stage = request.system.startsWith("You are a tutor. You teach") ? "lesson" : "chat";
+    const stage: Stage = request.system.startsWith("You are a tutor. You teach")
+      ? "lesson"
+      : request.system.startsWith("You are a tutor. The learner read your short lesson")
+        ? "detail"
+        : "chat";
     this.calls.push({ stage, request: { system: request.system, prompt: "", schema: null as never }, textRequest: request });
     if (this.handlers.text) return this.handlers.text(request);
+    // A text without references, as the client returns it when cite is false.
+    if (request.cite === false) return { text: "The concept, in short.", references: [] };
     // One reference to the first words of the first source. The check keeps it, because the quote is in the source.
     const source = request.sources[0];
     const quote = source ? defaultConcept(source).quote : "";
-    const text = stage === "lesson" ? `## Explanation\n\nThe concept, from the book [1].` : `The answer to your question [1].`;
+    const text = stage === "chat" ? `The answer to your question [1].` : `## Explanation\n\nThe concept, from the book [1].`;
     return checkReferences(text, source ? [{ number: 1, sourceId: source.id, quote }] : [], request.sources);
   }
 }

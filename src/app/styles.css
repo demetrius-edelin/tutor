@@ -522,32 +522,32 @@ a.contents-entry:hover .contents-title {
   font-size: 1.75rem;
 }
 
-/* On the concept map, the background of a row shows its status: yellow to learn, green known, gray skipped. */
-.map-concepts > .concept {
+/* In a list of concepts with status rows, the background of a row shows its status: yellow to learn, green known, gray skipped. */
+.status-rows > .concept {
   padding: 0.2rem 0;
 }
 
-.map-concepts > .concept > .concept-body {
+.status-rows > .concept > .concept-body {
   margin: 0 -0.75rem;
   padding: 0.55rem 0.75rem 0.6rem;
   border-radius: 0.35rem;
 }
 
-.map-concepts > .concept > .margin {
+.status-rows > .concept > .margin {
   top: 0.55rem;
 }
 
-.map-concepts > .status-queued > .concept-body,
-.map-concepts > .status-learning > .concept-body {
+.status-rows > .status-queued > .concept-body,
+.status-rows > .status-learning > .concept-body {
   background: color-mix(in srgb, var(--highlight-soft) 30%, var(--paper));
 }
 
-.map-concepts > .status-known > .concept-body,
-.map-concepts > .status-mastered > .concept-body {
+.status-rows > .status-known > .concept-body,
+.status-rows > .status-mastered > .concept-body {
   background: color-mix(in srgb, var(--green-soft) 50%, var(--paper));
 }
 
-.map-concepts > .status-skipped > .concept-body {
+.status-rows > .status-skipped > .concept-body {
   background: color-mix(in srgb, var(--rule) 22%, var(--paper));
 }
 
@@ -597,7 +597,8 @@ a.contents-entry:hover .contents-title {
 }
 
 /* A skipped concept is gray, so that the other concepts stand out. */
-.concept.status-skipped .concept-name {
+.concept.status-skipped .concept-name,
+.concept.status-skipped .concept-title {
   color: var(--graphite);
   font-weight: 500;
 }
@@ -702,6 +703,12 @@ a.contents-entry:hover .contents-title {
   color: var(--margin-red);
 }
 
+.tag.tag-unsaved {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--margin-red);
+  color: var(--margin-red);
+}
+
 .tag.tag-to_test {
   background: none;
   box-shadow: inset 0 0 0 1px var(--graphite);
@@ -771,6 +778,7 @@ a.contents-entry:hover .contents-title {
   color: var(--graphite);
 }
 
+/* A result row of a diagnosis: the concept on the left, the choice on the right. */
 .concept-select {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -784,6 +792,8 @@ a.contents-entry:hover .contents-title {
 
 .segmented {
   display: inline-flex;
+  flex-shrink: 0;
+  background: var(--panel);
   border: 1px solid var(--rule);
   border-radius: 0.3rem;
   overflow: hidden;
@@ -814,13 +824,6 @@ a.contents-entry:hover .contents-title {
 .segmented label:has(input:focus-visible) {
   outline: 2px solid var(--focus);
   outline-offset: -2px;
-}
-
-.change {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.4rem;
 }
 
 .check {
@@ -857,6 +860,40 @@ a.contents-entry:hover .contents-title {
 .button:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+/* A button with a spinner is busy, not unavailable. It stays easy to see. */
+.button:disabled:has(.spinner) {
+  opacity: 0.8;
+  cursor: progress;
+}
+
+/* The spinner: an arc that turns, in the color of the text. */
+.spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 0.5em;
+  border: 0.14em solid color-mix(in srgb, currentColor 18%, transparent);
+  border-top-color: currentColor;
+  border-right-color: currentColor;
+  border-radius: 50%;
+  vertical-align: -0.1em;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* With reduced motion, the spinner turns slowly. A spinner that does not turn looks like a frozen page. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.4s;
+  }
 }
 
 button.button {
@@ -941,6 +978,10 @@ button.button {
   text-decoration-color: var(--margin-red);
 }
 
+.open-answer {
+  margin-bottom: 1.25rem;
+}
+
 .open-answer label {
   display: block;
   margin-bottom: 0.3rem;
@@ -1002,12 +1043,8 @@ button.button {
   .concept-select {
     grid-template-columns: 1fr;
   }
-  .concept-select .segmented,
-  .concept-select > .text-button {
+  .concept-select .segmented {
     justify-self: start;
-  }
-  .change {
-    align-items: flex-start;
   }
 }
 
@@ -1365,6 +1402,11 @@ button.button {
 
 .lesson h2 {
   margin-top: 2rem;
+}
+
+.lesson-more {
+  max-width: var(--measure);
+  margin-top: 1.5rem;
 }
 
 .lesson pre,

@@ -3,6 +3,7 @@ import type { AfterTestAction, AttemptView, Choice, QuestionView, SessionView } 
 import { getJson, postJson } from "../api";
 import { Layout, Notice } from "../components/Layout";
 import { SectionPanel } from "../components/SectionPanel";
+import { Spinner } from "../components/Spinner";
 import { StatusMark } from "../components/StatusMark";
 import { href } from "../router";
 
@@ -51,6 +52,7 @@ function SessionBody({ session, onChange }: { session: SessionView; onChange: (s
       <>
         <h1>{title}</h1>
         <p className="lead" role="status">
+          <Spinner />
           The tutor writes 3 new questions about the concept.
         </p>
         <Waiting />
@@ -62,6 +64,7 @@ function SessionBody({ session, onChange }: { session: SessionView; onChange: (s
       <>
         <h1>{title}</h1>
         <p className="lead" role="status">
+          <Spinner />
           The tutor writes the questions: {session.prepared} of {session.total} concepts are ready.
         </p>
         <div className="progress-bar" aria-hidden="true">
@@ -268,7 +271,14 @@ function QuestionCard({ question, about, onAnswered }: { question: QuestionView;
             onClick={send}
             disabled={sending || (question.kind === "choice" ? choice === null : text.trim() === "")}
           >
-            {sending ? (question.kind === "choice" ? "Checking" : "Grading") : "Check the answer"}
+            {sending ? (
+              <>
+                <Spinner />
+                {question.kind === "choice" ? "Checking" : "Grading"}
+              </>
+            ) : (
+              "Check the answer"
+            )}
           </button>
         </p>
       )}
@@ -543,7 +553,14 @@ function TestResults({ session }: { session: SessionView }) {
       <ul className="plain-list next-steps">
         <li>
           <button className="text-button strong" onClick={teachAgain} disabled={busy !== null}>
-            {busy === "again" ? "Writing a new lesson" : "Teach it again"}
+            {busy === "again" ? (
+              <>
+                <Spinner />
+                Writing a new lesson
+              </>
+            ) : (
+              "Teach it again"
+            )}
           </button>{" "}
           <span className="quiet">The tutor writes a new lesson from a different angle. Then you take a new test.</span>
         </li>

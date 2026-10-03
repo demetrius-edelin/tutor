@@ -136,7 +136,7 @@ function MapView({ map: loaded, focus }: { map: ConceptMapView; focus: string | 
                 : "Change the choices"}
             </a>
           </div>
-          <ul className="concepts map-concepts">
+          <ul className="concepts status-rows">
             {module.concepts.map((concept) => (
               <ConceptRow
                 key={concept.slug}

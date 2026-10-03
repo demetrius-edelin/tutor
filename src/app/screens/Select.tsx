@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { ConceptMapView, ConceptView, Mark, SelectionResult } from "../../server/api-types";
+import type { ConceptMapView, ConceptView, Mark, SelectionResult, Status } from "../../server/api-types";
 import { postJson, useApi } from "../api";
 import { Layout, Notice } from "../components/Layout";
 import { StatusMark, STATUS_INFO } from "../components/StatusMark";
@@ -12,8 +12,19 @@ const MARKS: { value: Mark; label: string }[] = [
   { value: "later", label: "Later" },
 ];
 
+const LEVEL: Record<ConceptView["level"], string> = { basic: "Basic", intermediate: "Intermediate", advanced: "Advanced" };
+
 // These concepts have no mark yet. A failed concept counts too: the learner decides again.
-const UNMARKED = new Set(["new", "to_test", "failed"]);
+const UNMARKED = new Set<Status>(["new", "to_test", "failed"]);
+
+// The choice that a concept has now. A concept without a choice shows "Later".
+// A known or mastered concept has none of the four choices, so no choice is selected.
+function currentMark(status: Status): Mark | undefined {
+  if (UNMARKED.has(status)) return "later";
+  if (status === "queued" || status === "learning") return "learn";
+  if (status === "skipped") return "skip";
+  return undefined;
+}
 
 export function Select({ slug, moduleId }: { slug: string; moduleId: number }) {
   const map = useApi<ConceptMapView>(`/api/themes/${encodeURIComponent(slug)}/map`);
@@ -45,29 +56,20 @@ function MarkControl(props: { label: string; value: Mark | undefined; onChange: 
 function SelectView(props: { slug: string; moduleId: number; moduleName: string; position: number; concepts: ConceptView[] }) {
   const unmarked = useMemo(() => props.concepts.filter((concept) => UNMARKED.has(concept.status)), [props.concepts]);
   const marked = props.concepts.filter((concept) => !UNMARKED.has(concept.status));
-  // A concept without an entry keeps its status. An unmarked concept shows "Later" until the learner picks a mark.
+  // The choices that the learner picked on this page. A pick that is the same as the current choice is not a change.
   const [marks, setMarks] = useState<Record<number, Mark>>({});
-  const [changing, setChanging] = useState<Set<number>>(new Set());
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const setMark = (id: number, mark: Mark) => setMarks((current) => ({ ...current, [id]: mark }));
-  const keep = (id: number) => {
-    setMarks(({ [id]: _removed, ...rest }) => rest);
-    setChanging((current) => {
-      const next = new Set(current);
-      next.delete(id);
-      return next;
-    });
-  };
-
-  // "Later" on an unmarked concept changes nothing, so it is not sent.
+  const statusOf = new Map(props.concepts.map((concept) => [concept.id, concept.status]));
   const changes = Object.fromEntries(
-    Object.entries(marks).filter(([id, mark]) => !(mark === "later" && unmarked.some((concept) => concept.id === Number(id)))),
+    Object.entries(marks).filter(([id, mark]) => mark !== currentMark(statusOf.get(Number(id))!)),
   ) as Record<string, Mark>;
   const counts = { test: 0, learn: 0, skip: 0, later: 0 };
   for (const mark of Object.values(changes)) counts[mark]++;
   const total = Object.keys(changes).length;
+
+  const setMark = (id: number, mark: Mark) => setMarks((current) => ({ ...current, [id]: mark }));
 
   const submit = async () => {
     setSending(true);
@@ -87,6 +89,16 @@ function SelectView(props: { slug: string; moduleId: number; moduleName: string;
     counts.skip > 0 && `${counts.skip} to skip`,
     counts.later > 0 && `${counts.later} for later`,
   ].filter(Boolean);
+
+  const row = (concept: ConceptView) => (
+    <SelectRow
+      key={concept.id}
+      concept={concept}
+      value={marks[concept.id] ?? currentMark(concept.status)}
+      changed={concept.id in changes}
+      onChange={(mark) => setMark(concept.id, mark)}
+    />
+  );
 
   return (
     <>
@@ -113,73 +125,20 @@ function SelectView(props: { slug: string; moduleId: number; moduleName: string;
               </span>
             ))}
           </p>
-          <ul className="concepts">
-            {unmarked.map((concept) => (
-              <li key={concept.id} className="concept concept-select">
-                <div className="margin">
-                  <StatusMark status={concept.status} />
-                </div>
-                <div className="concept-body">
-                  <div className="concept-head">
-                    <span className="concept-title">{concept.name}</span>
-                    {concept.status === "failed" && <span className="concept-meta">Failed in a diagnosis</span>}
-                  </div>
-                  <p className="objective">{concept.objective}</p>
-                </div>
-                <MarkControl
-                  label={`Mark for ${concept.name}`}
-                  name={`mark-${concept.id}`}
-                  value={marks[concept.id] ?? "later"}
-                  onChange={(mark) => setMark(concept.id, mark)}
-                />
-              </li>
-            ))}
-          </ul>
+          <ul className="concepts status-rows">{unmarked.map(row)}</ul>
         </section>
       )}
 
       {marked.length > 0 && (
         <section aria-labelledby="marked-heading">
           <h2 id="marked-heading">Chosen already</h2>
-          <p className="bulk">To change a choice, use Change. Later sets the concept back to not chosen.</p>
-          <ul className="concepts">
-            {marked.map((concept) => (
-              <li key={concept.id} className="concept concept-select">
-                <div className="margin">
-                  <StatusMark status={concept.status} />
-                </div>
-                <div className="concept-body">
-                  <div className="concept-head">
-                    <span className="concept-title">{concept.name}</span>
-                    <span className="concept-meta">{STATUS_INFO[concept.status].label}</span>
-                  </div>
-                  <p className="objective">{concept.objective}</p>
-                </div>
-                {changing.has(concept.id) ? (
-                  <div className="change">
-                    <MarkControl
-                      label={`New mark for ${concept.name}`}
-                      name={`mark-${concept.id}`}
-                      value={marks[concept.id]}
-                      onChange={(mark) => setMark(concept.id, mark)}
-                    />
-                    <button className="text-button" onClick={() => keep(concept.id)}>
-                      Keep as it is
-                    </button>
-                  </div>
-                ) : (
-                  <button className="text-button" onClick={() => setChanging((current) => new Set(current).add(concept.id))}>
-                    Change
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
+          <p className="bulk">To change a choice, select a different one. Later sets the concept back to not chosen.</p>
+          <ul className="concepts status-rows">{marked.map(row)}</ul>
         </section>
       )}
 
       <div className="action-bar">
-        <span className="quiet">{summary.length > 0 ? summary.join(", ") : "Nothing chosen yet"}</span>
+        <span className="quiet">{summary.length > 0 ? summary.join(", ") : "No changes yet"}</span>
         <button className="button" onClick={submit} disabled={sending || total === 0}>
           {sending ? "Starting" : counts.test > 0 ? "Start the test" : "Save the choices"}
         </button>
@@ -190,5 +149,31 @@ function SelectView(props: { slug: string; moduleId: number; moduleName: string;
         </p>
       )}
     </>
+  );
+}
+
+// One concept with its status and its four choices. The row has the same look as a row of the concept map.
+function SelectRow(props: { concept: ConceptView; value: Mark | undefined; changed: boolean; onChange: (mark: Mark) => void }) {
+  const { concept } = props;
+  return (
+    <li className={`concept status-${concept.status}`}>
+      <div className="margin">
+        <StatusMark status={concept.status} />
+      </div>
+      <div className="concept-body">
+        <div className="concept-top">
+          <div className="concept-head">
+            <span className="concept-title">{concept.name}</span>
+            <span className="concept-meta">
+              {LEVEL[concept.level]} {concept.kind}
+            </span>
+            {concept.status !== "new" && <span className={`tag tag-${concept.status}`}>{STATUS_INFO[concept.status].label}</span>}
+            {props.changed && <span className="tag tag-unsaved">Not saved</span>}
+          </div>
+          <MarkControl label={`Choice for ${concept.name}`} name={`mark-${concept.id}`} value={props.value} onChange={props.onChange} />
+        </div>
+        <p className="objective">{concept.objective}</p>
+      </div>
+    </li>
   );
 }
