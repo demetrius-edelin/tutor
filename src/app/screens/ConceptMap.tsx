@@ -21,6 +21,17 @@ export function ConceptMap({ slug, focus }: { slug: string; focus: string | null
   );
 }
 
+// The choice to show the goals stays in this browser. Without storage, the map shows the goals.
+const GOALS_KEY = "tutor.map.goals";
+
+function readShowGoals(): boolean {
+  try {
+    return window.localStorage.getItem(GOALS_KEY) !== "hidden";
+  } catch {
+    return true;
+  }
+}
+
 function matches(concept: ConceptView, query: string): boolean {
   const text = `${concept.name} ${concept.objective}`.toLowerCase();
   return query
@@ -35,6 +46,7 @@ function MapView({ map: loaded, focus }: { map: ConceptMapView; focus: string | 
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<Set<string>>(() => new Set(focus ? [focus] : []));
   const [section, setSection] = useState<number | null>(null);
+  const [showGoals, setShowGoals] = useState(readShowGoals);
   const total = map.modules.reduce((sum, module) => sum + module.concepts.length, 0);
 
   // A link to a concept opens it and scrolls to it.
@@ -63,6 +75,15 @@ function MapView({ map: loaded, focus }: { map: ConceptMapView; focus: string | 
       })),
     }));
 
+  const changeShowGoals = (value: boolean) => {
+    setShowGoals(value);
+    try {
+      window.localStorage.setItem(GOALS_KEY, value ? "shown" : "hidden");
+    } catch {
+      // The choice then stays only until the page loads again.
+    }
+  };
+
   const toggle = (slug: string) =>
     setOpen((current) => {
       const next = new Set(current);
@@ -76,7 +97,7 @@ function MapView({ map: loaded, focus }: { map: ConceptMapView; focus: string | 
       <h1>Concept map</h1>
       <p className="lead">
         {map.modules.length} modules and {total} concepts from the books of {map.theme.name}. Open a concept to see its sources. Use
-        the links under a concept to learn it or to test it.
+        the buttons next to a concept to learn it or to test it. Gray concepts are skipped.
       </p>
       <div className="search">
         <label htmlFor="concept-search">Find a concept</label>
@@ -88,6 +109,10 @@ function MapView({ map: loaded, focus }: { map: ConceptMapView; focus: string | 
           placeholder="For example: index"
           autoComplete="off"
         />
+        <label className="check">
+          <input type="checkbox" checked={showGoals} onChange={(event) => changeShowGoals(event.target.checked)} />
+          Show the goals
+        </label>
         {query && (
           <span className="quiet" role="status">
             {shown} of {total} concepts
@@ -118,6 +143,7 @@ function MapView({ map: loaded, focus }: { map: ConceptMapView; focus: string | 
                 moduleId={module.id}
                 themeSlug={map.theme.slug}
                 open={open.has(concept.slug)}
+                showGoal={showGoals}
                 onToggle={() => toggle(concept.slug)}
                 onRead={setSection}
                 onStatus={(status) => setStatus(concept.id, status)}
@@ -140,26 +166,29 @@ function ConceptRow(props: {
   onToggle: () => void;
   onRead: (sectionId: number) => void;
   onStatus: (status: Status) => void;
+  showGoal: boolean;
 }) {
   const { concept, open } = props;
   const detailsId = `details-${concept.slug}`;
   return (
-    <li className="concept" id={`concept-${concept.slug}`}>
+    <li className={`concept status-${concept.status}`} id={`concept-${concept.slug}`}>
       <div className="margin">
         <StatusMark status={concept.status} />
       </div>
       <div className="concept-body">
-        <div className="concept-head">
-          <button className="concept-name" aria-expanded={open} aria-controls={detailsId} onClick={props.onToggle}>
-            {concept.name}
-          </button>
-          <span className="concept-meta">
-            {LEVEL[concept.level]} {KIND[concept.kind]}
-            {concept.status !== "new" && `. ${STATUS_INFO[concept.status].label}`}
-          </span>
+        <div className="concept-top">
+          <div className="concept-head">
+            <button className="concept-name" aria-expanded={open} aria-controls={detailsId} onClick={props.onToggle}>
+              {concept.name}
+            </button>
+            <span className="concept-meta">
+              {LEVEL[concept.level]} {KIND[concept.kind]}
+            </span>
+            {concept.status !== "new" && <span className={`tag tag-${concept.status}`}>{STATUS_INFO[concept.status].label}</span>}
+          </div>
+          <ConceptActions concept={concept} moduleId={props.moduleId} onStatus={props.onStatus} />
         </div>
-        <p className="objective">{concept.objective}</p>
-        <ConceptActions concept={concept} moduleId={props.moduleId} onStatus={props.onStatus} />
+        {(props.showGoal || open) && <p className="objective">{concept.objective}</p>}
         {open && (
           <div className="concept-details" id={detailsId}>
             {concept.prerequisites.length > 0 && (
@@ -235,35 +264,51 @@ function ConceptActions({ concept, moduleId, onStatus }: { concept: ConceptView;
     });
 
   return (
-    <>
-      <p className="row-actions">
+    <div className="concept-actions">
+      <div className="chips" role="group" aria-label={`Actions for ${concept.name}`}>
         {concept.status === "learning" || concept.status === "mastered" ? (
-          <a className="text-button strong" href={href.lesson(concept.id)}>
+          <a className="chip" href={href.lesson(concept.id)}>
+            <PlayIcon />
             {concept.status === "learning" ? "Continue the lesson" : "Open the lesson"}
           </a>
         ) : (
           <>
-            <button className="text-button strong" onClick={learnNow} disabled={busy}>
+            <button className="chip" onClick={learnNow} disabled={busy}>
+              <PlayIcon />
               Learn now
             </button>
             {concept.status !== "queued" && (
-              <button className="text-button" onClick={addToQueue} disabled={busy}>
-                Add to the study queue
+              <button className="chip" onClick={addToQueue} disabled={busy} title="Add the concept to the end of your study queue">
+                <span className="chip-icon" aria-hidden="true">
+                  +
+                </span>
+                Add to the queue
               </button>
             )}
             {concept.status !== "queued" && (
-              <button className="text-button" onClick={testIt} disabled={busy}>
+              <button className="chip" onClick={testIt} disabled={busy} title="Answer 2 questions about the concept">
+                <span className="chip-icon" aria-hidden="true">
+                  ?
+                </span>
                 Test it
               </button>
             )}
           </>
         )}
-      </p>
+      </div>
       {error && (
-        <p className="error" role="alert">
+        <p className="error small" role="alert">
           {error}
         </p>
       )}
-    </>
+    </div>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg className="chip-icon" viewBox="0 0 10 10" width="0.6em" height="0.6em" aria-hidden="true">
+      <path d="M2 1 9 5 2 9Z" fill="currentColor" />
+    </svg>
   );
 }
