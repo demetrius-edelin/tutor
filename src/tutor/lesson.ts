@@ -199,6 +199,7 @@ export function lessonView(db: Db, conceptId: number): LessonView {
     missingPrerequisites: missing,
     warning: missing.length > 0 ? `This concept needs ${names}, which you do not know yet.` : null,
     queuePosition: concept.queue_pos,
+    next: nextInQueue(db, concept),
     openTestId: openTest(db, conceptId),
     failedTests: failedTests(db, conceptId),
   };
@@ -225,6 +226,23 @@ export function startTest(db: Db, conceptId: number): { sessionId: number; creat
   const open = openTest(db, conceptId);
   if (open !== null) return { sessionId: open, created: false };
   return { sessionId: createSession(db, concept.theme_id, concept.module_id, [conceptId], "test"), created: true };
+}
+
+// The learner skips the test after a lesson, for example for a simple concept.
+// As after a pass, the concept becomes mastered and leaves the queue.
+export function skipTest(db: Db, conceptId: number): LessonView {
+  conceptRow(db, conceptId);
+  db.prepare("UPDATE concepts SET status = 'mastered', queue_pos = NULL WHERE id = ?").run(conceptId);
+  return lessonView(db, conceptId);
+}
+
+// The first concept in the study queue of the theme, without the concept of the lesson.
+function nextInQueue(db: Db, concept: ConceptRow): LessonView["next"] {
+  return (
+    (db
+      .prepare("SELECT id AS conceptId, name FROM concepts WHERE theme_id = ? AND status IN ('queued', 'learning') AND id <> ? ORDER BY queue_pos, id LIMIT 1")
+      .get(concept.theme_id, concept.id) as LessonView["next"] | undefined) ?? null
+  );
 }
 
 // After a failed test, the learner can keep the concept for later or skip it.

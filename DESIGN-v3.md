@@ -298,6 +298,8 @@ To pass, the user must answer 2 of the 3 questions correctly. One of the 2 must 
 
 After a pass, the concept becomes `mastered` and leaves the queue. The results show the next concept in the queue, with a "Next lesson" button.
 
+For a simple concept, the user can click "Skip the test" on the lesson page. Then the concept becomes `mastered` and leaves the queue, with no model call. The lesson page shows the "Next lesson" button.
+
 After a fail, the tutor shows the wrong answers and offers these actions:
 
 - Teach again: a new lesson starts from the wrong answers. It uses a different example or a different book. Then the tutor gives a new test with new questions. This action is the default.
@@ -355,7 +357,7 @@ The user writes the answer in a code box in the app. The runners use Docker cont
 - `failed`: failed the diagnosis or a review. It waits for the choice of the user.
 - `queued`: in the study queue.
 - `learning`: the current concept in a teach and test loop.
-- `mastered`: passed a test after a lesson.
+- `mastered`: passed a test after a lesson, or skipped the test.
 - `skipped`: the user skipped it. The user can undo this on the map screen.
 
 ## Screens

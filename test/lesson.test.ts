@@ -143,6 +143,18 @@ describe("lessons", () => {
     expect((await get<SessionView>(`/api/sessions/${body.sessionId}`)).questions.length).toBe(2);
   });
 
+  it("skips the test: the concept becomes mastered, and the page offers the next lesson", async () => {
+    const [first, second] = [conceptIds[1]!, conceptIds[2]!];
+    await post(`/api/concepts/${first}/lesson`);
+    await post(`/api/concepts/${second}/lesson`);
+    const { body } = await post<LessonView>(`/api/concepts/${second}/skip-test`);
+    expect(body.concept.status).toBe("mastered");
+    expect(body.queuePosition).toBeNull();
+    expect(body.next).toEqual({ conceptId: first, name: expect.any(String) });
+    expect(llm.count("test")).toBe(0);
+    expect((await post(`/api/concepts/999/skip-test`)).status).toBe(404);
+  });
+
   it("does not save an empty lesson or an empty answer", async () => {
     await post(`/api/concepts/${conceptIds[1]}/lesson`);
     const lessonId = db.prepare("SELECT id FROM lessons").pluck().get() as number;

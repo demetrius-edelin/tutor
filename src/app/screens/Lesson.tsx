@@ -142,6 +142,7 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
   const [rewriting, setRewriting] = useState(false);
   const [testing, setTesting] = useState(false);
   const [detailing, setDetailing] = useState(false);
+  const [skipping, setSkipping] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -149,6 +150,7 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
   const article = useRef<HTMLElement>(null);
   // The detailed lesson replaces the short lesson, because it includes its content.
   const shown = lesson.detail ?? { text: lesson.text, references: lesson.references };
+  const mastered = view.concept.status === "mastered";
 
   const showDetail = async () => {
     setDetailing(true);
@@ -185,6 +187,18 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
       setActionError((problem as Error).message);
       setTesting(false);
     }
+  };
+
+  // Skip the test, for example for a simple concept. The concept becomes mastered.
+  const skipTest = async () => {
+    setSkipping(true);
+    setActionError(null);
+    try {
+      onChange(await postJson<LessonView>(`/api/concepts/${view.concept.id}/skip-test`));
+    } catch (problem) {
+      setActionError((problem as Error).message);
+    }
+    setSkipping(false);
   };
 
   const teachAgain = async () => {
@@ -294,8 +308,8 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
 
       <section aria-labelledby="after-heading">
         <h2 id="after-heading">After the lesson</h2>
-        {view.concept.status === "mastered" ? (
-          <p>You passed the test. The concept is mastered.</p>
+        {mastered ? (
+          <p>The concept is mastered.</p>
         ) : (
           <>
             <p>
@@ -303,16 +317,27 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
               of them.
               {view.failedTests > 0 && ` You did not pass the test ${view.failedTests} ${view.failedTests === 1 ? "time" : "times"}.`}
             </p>
+            <p>For a simple concept, skip the test. The concept then becomes mastered.</p>
             <p>If the lesson was not clear, the tutor can teach the concept again from a different angle.</p>
           </>
         )}
         <p className="button-row">
-          {view.concept.status !== "mastered" && (
-            <button className="button" onClick={startTest} disabled={testing || rewriting}>
-              {testing ? "Starting the test" : view.openTestId ? "Continue the test" : "Test me"}
-            </button>
+          {mastered && view.next && (
+            <a className="button" href={href.lesson(view.next.conceptId)}>
+              Next lesson: {view.next.name}
+            </a>
           )}
-          <button className="text-button strong" onClick={teachAgain} disabled={rewriting || testing || detailing}>
+          {!mastered && (
+            <>
+              <button className="button" onClick={startTest} disabled={testing || rewriting || skipping}>
+                {testing ? "Starting the test" : view.openTestId ? "Continue the test" : "Test me"}
+              </button>
+              <button className="button secondary" onClick={skipTest} disabled={testing || rewriting || skipping}>
+                Skip the test
+              </button>
+            </>
+          )}
+          <button className="text-button strong" onClick={teachAgain} disabled={rewriting || testing || detailing || skipping}>
             {rewriting ? (
               <>
                 <Spinner />

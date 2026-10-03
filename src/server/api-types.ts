@@ -250,6 +250,8 @@ export interface LessonView {
   missingPrerequisites: { conceptId: number; slug: string; name: string; status: Status; position: number | null }[];
   warning: string | null;
   queuePosition: number | null;
+  // The first concept in the study queue after this concept, or null.
+  next: { conceptId: number; name: string } | null;
   // A test after the lesson that the learner did not finish, or null.
   openTestId: number | null;
   failedTests: number;

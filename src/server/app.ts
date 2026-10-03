@@ -15,7 +15,18 @@ import {
   sessionView,
   TutorError,
 } from "../tutor/diagnosis.js";
-import { afterTest, askAboutLesson, detailLesson, lessonView, moveToTop, startLesson, startTest, testConcept, testPrerequisites } from "../tutor/lesson.js";
+import {
+  afterTest,
+  askAboutLesson,
+  detailLesson,
+  lessonView,
+  moveToTop,
+  skipTest,
+  startLesson,
+  startTest,
+  testConcept,
+  testPrerequisites,
+} from "../tutor/lesson.js";
 import { applySuggestedOrder, queueView, removeFromQueue, reorderQueue } from "../tutor/queue.js";
 import type { AfterTestAction, Choice, Mark } from "./api-types.js";
 import { conceptMap, listThemes, section, themeDetail } from "./queries.js";
@@ -161,6 +172,9 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError }: Serve
     if (result.created) runInBackground(prepareSession(db, model, dataDir, result.sessionId));
     return { sessionId: result.sessionId };
   });
+
+  // Skip the test: the concept becomes mastered.
+  app.post<{ Params: { id: string } }>("/api/concepts/:id/skip-test", async (request) => skipTest(db, Number(request.params.id)));
 
   app.post<{ Params: { id: string }; Body: { action: AfterTestAction } }>("/api/concepts/:id/after-test", async (request) => {
     afterTest(db, Number(request.params.id), request.body?.action);
