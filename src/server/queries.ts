@@ -118,9 +118,9 @@ export function conceptMap(db: Db, slug: string): ConceptMapView | undefined {
   }[];
   const concepts = db
     .prepare(
-      "SELECT id, module_id, slug, name, objective, kind, level, status FROM concepts WHERE theme_id = ? ORDER BY id",
+      "SELECT id, module_id, slug, name, objective, kind, level, status, starred FROM concepts WHERE theme_id = ? ORDER BY id",
     )
-    .all(theme.id) as (Omit<ConceptView, "prerequisites" | "sources"> & { module_id: number })[];
+    .all(theme.id) as (Omit<ConceptView, "prerequisites" | "sources" | "starred"> & { module_id: number; starred: number })[];
   const prerequisites = db
     .prepare(
       `SELECT p.concept_id, c.slug, c.name FROM concept_prereqs p JOIN concepts c ON c.id = p.prereq_id
@@ -143,6 +143,7 @@ export function conceptMap(db: Db, slug: string): ConceptMapView | undefined {
         .filter((concept) => concept.module_id === module.id)
         .map(({ module_id: _module, ...concept }) => ({
           ...concept,
+          starred: concept.starred === 1,
           prerequisites: prerequisites
             .filter((prerequisite) => prerequisite.concept_id === concept.id)
             .map(({ slug, name }) => ({ slug, name })),

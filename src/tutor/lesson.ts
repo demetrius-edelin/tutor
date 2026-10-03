@@ -52,6 +52,7 @@ interface ConceptRow {
   kind: "knowledge" | "skill";
   level: "basic" | "intermediate" | "advanced";
   status: Status;
+  starred: number;
   queue_pos: number | null;
   theme_slug: string;
   theme_name: string;
@@ -63,7 +64,7 @@ interface ConceptRow {
 function conceptRow(db: Db, conceptId: number): ConceptRow {
   const row = db
     .prepare(
-      `SELECT c.id, c.theme_id, c.slug, c.name, c.objective, c.kind, c.level, c.status, c.queue_pos,
+      `SELECT c.id, c.theme_id, c.slug, c.name, c.objective, c.kind, c.level, c.status, c.starred, c.queue_pos,
          t.slug AS theme_slug, t.name AS theme_name, m.id AS module_id, m.position AS module_position, m.name AS module_name
        FROM concepts c JOIN themes t ON t.id = c.theme_id JOIN modules m ON m.id = c.module_id WHERE c.id = ?`,
     )
@@ -176,6 +177,7 @@ export function lessonView(db: Db, conceptId: number): LessonView {
       kind: concept.kind,
       level: concept.level,
       status: concept.status,
+      starred: concept.starred === 1,
       theme: { slug: concept.theme_slug, name: concept.theme_name },
       module: { id: concept.module_id, position: concept.module_position, name: concept.module_name },
     },
@@ -413,6 +415,14 @@ export function moveToTop(db: Db, conceptId: number): void {
     const update = db.prepare("UPDATE concepts SET queue_pos = ? WHERE id = ?");
     order.forEach((id, i) => update.run(i + 1, id));
   })();
+}
+
+// Add or remove the star of an important concept. The star does not change the status or the queue.
+export function starConcept(db: Db, conceptId: number, starred: unknown): { starred: boolean } {
+  conceptRow(db, conceptId);
+  if (typeof starred !== "boolean") throw new TutorError('"starred" must be true or false.');
+  db.prepare("UPDATE concepts SET starred = ? WHERE id = ?").run(starred ? 1 : 0, conceptId);
+  return { starred };
 }
 
 // Test one concept, for example a prerequisite: a diagnosis session with this concept only.

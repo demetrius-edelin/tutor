@@ -6,7 +6,7 @@ The tutor runs on your computer. It uses one large language model (LLM) from Ant
 
 ## Status
 
-The project is in phase 1. These parts work now:
+Phase 1 is complete, and phase 2 is in progress. These parts work now:
 
 - The parser reads EPUB files and tagged PDF files, and splits each book into chapters and sections.
 - The model client sends requests to the model that you select in `.env`.
@@ -16,8 +16,9 @@ The project is in phase 1. These parts work now:
 - The study queue: the concepts to learn, in an order that you can change.
 - The lessons: the tutor teaches each concept from your books, with references, and answers your questions.
 - The test after each lesson: 3 new questions. A pass makes the concept mastered, and the tutor offers the next lesson.
+- The stars: star the important concepts on the lesson page or in the concept map.
 
-Phase 1 is complete. The review schedule and "Add book" in the app come later. See `PLAN.md` for the build order and `DESIGN-v3.md` for the design.
+The rest of phase 2 adds the review board and "Learn again". "Add book" in the app comes later. See `PLAN.md` for the build order and `DESIGN-v3.md` for the design.
 
 ## Requirements
 

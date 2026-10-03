@@ -66,5 +66,12 @@ describe("migrations", () => {
 
     const db = openDb(file);
     expect(db.prepare("SELECT detail, detail_refs FROM lessons").get()).toEqual({ detail: "A long lesson [1].", detail_refs: '[{"number":1}]' });
+
+    // Version 5 adds the star and removes the columns of the review schedule.
+    const columns = db.prepare("SELECT name FROM pragma_table_info('concepts')").pluck().all();
+    expect(columns).toContain("starred");
+    expect(columns).not.toContain("review_step");
+    expect(columns).not.toContain("review_at");
+    expect(db.prepare("SELECT name, starred FROM concepts").get()).toEqual({ name: "LIKE", starred: 0 });
   });
 });

@@ -14,6 +14,8 @@
   /* Green is for the concepts that the learner knows. */
   --green: #2e8b57;
   --green-soft: #e4f3e9;
+  /* Amber is for the stars of the important concepts. */
+  --star: #b7791f;
 
   --ui: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
   --reading: "Literata", Georgia, "Times New Roman", serif;
@@ -56,6 +58,7 @@
     --focus: #8ab4ff;
     --green: #5cc58a;
     --green-soft: #1d3b36;
+    --star: #f2c94c;
     --line: color-mix(in srgb, var(--rule) 80%, var(--paper));
     --binding: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='28'%3E%3Cpath d='M15 16C10 21.5 3 21.5 -1 18.5' fill='none' stroke='%233d4a66' stroke-width='2.4' stroke-linecap='round'/%3E%3Crect x='13' y='9' width='6' height='9' rx='1.5' fill='%230a1020'/%3E%3Cpath d='M-1 5.5C4 3 12 4 15.5 11' fill='none' stroke='%230a1020' stroke-width='3.4' stroke-linecap='round'/%3E%3Cpath d='M-1 5.5C4 3 12 4 15.5 11' fill='none' stroke='%238793a8' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
     color-scheme: dark;
@@ -567,6 +570,58 @@ a.contents-entry:hover .contents-title {
   text-decoration: underline;
   text-decoration-color: var(--margin-red);
   text-underline-offset: 0.2em;
+}
+
+/* The star button of a concept. The target is larger than the glyph, so that it is easy to click. */
+.star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.3rem;
+  background: none;
+  color: var(--graphite);
+  font-family: var(--ui);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.star:hover {
+  background: color-mix(in srgb, var(--rule) 40%, transparent);
+  color: var(--star);
+}
+
+.star.starred {
+  color: var(--star);
+}
+
+.star:disabled {
+  cursor: progress;
+}
+
+/* The title of a page with a star button next to it. */
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.title-row h1 {
+  margin: 0;
+}
+
+.title-row .star {
+  font-size: 1.6rem;
+}
+
+/* In a concept row, the star does not make the row higher. */
+.concept-head .star {
+  margin: -0.4rem 0;
 }
 
 .concept-head {

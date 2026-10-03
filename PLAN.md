@@ -1,6 +1,6 @@
 # Build Plan
 
-Status: draft 1. Date: 2026-10-02. The design is in `DESIGN-v3.md`. This file gives the build order for phase 1.
+Status: draft 2. Date: 2026-10-03. The design is in `DESIGN-v3.md`. This file gives the build order for phase 1 and phase 2.
 
 ## Rules
 
@@ -22,6 +22,8 @@ Status: draft 1. Date: 2026-10-02. The design is in `DESIGN-v3.md`. This file gi
 - Milestone 7: done. The study queue has a suggested order, drag and drop, move buttons, prerequisite warnings, and Later and Skip.
 - Milestone 8: done. Lessons with checked references, the chat box, Teach it again, Start now in the queue, and the prerequisite actions.
 - Milestone 9: done. The test after a lesson has the pass rule, mastered concepts, and the next lesson. After a fail, the user selects an action. After 3 fails, the tutor offers a prerequisite test. Phase 1 is complete.
+- Milestone 10: done. The star button is on the lesson page and in the concept map. The columns of the review schedule are gone. The database of the user opens with no error.
+- Milestones 11 and 12: planned. See "Phase 2 milestones".
 
 ## Milestones
 
@@ -36,6 +38,36 @@ Status: draft 1. Date: 2026-10-02. The design is in `DESIGN-v3.md`. This file gi
 9. Test and grader. After this milestone, phase 1 is complete.
 
 Milestone 4 gives the first useful result: a full digest of a book.
+
+## Phase 2 milestones
+
+Phase 2 adds the review board and the stars. See "Review board" in `DESIGN-v3.md`. Phase 2 makes no new model calls.
+
+10. Star, and the removal of the review schedule.
+    - One migration adds `concepts.starred` and removes `concepts.review_step` and `concepts.review_at`.
+    - Remove `"review"` from the session kind type. The SQL CHECK constraints keep the value, because a change of a CHECK constraint needs a rebuild of the table.
+    - Add `POST /api/concepts/:id/star` with the body `{ "starred": true }` or `{ "starred": false }`.
+    - Add the `starred` field to the data of the concept map and of the lesson page.
+    - Add the star button to the lesson header and to the concept rows of the concept map.
+    - Exit test: star a concept on the lesson page, then load the concept map again. The concept has its star. The database of the user opens with no error.
+11. Review board.
+    - Add the route `#/themes/<slug>/board` and the "Review board" tab after "Study queue".
+    - Show one line for each concept, in its module: the status mark, the name, and the star button. The name opens the lesson page.
+    - Add the summary line, the status filters with their counts, the "Starred" toggle, and the search box. The address keeps the filters.
+    - Use the concept map request for the data.
+    - Exit test: select "Learned" and "Starred". The board shows only the starred concepts that are `known` or `mastered`. A reload keeps the filters.
+12. Learn again.
+    - Add the "Learn again" button to the board line of a `known` or `mastered` concept, and to the lesson page of a `mastered` concept.
+    - The button uses `POST /api/concepts/:id/top`. This endpoint puts the concept at the top of the queue with the status `queued`.
+    - Exit test: click "Learn again" on the board. The Overview shows the concept as "Next to learn", and its lesson page shows the last lesson.
+
+After milestone 12, phase 2 is complete.
+
+If the user asks for them, these options can come later:
+
+- Keep the date of the change to `mastered` for each concept. Then the board can show "learned 5 weeks ago".
+- Export the starred concepts as a Markdown list, as a summary of the books.
+- A "Quiz me" button that asks one question about one concept, with no schedule.
 
 ## Test books
 

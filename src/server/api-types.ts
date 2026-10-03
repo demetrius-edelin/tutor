@@ -61,6 +61,8 @@ export interface ConceptView {
   kind: "knowledge" | "skill";
   level: "basic" | "intermediate" | "advanced";
   status: Status;
+  // True for an important concept that the user starred.
+  starred: boolean;
   prerequisites: { slug: string; name: string }[];
   sources: SourceRef[];
 }
@@ -140,7 +142,7 @@ export interface SessionView {
   id: number;
   theme: { slug: string; name: string };
   module: { id: number; position: number; name: string } | null;
-  kind: "diagnose" | "test" | "review";
+  kind: "diagnose" | "test";
   status: "preparing" | "ready" | "finished" | "failed";
   error: string | null;
   // Concepts with questions, and all concepts of the session.
@@ -231,6 +233,7 @@ export interface LessonView {
     kind: "knowledge" | "skill";
     level: "basic" | "intermediate" | "advanced";
     status: Status;
+    starred: boolean;
     theme: { slug: string; name: string };
     module: { id: number; position: number; name: string };
   };

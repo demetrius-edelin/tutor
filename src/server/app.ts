@@ -23,6 +23,7 @@ import {
   lessonView,
   moveToTop,
   skipTest,
+  starConcept,
   startLesson,
   startTest,
   testConcept,
@@ -162,6 +163,11 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError }: Serve
     moveToTop(db, Number(request.params.id));
     return { ok: true };
   });
+
+  // Add or remove the star of an important concept.
+  app.post<{ Params: { id: string }; Body: { starred: unknown } }>("/api/concepts/:id/star", async (request) =>
+    starConcept(db, Number(request.params.id), request.body?.starred),
+  );
 
   // Test one concept, for example a prerequisite.
   app.post<{ Params: { id: string } }>("/api/concepts/:id/test", async (request) => {

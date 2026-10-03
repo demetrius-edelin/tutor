@@ -1,6 +1,6 @@
 # Engineering Skills Tutor: Design
 
-Status: draft 3, revision 9. Date: 2026-10-02. This file replaces `DESIGN.md` (draft 2).
+Status: draft 3, revision 10. Date: 2026-10-03. This file replaces `DESIGN.md` (draft 2).
 
 ## Purpose
 
@@ -15,7 +15,7 @@ The tutor uses one large language model (LLM) from Anthropic, OpenAI, or OpenRou
 - Themes are neutral. The tutor has no built-in themes and no code for a specific subject. The user creates a theme with a name and adds books to it. The books define the content of the theme.
 - Books are EPUB files or tagged PDF files.
 - Phase 1 is a local app on the laptop of the user. It has no Telegram bot and no other messaging.
-- The review schedule is part of the design.
+- The review board shows what the user learned. The user decides what to learn again. The tutor has no review schedule.
 - The user makes each decision about what to test, what to learn, what to skip, and the order of study. The tutor only suggests.
 - The tutor uses one model. The user selects the provider, the model, and the API key in the `.env` file. The tutor has no default model.
 
@@ -324,16 +324,57 @@ Only a score of 2 counts as correct.
 
 The user can dispute a grade with a button. A disputed answer counts as correct, and the tutor records the case. Use the recorded cases to improve the grader prompt.
 
-## Review
+## Review board (phase 2)
 
-A concept that the user learns one time fades after some weeks. A short review keeps it:
+The review board shows what the user learned, at a glance. The user decides what to learn again. The tutor has no review schedule and makes no model call for the board.
 
-- After a concept becomes `known` or `mastered`, it gets review dates 3, 10, 30, and 90 days later.
-- On each date, the user gets one question on the concept.
-- Each session starts with the reviews that are due, a maximum of 5.
-- A wrong review answer sets the concept to `failed`. Then the user selects "Learn" or "Skip".
+The board has three uses:
 
-## Exercise runners (phase 4)
+- See the status of each concept of a theme on one or two screens.
+- Find a concept that the user forgot, and put it back in the study queue with "Learn again".
+- Keep a list of the most important concepts of the books, with stars.
+
+### The board
+
+The board is a tab of each theme, after "Study queue". The tab label is "Review board".
+
+- A summary line at the top gives the number of concepts in each status group and the number of starred concepts.
+- The concepts are in their modules, in the order of the concept map. Each module heading shows how many of its concepts are `known` or `mastered`.
+- Each concept has one short line: the status mark, the name, and the star button. The line has no goal, no sources, and no level.
+- A click on the name opens the lesson page of the concept.
+- A `known` or `mastered` concept has a "Learn again" button on its line.
+
+The board uses the data of the concept map request. It needs no new read endpoint.
+
+### Filters
+
+- Status filter: the user selects one filter at a time. Each filter shows its count. These are the filters:
+  - All.
+  - Learned: `known` and `mastered`.
+  - Learning: `learning`.
+  - In the queue: `queued`.
+  - Not chosen: `new`, `to_test`, and `failed`.
+  - Skipped: `skipped`.
+- Starred: a toggle. It works together with the status filter. For example, "Learned" and "Starred" give the list of the key concepts that the user learned.
+- Find: a search box for the concept name.
+
+The address of the page keeps the filters. Thus, a link or a bookmark can open the list of starred concepts.
+
+### Learn again
+
+"Learn again" puts a `known` or `mastered` concept at the top of the study queue, with the status `queued`. The tutor makes no model call. The lesson page then shows the last lesson of the concept, so the user can read it again quickly. After the lesson, the user can take the test, skip the test, or select "Teach it again".
+
+The progress of the theme goes down by one concept. This is correct, because the user marked the concept as forgotten. To undo the action, the user opens the lesson and clicks "Skip the test".
+
+The lesson page of a `mastered` concept also has the "Learn again" button.
+
+### Stars
+
+The user stars the important concepts. The star has no effect on the status or on the queue. A concept keeps its star after "Learn again", a test, or a skip.
+
+The star button is on the board line, in the header of the lesson page, and on the concept row of the concept map. One click adds the star, and one more click removes it.
+
+## Exercise runners (phase 3)
 
 An exercise runner is an optional plug-in. It runs the answer of the user and checks it with a program. The tutor has no runner by default. The user can turn on a runner for a theme on the theme screen. For example, the user can turn on the SQL runner for a theme about databases.
 
@@ -349,14 +390,14 @@ These runners are planned:
 - TypeScript runner: it runs `tsc --strict` and the tests that the model wrote.
 - Testing runner: the tutor supplies code, and the user writes tests for it. The tests must pass on the correct code. They must also fail on 3 to 5 hidden copies of the code with one bug each (mutants).
 
-The user writes the answer in a code box in the app. The runners use Docker containers. Thus, the tutor needs Docker only from phase 4.
+The user writes the answer in a code box in the app. The runners use Docker containers. Thus, the tutor needs Docker only from phase 3.
 
 ## Concept status
 
 - `new`: the user did not mark the concept yet.
 - `to_test`: the user marked it "Test". It waits for the diagnosis.
 - `known`: passed the diagnosis.
-- `failed`: failed the diagnosis or a review. It waits for the choice of the user.
+- `failed`: failed the diagnosis. It waits for the choice of the user.
 - `queued`: in the study queue.
 - `learning`: the current concept in a teach and test loop.
 - `mastered`: passed a test after a lesson, or skipped the test.
@@ -364,12 +405,13 @@ The user writes the answer in a code box in the app. The runners use Docker cont
 
 ## Screens
 
-- Home: the list of themes, with the queue length and the due reviews of each theme. A field to create a new theme.
-- Theme: the books of the theme and the progress. Later: the "Add book" button, the ingest progress, and the ingest report of each book. Until then, ingest runs from the command line. The "Start session" button starts the due reviews, then the first concept in the queue.
-- Map: the modules and concepts, with the status and the sources of each concept. Open a module here to mark its concepts. Undo a skip here.
+- Home: the list of themes, with the progress of each theme. A field to create a new theme.
+- Theme: the books of the theme and the progress. Later: the "Add book" button, the ingest progress, and the ingest report of each book. Until then, ingest runs from the command line. The "Next to learn" card opens the lesson of the first concept in the queue.
+- Map: the modules and concepts, with the status, the star, and the sources of each concept. Open a module here to mark its concepts. Undo a skip here.
 - Diagnosis: the questions one at a time. Then the results, with the "Learn" and "Skip" choices.
 - Queue: the study queue, with drag and drop and the queue buttons.
-- Lesson: the lesson with its references, the chat box, and the "Test me" button.
+- Review board: one short line for each concept, with the status filters, the star filter, and "Learn again". See "Review board".
+- Lesson: the short lesson, the detailed lesson on request, the chat box, and the "Test me" and "Skip the test" buttons. The header has the star button. A `mastered` concept has the "Learn again" button.
 - Test: the questions, the results, and the actions after a fail.
 
 ## Components
@@ -380,11 +422,11 @@ The user writes the answer in a code box in the app. The runners use Docker cont
         ▼
  [Server] ──► [Ingest] ──► data/themes/<theme>/sections/ (Markdown)
     │
-    ├──► [Tutor loop]: select, diagnose, queue, teach, test, review
+    ├──► [Tutor loop]: select, diagnose, queue, teach, test, board
     │         │
     │         ├──► [Grader]
     │         ├──► [Model client] ──► Anthropic, OpenAI, or OpenRouter
-    │         └──► [Exercise runners] (phase 4)
+    │         └──► [Exercise runners] (phase 3)
     │
     └──► SQLite: themes, books, concept map, progress
 ```
@@ -396,7 +438,7 @@ themes           (id, slug, name, runners, created_at)
 books            (id, theme_id, title, file, status, created_at)
 sections         (id, book_id, chapter, number, chapter_title, title, page, path, words)
 modules          (id, theme_id, position, name)
-concepts         (id, theme_id, module_id, slug, name, objective, kind, level, status, queue_pos, review_step, review_at)
+concepts         (id, theme_id, module_id, slug, name, objective, kind, level, status, queue_pos, starred)
 concept_sources  (concept_id, section_id, quote)
 concept_prereqs  (concept_id, prereq_id)
 questions        (id, concept_id, purpose, kind, text, choices, answer, key_points, section_id)
@@ -406,13 +448,14 @@ lesson_messages  (id, lesson_id, role, text, created_at)
 exercises        (id, concept_id, runner, spec, status, created_at)
 ```
 
-- `themes.runners`: the exercise runners that the user turned on for the theme (phase 4).
+- `themes.runners`: the exercise runners that the user turned on for the theme (phase 3).
 - `books.status`: `ingesting`, `ready`, or `failed`.
 - `sections.page`: the print page from the EPUB page list. For an EPUB file without a page list, it is empty.
-- `questions.purpose`: `diagnose`, `test`, or `review`.
+- `questions.purpose`: `diagnose` or `test`.
 - `questions.kind`: `choice`, `short`, or `apply`.
 - `concepts.status`: see "Concept status".
 - `concepts.queue_pos`: the position in the study queue. It is empty for a concept that is not in the queue.
+- `concepts.starred`: 1 for a concept with a star, else 0.
 
 The concept map is in SQLite, because the merge step changes it for each new book. The section text stays in Markdown files.
 
@@ -511,7 +554,7 @@ These numbers are rough estimates for one large model (Claude Opus 5.5) from the
 
 The tutor runs on the laptop of the user. Start it with `npm start`, then open `http://localhost:3000` in a browser. Phase 1 needs no Docker.
 
-A Telegram client for reviews on the phone is an option for later. A move to a server is also an option for later.
+A Telegram client on the phone is an option for later. A move to a server is also an option for later.
 
 ## Repository layout
 
@@ -533,11 +576,11 @@ src/
   ingest/epub/        EPUB reader
   ingest/pdf/         tagged PDF reader
   ingest/             concept extraction, merge
-  tutor/              select, diagnose, queue, teach, test, review
+  tutor/              select, diagnose, queue, teach, test, board
   grader/             scores for short and apply answers
   llm/                model client for each provider, and prompts
   db/                 SQLite schema and queries
-  runners/            exercise runners (phase 4)
+  runners/            exercise runners (phase 3)
 .env                  the provider, the model, and the API keys (not in git)
 .env.example          the format of .env
 ```
@@ -549,14 +592,14 @@ Do not commit `data/`. It contains the text of books that the user bought, and t
 Each phase ends with a tool that the user can learn with.
 
 1. Phase 1: the app, with themes and one book for each theme. Add EPUB ingest with the parse checks, the review stage, and the ingest report. Add the concept map, select and diagnose, the study queue, lessons with references, and tests with multiple-choice and short answers. Add the model client and the `.env` file.
-2. Phase 2: more books for each theme, with the merge step.
-3. Phase 3: the review schedule and the progress views.
-4. Phase 4: the exercise runners and Docker.
-5. Later: the ingest test, image descriptions, a Telegram client for reviews, more runners, untagged PDF files, and a move to a server.
+2. Phase 2: the review board and the stars. The user sees what they learned, marks a forgotten concept to learn again, and keeps a list of the key concepts.
+3. Phase 3: the exercise runners and Docker.
+4. Phase 4: more books for each theme, with the merge step.
+5. Later: the ingest test, image descriptions, a Telegram client, more runners, untagged PDF files, and a move to a server.
 
 ## Risks
 
-1. The merge step can join two different ideas, or keep two copies of one idea. Test the merge on two books of one theme early in phase 2. The map screen shows the sources of each concept, so bad merges are easy to see.
+1. The merge step can join two different ideas, or keep two copies of one idea. Test the merge on two books of one theme early in phase 4. The map screen shows the sources of each concept, so bad merges are easy to see.
 2. A guess can pass a multiple-choice question. Thus, each diagnosis and each test includes a short answer or an apply question.
 3. The model can teach content that is not in the books. The checked references and the "not from the books" mark make this content visible.
 4. Two books can split one idea into concepts of different sizes. The size rule in "Concept map" tells the model the correct size.

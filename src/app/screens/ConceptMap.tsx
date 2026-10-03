@@ -3,6 +3,7 @@ import type { ConceptMapView, ConceptView, Status } from "../../server/api-types
 import { postJson, useApi } from "../api";
 import { Layout, Notice } from "../components/Layout";
 import { SectionPanel } from "../components/SectionPanel";
+import { StarButton } from "../components/StarButton";
 import { STATUS_INFO, StatusMark } from "../components/StatusMark";
 import { href } from "../router";
 
@@ -65,13 +66,13 @@ function MapView({ map: loaded, focus }: { map: ConceptMapView; focus: string | 
   );
   const shown = modules.reduce((sum, module) => sum + module.concepts.length, 0);
 
-  // Show the new status of a concept after an action, without a new load of the map.
-  const setStatus = (id: number, status: Status) =>
+  // Show the new status or star of a concept after an action, without a new load of the map.
+  const updateConcept = (id: number, change: Partial<Pick<ConceptView, "status" | "starred">>) =>
     setMap((current) => ({
       ...current,
       modules: current.modules.map((module) => ({
         ...module,
-        concepts: module.concepts.map((concept) => (concept.id === id ? { ...concept, status } : concept)),
+        concepts: module.concepts.map((concept) => (concept.id === id ? { ...concept, ...change } : concept)),
       })),
     }));
 
@@ -147,7 +148,8 @@ function MapView({ map: loaded, focus }: { map: ConceptMapView; focus: string | 
                 showGoal={showGoals}
                 onToggle={() => toggle(concept.slug)}
                 onRead={setSection}
-                onStatus={(status) => setStatus(concept.id, status)}
+                onStatus={(status) => updateConcept(concept.id, { status })}
+                onStar={(starred) => updateConcept(concept.id, { starred })}
               />
             ))}
           </ul>
@@ -167,6 +169,7 @@ function ConceptRow(props: {
   onToggle: () => void;
   onRead: (sectionId: number) => void;
   onStatus: (status: Status) => void;
+  onStar: (starred: boolean) => void;
   showGoal: boolean;
 }) {
   const { concept, open } = props;
@@ -182,6 +185,7 @@ function ConceptRow(props: {
             <button className="concept-name" aria-expanded={open} aria-controls={detailsId} onClick={props.onToggle}>
               {concept.name}
             </button>
+            <StarButton conceptId={concept.id} name={concept.name} starred={concept.starred} onChange={props.onStar} />
             <span className="concept-meta">
               {LEVEL[concept.level]} {KIND[concept.kind]}
             </span>

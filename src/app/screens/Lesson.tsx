@@ -5,6 +5,7 @@ import { CitedMarkdown, ReferenceList } from "../components/CitedMarkdown";
 import { Layout, Notice } from "../components/Layout";
 import { SectionPanel } from "../components/SectionPanel";
 import { Spinner } from "../components/Spinner";
+import { StarButton } from "../components/StarButton";
 import { STATUS_INFO } from "../components/StatusMark";
 import { href } from "../router";
 
@@ -30,10 +31,18 @@ export function Lesson({ conceptId }: { conceptId: number }) {
   );
 }
 
-function ConceptHeader({ view }: { view: LessonView }) {
+function ConceptHeader({ view, onChange }: { view: LessonView; onChange: (view: LessonView) => void }) {
   return (
     <>
-      <h1>{view.concept.name}</h1>
+      <div className="title-row">
+        <h1>{view.concept.name}</h1>
+        <StarButton
+          conceptId={view.concept.id}
+          name={view.concept.name}
+          starred={view.concept.starred}
+          onChange={(starred) => onChange({ ...view, concept: { ...view.concept, starred } })}
+        />
+      </div>
       <p className="lead">{view.concept.objective}</p>
       <p className="quiet small">
         {LEVEL[view.concept.level]} {view.concept.kind}, module {view.concept.module.position}, {view.concept.module.name}
@@ -82,7 +91,7 @@ function LessonStart({ view, onStarted }: { view: LessonView; onStarted: (view: 
 
   return (
     <>
-      <ConceptHeader view={view} />
+      <ConceptHeader view={view} onChange={onStarted} />
       {view.missingPrerequisites.length > 0 && (
         <div className="suggestion">
           <p>{view.warning}</p>
@@ -215,7 +224,7 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
 
   return (
     <>
-      <ConceptHeader view={view} />
+      <ConceptHeader view={view} onChange={onChange} />
       {lesson.detail && lesson.detail.references.length === 0 && (
         <p className="warning">This lesson has no reference that the tutor could find in your books. Check it against the book sections.</p>
       )}

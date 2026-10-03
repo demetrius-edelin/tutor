@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { openDb, type Db } from "../src/db/index.js";
 import { ingestBook } from "../src/ingest/ingest.js";
 import { parseEpub } from "../src/ingest/parse.js";
-import type { LessonView, SessionView } from "../src/server/api-types.js";
+import type { ConceptMapView, LessonView, SessionView } from "../src/server/api-types.js";
 import { buildServer, type TutorServer } from "../src/server/app.js";
 import { buildEpub, mainFixture } from "./fixtures/epub.js";
 import { FakeLlm } from "./fakes/llm.js";
@@ -153,6 +153,23 @@ describe("lessons", () => {
     expect(body.next).toEqual({ conceptId: first, name: expect.any(String) });
     expect(llm.count("test")).toBe(0);
     expect((await post(`/api/concepts/999/skip-test`)).status).toBe(404);
+  });
+
+  it("stars a concept: the lesson page and the concept map show the star, and the status stays", async () => {
+    const id = conceptIds[1]!;
+    const starredOnMap = async () =>
+      (await get<ConceptMapView>("/api/themes/git/map")).modules.flatMap((module) => module.concepts).find((concept) => concept.id === id)!.starred;
+    expect(await starredOnMap()).toBe(false);
+
+    expect((await post(`/api/concepts/${id}/star`, { starred: true })).body).toEqual({ starred: true });
+    expect((await get<LessonView>(`/api/concepts/${id}/lesson`)).concept.starred).toBe(true);
+    expect(await starredOnMap()).toBe(true);
+    expect(statusOf(id)).toBe("new");
+
+    await post(`/api/concepts/${id}/star`, { starred: false });
+    expect(await starredOnMap()).toBe(false);
+    expect((await post(`/api/concepts/${id}/star`, { starred: "yes" })).status).toBe(400);
+    expect((await post(`/api/concepts/999/star`, { starred: true })).status).toBe(404);
   });
 
   it("does not save an empty lesson or an empty answer", async () => {
