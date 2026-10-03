@@ -346,7 +346,7 @@ The board has three uses:
 The board is a tab of each theme, after "Study queue". The tab label is "Review board".
 
 - A summary line at the top gives the number of concepts in each status group and the number of starred concepts.
-- The concepts are in their modules, in the order of the concept map. Each module heading shows how many of its concepts are `known` or `mastered`.
+- The concepts are in their modules, in the order of the concept map. Each module heading shows how many of its concepts are `known` or `mastered`. Skipped concepts do not count, as in the progress of the theme.
 - Each concept has one short line: the status mark, the name, and the star button. The line has no goal, no sources, and no level.
 - A click on the name opens the lesson page of the concept.
 - A `known` or `mastered` concept has a "Learn again" button on its line.
@@ -355,7 +355,7 @@ The board uses the data of the concept map request. It needs no new read endpoin
 
 ### Filters
 
-- Status filter: the user selects one filter at a time. Each filter shows its count. These are the filters:
+- Status filter: the user selects one filter at a time. Each filter shows its count. The count also follows the star filter and the search. These are the filters:
   - All.
   - Learned: `known` and `mastered`.
   - Learning: `learning`.
@@ -365,7 +365,7 @@ The board uses the data of the concept map request. It needs no new read endpoin
 - Starred: a toggle. It works together with the status filter. For example, "Learned" and "Starred" give the list of the key concepts that the user learned.
 - Find: a search box for the concept name.
 
-The address of the page keeps the filters. Thus, a link or a bookmark can open the list of starred concepts.
+The address of the page keeps the filters. Thus, a link or a bookmark can open the list of starred concepts. A change of a filter does not add an entry to the history of the browser.
 
 ### Learn again
 

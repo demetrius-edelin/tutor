@@ -1,5 +1,6 @@
 import { Layout, Notice } from "./components/Layout";
 import { href, useRoute } from "./router";
+import { Board } from "./screens/Board";
 import { ConceptMap } from "./screens/ConceptMap";
 import { Home } from "./screens/Home";
 import { Lesson } from "./screens/Lesson";
@@ -21,6 +22,8 @@ export function App() {
       return <Select key={`${route.slug}-${route.moduleId}`} slug={route.slug} moduleId={route.moduleId} />;
     case "queue":
       return <Queue key={route.slug} slug={route.slug} />;
+    case "board":
+      return <Board key={route.slug} slug={route.slug} filters={{ show: route.show, starred: route.starred, find: route.find }} />;
     case "lesson":
       return <Lesson key={route.conceptId} conceptId={route.conceptId} />;
     case "session":

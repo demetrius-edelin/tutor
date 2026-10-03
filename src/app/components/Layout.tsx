@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 import { href, useRoute } from "../router";
 
-export type ThemeTab = "theme" | "map" | "queue";
+export type ThemeTab = "theme" | "map" | "queue" | "board";
 
 const TABS: { tab: ThemeTab; label: string; href: (slug: string) => string }[] = [
   { tab: "theme", label: "Overview", href: href.theme },
   { tab: "map", label: "Concept map", href: (slug) => href.map(slug) },
   { tab: "queue", label: "Study queue", href: href.queue },
+  { tab: "board", label: "Review board", href: (slug) => href.board(slug) },
 ];
 
 // A page in a theme shows the tabs of the theme. The tab of the page has a mark.
