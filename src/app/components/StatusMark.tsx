@@ -8,7 +8,7 @@ export const STATUS_INFO: Record<Status, { mark: string; label: string }> = {
   failed: { mark: "✗", label: "Failed" },
   queued: { mark: "◇", label: "In the study queue" },
   learning: { mark: "◐", label: "Learning" },
-  mastered: { mark: "★", label: "Mastered" },
+  mastered: { mark: "✓", label: "Mastered" },
   skipped: { mark: "–", label: "Skipped" },
 };
 

@@ -97,7 +97,8 @@ function MapView({ map: loaded, focus }: { map: ConceptMapView; focus: string | 
       <h1>Concept map</h1>
       <p className="lead">
         {map.modules.length} modules and {total} concepts from the books of {map.theme.name}. Open a concept to see its sources. Use
-        the buttons next to a concept to learn it or to test it. Gray concepts are skipped.
+        the buttons next to a concept to learn it or to test it. The color of a row shows its status: yellow to learn, green
+        known, and gray skipped.
       </p>
       <div className="search">
         <label htmlFor="concept-search">Find a concept</label>
@@ -135,7 +136,7 @@ function MapView({ map: loaded, focus }: { map: ConceptMapView; focus: string | 
                 : "Change the choices"}
             </a>
           </div>
-          <ul className="concepts">
+          <ul className="concepts map-concepts">
             {module.concepts.map((concept) => (
               <ConceptRow
                 key={concept.slug}

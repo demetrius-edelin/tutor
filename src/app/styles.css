@@ -11,6 +11,9 @@
   --highlight-soft: #fff3b0;
   --panel: #ffffff;
   --focus: #2f6fdb;
+  /* Green is for the concepts that the learner knows. */
+  --green: #2e8b57;
+  --green-soft: #e4f3e9;
 
   --ui: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
   --reading: "Literata", Georgia, "Times New Roman", serif;
@@ -51,6 +54,8 @@
     --highlight-soft: #4d4516;
     --panel: #1c2944;
     --focus: #8ab4ff;
+    --green: #5cc58a;
+    --green-soft: #1d3b36;
     --line: color-mix(in srgb, var(--rule) 80%, var(--paper));
     --binding: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='28'%3E%3Cpath d='M15 16C10 21.5 3 21.5 -1 18.5' fill='none' stroke='%233d4a66' stroke-width='2.4' stroke-linecap='round'/%3E%3Crect x='13' y='9' width='6' height='9' rx='1.5' fill='%230a1020'/%3E%3Cpath d='M-1 5.5C4 3 12 4 15.5 11' fill='none' stroke='%230a1020' stroke-width='3.4' stroke-linecap='round'/%3E%3Cpath d='M-1 5.5C4 3 12 4 15.5 11' fill='none' stroke='%238793a8' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
     color-scheme: dark;
@@ -345,10 +350,10 @@ a.contents-entry:hover .contents-title {
   background: var(--highlight);
 }
 .segment-known {
-  background: color-mix(in srgb, var(--ink) 60%, var(--paper));
+  background: color-mix(in srgb, var(--green) 55%, var(--paper));
 }
 .segment-mastered {
-  background: var(--ink);
+  background: var(--green);
 }
 .segment-skipped {
   background: repeating-linear-gradient(135deg, var(--rule) 0 4px, transparent 4px 8px);
@@ -422,10 +427,24 @@ a.contents-entry:hover .contents-title {
 .mark-skipped {
   color: var(--graphite);
 }
-.mark-to_test,
-.mark-known,
-.mark-mastered {
+.mark-to_test {
   color: var(--ink);
+}
+.mark-known {
+  color: var(--green);
+  font-weight: 700;
+}
+.mark-mastered {
+  display: inline-grid;
+  place-items: center;
+  width: 1.15em;
+  min-width: 0;
+  height: 1.15em;
+  border-radius: 50%;
+  background: var(--green);
+  color: var(--paper);
+  font-size: 1.1em;
+  font-weight: 700;
 }
 .mark-failed {
   color: var(--margin-red);
@@ -490,12 +509,46 @@ a.contents-entry:hover .contents-title {
 }
 
 /* The margin column is to the left of the red line. */
+/* The marks are in the middle of the space between the spiral binding and the red line. */
 .margin {
   position: absolute;
-  top: 0.65rem;
-  left: calc(-1 * var(--margin-width) - var(--gutter));
-  width: var(--margin-width);
+  top: 0.45rem;
+  left: calc(-1 * var(--margin-width) - var(--gutter) + var(--binding-width));
+  width: calc(var(--margin-width) - var(--binding-width));
   text-align: center;
+}
+
+.margin .mark {
+  font-size: 1.75rem;
+}
+
+/* On the concept map, the background of a row shows its status: yellow to learn, green known, gray skipped. */
+.map-concepts > .concept {
+  padding: 0.2rem 0;
+}
+
+.map-concepts > .concept > .concept-body {
+  margin: 0 -0.75rem;
+  padding: 0.55rem 0.75rem 0.6rem;
+  border-radius: 0.35rem;
+}
+
+.map-concepts > .concept > .margin {
+  top: 0.55rem;
+}
+
+.map-concepts > .status-queued > .concept-body,
+.map-concepts > .status-learning > .concept-body {
+  background: color-mix(in srgb, var(--highlight-soft) 30%, var(--paper));
+}
+
+.map-concepts > .status-known > .concept-body,
+.map-concepts > .status-mastered > .concept-body {
+  background: color-mix(in srgb, var(--green-soft) 50%, var(--paper));
+}
+
+.map-concepts > .status-skipped > .concept-body {
+  background: color-mix(in srgb, var(--rule) 22%, var(--paper));
 }
 
 .concept-name {
@@ -635,7 +688,7 @@ a.contents-entry:hover .contents-title {
 
 .tag.tag-known,
 .tag.tag-mastered {
-  background: var(--ink);
+  background: var(--green);
   color: var(--paper);
 }
 
@@ -1517,6 +1570,13 @@ button.button {
   .theme-name {
     padding-left: 0;
     border-left: 0;
+  }
+  .margin {
+    left: calc(-1 * var(--margin-width) - var(--gutter));
+    width: var(--margin-width);
+  }
+  .margin .mark {
+    font-size: 1.35rem;
   }
   .steps {
     grid-template-columns: 1fr;
