@@ -15,7 +15,7 @@ The tutor uses one large language model (LLM) from Anthropic, OpenAI, or OpenRou
 - Themes are neutral. The tutor has no built-in themes and no code for a specific subject. The user creates a theme with a name and adds books to it. The books define the content of the theme.
 - Books are EPUB files or tagged PDF files.
 - Phase 1 is a local app on the laptop of the user. It has no Telegram bot and no other messaging.
-- The review board shows what the user learned. The user decides what to learn again. The tutor has no review schedule.
+- The review board shows what the user learned. The user decides what to read again or to test again. The tutor has no review schedule.
 - The user makes each decision about what to test, what to learn, what to skip, and the order of study. The tutor only suggests.
 - The tutor uses one model. The user selects the provider, the model, and the API key in the `.env` file. The tutor has no default model.
 
@@ -333,12 +333,12 @@ The user can dispute a grade with a button. A disputed answer counts as correct,
 
 ## Review board (phase 2)
 
-The review board shows what the user learned, at a glance. The user decides what to learn again. The tutor has no review schedule and makes no model call for the board.
+The review board shows what the user learned, at a glance. The user decides what to read again or to test again. The tutor has no review schedule and makes no model call for the board.
 
 The board has three uses:
 
 - See the status of each concept of a theme on one or two screens.
-- Find a concept that the user forgot, and put it back in the study queue with "Learn again".
+- Find a concept that the user forgot. Open its lesson, read it again, and test it again with "Test me again".
 - Keep a list of the most important concepts of the books, with stars.
 
 ### The board
@@ -349,7 +349,6 @@ The board is a tab of each theme, after "Study queue". The tab label is "Review 
 - The concepts are in their modules, in the order of the concept map. Each module heading shows how many of its concepts are `known` or `mastered`. Skipped concepts do not count, as in the progress of the theme.
 - Each concept has one short line: the status mark, the name, and the star button. The line has no goal, no sources, and no level.
 - A click on the name opens the lesson page of the concept.
-- A `known` or `mastered` concept has a "Learn again" button on its line.
 
 The board uses the data of the concept map request. It needs no new read endpoint.
 
@@ -367,17 +366,18 @@ The board uses the data of the concept map request. It needs no new read endpoin
 
 The address of the page keeps the filters. Thus, a link or a bookmark can open the list of starred concepts. A change of a filter does not add an entry to the history of the browser.
 
-### Learn again
+### Test me again
 
-"Learn again" puts a `known` or `mastered` concept at the top of the study queue, with the status `queued`. The tutor makes no model call. The lesson page then shows the last lesson of the concept, so the user can read it again quickly. After the lesson, the user can take the test, skip the test, or select "Teach it again".
+The lesson page of a `mastered` concept has the "Test me again" button. The user reads the lesson again, then tests the concept again.
 
-The progress of the theme goes down by one concept. This is correct, because the user marked the concept as forgotten. To undo the action, the user opens the lesson and clicks "Skip the test".
-
-The lesson page of a `mastered` concept also has the "Learn again" button.
+- The test uses the 3 questions of the last finished test of the concept again. The options of the recall question come in a new order. The test is ready at once, with no model call to write questions.
+- If the concept has no finished test, for example after "Skip the test", the model writes 3 new questions, as for "Test me".
+- The pass rule is the same as for each test. A pass keeps the concept `mastered`.
+- After a fail, the concept stays `mastered`. The results offer the usual actions. "Teach it again" writes a new lesson now. "Later" puts the concept at the end of the study queue. "Skip" skips the concept.
 
 ### Stars
 
-The user stars the important concepts. The star has no effect on the status or on the queue. A concept keeps its star after "Learn again", a test, or a skip.
+The user stars the important concepts. The star has no effect on the status or on the queue. A concept keeps its star after a test, a new lesson, or a skip.
 
 The star button is on the board line, in the header of the lesson page, and on the concept row of the concept map. One click adds the star, and one more click removes it.
 
@@ -417,8 +417,8 @@ The user writes the answer in a code box in the app. The runners use Docker cont
 - Map: the modules and concepts, with the status, the star, and the sources of each concept. Open a module here to mark its concepts. Undo a skip here.
 - Diagnosis: the questions one at a time. Then the results, with the "Learn" and "Skip" choices.
 - Queue: the study queue, with drag and drop and the queue buttons.
-- Review board: one short line for each concept, with the status filters, the star filter, and "Learn again". See "Review board".
-- Lesson: the lesson, the chat box, and the "Test me" and "Skip the test" buttons. The header has the star button. A `mastered` concept has the "Learn again" button.
+- Review board: one short line for each concept, with the status filters, the star filter, and the search. See "Review board".
+- Lesson: the lesson, the chat box, and the "Test me" and "Skip the test" buttons. The header has the star button. A `mastered` concept has the "Test me again" button.
 - Test: the questions, the results, and the actions after a fail.
 
 ## Components
@@ -599,7 +599,7 @@ Do not commit `data/`. It contains the text of books that the user bought, and t
 Each phase ends with a tool that the user can learn with.
 
 1. Phase 1: the app, with themes and one book for each theme. Add EPUB ingest with the parse checks, the review stage, and the ingest report. Add the concept map, select and diagnose, the study queue, lessons with references, and tests with multiple-choice and short answers. Add the model client and the `.env` file.
-2. Phase 2: the review board and the stars. The user sees what they learned, marks a forgotten concept to learn again, and keeps a list of the key concepts.
+2. Phase 2: the review board and the stars. The user sees what they learned, tests a concept again, and keeps a list of the key concepts.
 3. Phase 3: the exercise runners and Docker.
 4. Phase 4: more books for each theme, with the merge step.
 5. Later: the ingest test, image descriptions, a Telegram client, more runners, untagged PDF files, and a move to a server.

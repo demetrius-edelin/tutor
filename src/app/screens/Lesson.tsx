@@ -169,11 +169,12 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
     setAsking(false);
   };
 
-  const startTest = async () => {
+  // With again, a mastered concept gets the questions of its last test.
+  const startTest = async (again = false) => {
     setTesting(true);
     setActionError(null);
     try {
-      const { sessionId } = await postJson<{ sessionId: number }>(`/api/concepts/${view.concept.id}/check`);
+      const { sessionId } = await postJson<{ sessionId: number }>(`/api/concepts/${view.concept.id}/check`, { again });
       window.location.hash = href.session(sessionId);
     } catch (problem) {
       setActionError((problem as Error).message);
@@ -273,7 +274,10 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
       <section aria-labelledby="after-heading">
         <h2 id="after-heading">After the lesson</h2>
         {mastered ? (
-          <p>The concept is mastered.</p>
+          <p>
+            The concept is mastered. To check that you still know it, test it again.{" "}
+            {view.hasFinishedTest ? "The test uses the questions of your last test." : "The test has 3 new questions."}
+          </p>
         ) : (
           <>
             <p>
@@ -291,9 +295,14 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
               Next lesson: {view.next.name}
             </a>
           )}
+          {mastered && (
+            <button className={view.next ? "button secondary" : "button"} onClick={() => startTest(true)} disabled={testing || rewriting}>
+              {testing ? "Starting the test" : view.openTestId ? "Continue the test" : "Test me again"}
+            </button>
+          )}
           {!mastered && (
             <>
-              <button className="button" onClick={startTest} disabled={testing || rewriting || skipping}>
+              <button className="button" onClick={() => startTest()} disabled={testing || rewriting || skipping}>
                 {testing ? "Starting the test" : view.openTestId ? "Continue the test" : "Test me"}
               </button>
               <button className="button secondary" onClick={skipTest} disabled={testing || rewriting || skipping}>

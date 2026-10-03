@@ -25,7 +25,7 @@ Status: draft 2. Date: 2026-10-03. The design is in `DESIGN-v3.md`. This file gi
 - Milestone 10: done. The star button is on the lesson page and in the concept map. The columns of the review schedule are gone. The database of the user opens with no error.
 - Lesson length fix: done. The tutor writes one lesson with references in one call. The length follows the concept, and the prompt has no minimum length. The "Explain in more detail" button is gone. Schema version 6 keeps the detailed version of each old lesson.
 - Milestone 11: done. The "Review board" tab shows one line for each concept, with the status filters, the star filter, and the search. The address keeps the filters.
-- Milestone 12: planned. See "Phase 2 milestones".
+- Milestone 12: done. "Test me again" on the lesson page of a mastered concept uses the questions of the last test, with no model call to write questions. "Learn again" is dropped, because a click on the board opens the lesson. Phase 2 is complete.
 - Milestone 13: planned. See "Later milestones".
 
 ## Milestones
@@ -59,10 +59,12 @@ Phase 2 adds the review board and the stars. See "Review board" in `DESIGN-v3.md
     - Add the summary line, the status filters with their counts, the "Starred" toggle, and the search box. The address keeps the filters.
     - Use the concept map request for the data.
     - Exit test: select "Learned" and "Starred". The board shows only the starred concepts that are `known` or `mastered`. A reload keeps the filters.
-12. Learn again.
-    - Add the "Learn again" button to the board line of a `known` or `mastered` concept, and to the lesson page of a `mastered` concept.
-    - The button uses `POST /api/concepts/:id/top`. This endpoint puts the concept at the top of the queue with the status `queued`.
-    - Exit test: click "Learn again" on the board. The Overview shows the concept as "Next to learn", and its lesson page shows the last lesson.
+12. Test me again. This milestone replaces "Learn again": a click on a concept on the board opens its lesson, so the board needs no button.
+    - Add the "Test me again" button to the "After the lesson" part of the lesson page of a `mastered` concept.
+    - The button uses `POST /api/concepts/:id/check` with the body `{ "again": true }`. The server copies the 3 questions of the last finished test into a new test session. The options of the recall question get a new order. The session is ready at once, with no model call.
+    - If the concept has no finished test, the server writes new questions, as for "Test me".
+    - A pass keeps the concept `mastered`. After a fail, the concept stays `mastered`, and the results offer "Teach it again", "Later", and "Skip".
+    - Exit test: on the lesson page of a `mastered` concept with an old test, click "Test me again". The test opens at once with the old questions. After a pass, the concept is still `mastered`.
 
 After milestone 12, phase 2 is complete.
 

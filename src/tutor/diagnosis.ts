@@ -146,7 +146,8 @@ export async function prepareSession(db: Db, llm: LlmClient, dataDir: string, se
     for (const batch of batches) {
       let questions: WrittenQuestion[];
       if (kind === "test") {
-        const seen = db.prepare("SELECT text FROM questions WHERE concept_id = ? ORDER BY id").pluck().all(batch[0]!.id) as string[];
+        // A test again copies old questions, so one text can be in more than one row.
+        const seen = db.prepare("SELECT text FROM questions WHERE concept_id = ? GROUP BY text ORDER BY MIN(id)").pluck().all(batch[0]!.id) as string[];
         questions = await writeTestQuestions(llm, batch[0]!, seen);
       } else {
         questions = await writeQuestions(llm, batch);

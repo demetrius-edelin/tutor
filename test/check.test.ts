@@ -65,6 +65,45 @@ describe("the test after a lesson", () => {
     expect(db.prepare("SELECT DISTINCT purpose FROM questions WHERE session_id = ?").pluck().all(session.id)).toEqual(["test"]);
   });
 
+  it("tests a mastered concept again with the questions of its last test, and with no model call", async () => {
+    const id = conceptIds[1]!;
+    const first = await startTest(id);
+    expect((await answer(first, [true, true, true])).outcome!.passed).toBe(true);
+    expect((await get<LessonView>(`/api/concepts/${id}/lesson`)).hasFinishedTest).toBe(true);
+
+    const { body } = await post<{ sessionId: number }>(`/api/concepts/${id}/check`, { again: true });
+    const again = await get<SessionView>(`/api/sessions/${body.sessionId}`);
+    expect(again.id).not.toBe(first.id);
+    expect(again.status).toBe("ready");
+    expect(llm.count("test")).toBe(1);
+    expect(again.questions.map((question) => [question.kind, question.text])).toEqual(first.questions.map((question) => [question.kind, question.text]));
+    // The recall question has the same options. The order can change, and the answer follows its option.
+    const options = (session: SessionView) => [...session.questions[0]!.choices!].sort();
+    expect(options(again)).toEqual(options(first));
+    const rightOption = (session: SessionView) => session.questions[0]!.choices![Number(correctIndex(session.questions[0]!.id))];
+    expect(rightOption(again)).toBe(rightOption(first));
+    expect(again.questions.every((question) => question.attempt === null)).toBe(true);
+
+    // A pass keeps the concept mastered. A fail also keeps it mastered, until the learner chooses an action.
+    expect((await answer(again, [true, true, true])).outcome!.passed).toBe(true);
+    expect(statusOf(id)).toBe("mastered");
+    const third = await get<SessionView>(`/api/sessions/${(await post<{ sessionId: number }>(`/api/concepts/${id}/check`, { again: true })).body.sessionId}`);
+    expect((await answer(third, [false, false, false])).outcome!.passed).toBe(false);
+    expect(statusOf(id)).toBe("mastered");
+    expect(llm.count("test")).toBe(1);
+  });
+
+  it("writes new questions to test again a concept with no finished test", async () => {
+    const id = conceptIds[1]!;
+    await post(`/api/concepts/${id}/lesson`);
+    await post(`/api/concepts/${id}/skip-test`);
+    expect((await get<LessonView>(`/api/concepts/${id}/lesson`)).hasFinishedTest).toBe(false);
+    const { body } = await post<{ sessionId: number }>(`/api/concepts/${id}/check`, { again: true });
+    await app.idle();
+    expect((await get<SessionView>(`/api/sessions/${body.sessionId}`)).questions.length).toBe(3);
+    expect(llm.count("test")).toBe(1);
+  });
+
   it("uses an unfinished test again", async () => {
     const first = await startTest(conceptIds[1]!);
     const again = await post<{ sessionId: number }>(`/api/concepts/${conceptIds[1]}/check`);

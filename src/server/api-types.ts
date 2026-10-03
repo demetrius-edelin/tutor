@@ -257,6 +257,8 @@ export interface LessonView {
   next: { conceptId: number; name: string } | null;
   // A test after the lesson that the learner did not finish, or null.
   openTestId: number | null;
+  // True if the concept has a finished test. "Test me again" then uses its questions.
+  hasFinishedTest: boolean;
   failedTests: number;
 }
 

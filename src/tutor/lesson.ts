@@ -2,6 +2,7 @@ import type { Db } from "../db/index.js";
 import type { LlmClient, Message, Reference, Source } from "../llm/index.js";
 import type { AfterTestAction, LessonMessage, LessonReference, LessonView, SourceInfo, Status } from "../server/api-types.js";
 import { applyMarks, createSession, enqueue, failedTests, readSection, TutorError } from "./diagnosis.js";
+import { shuffle } from "./questions.js";
 
 // A lesson: the model teaches one concept from all its book sections, with references.
 // The length of the lesson follows the concept, so a simple concept gets a short lesson.
@@ -198,6 +199,7 @@ export function lessonView(db: Db, conceptId: number): LessonView {
     queuePosition: concept.queue_pos,
     next: nextInQueue(db, concept),
     openTestId: openTest(db, conceptId),
+    hasFinishedTest: lastTest(db, conceptId) !== null,
     failedTests: failedTests(db, conceptId),
   };
 }
@@ -215,14 +217,67 @@ function openTest(db: Db, conceptId: number): number | null {
   );
 }
 
-// Start the test after a lesson: a session with 3 new questions. An unfinished test is used again.
-export function startTest(db: Db, conceptId: number): { sessionId: number; created: boolean } {
+// The last finished test of the concept, or null.
+function lastTest(db: Db, conceptId: number): number | null {
+  return (
+    (db
+      .prepare(
+        `SELECT s.id FROM sessions s JOIN session_concepts sc ON sc.session_id = s.id
+         WHERE s.kind = 'test' AND s.status = 'finished' AND sc.concept_id = ? ORDER BY s.id DESC LIMIT 1`,
+      )
+      .pluck()
+      .get(conceptId) as number | undefined) ?? null
+  );
+}
+
+// Copy the questions of an old test into a new test session, which is then ready with no model call.
+// The options of the recall question get a new order, so that the learner cannot remember a position.
+function copyQuestions(db: Db, fromSessionId: number, toSessionId: number): void {
+  const questions = db
+    .prepare("SELECT concept_id, purpose, kind, text, choices, answer, key_points, section_id, position FROM questions WHERE session_id = ? ORDER BY position")
+    .all(fromSessionId) as {
+    concept_id: number;
+    purpose: string;
+    kind: string;
+    text: string;
+    choices: string | null;
+    answer: string;
+    key_points: string;
+    section_id: number | null;
+    position: number;
+  }[];
+  const insert = db.prepare(
+    `INSERT INTO questions (concept_id, purpose, kind, text, choices, answer, key_points, section_id, session_id, position)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  for (const question of questions) {
+    let { choices, answer } = question;
+    if (question.kind === "choice" && choices) {
+      const shuffled = shuffle(JSON.parse(choices) as string[], Number(answer));
+      choices = JSON.stringify(shuffled.options);
+      answer = String(shuffled.correct);
+    }
+    insert.run(question.concept_id, question.purpose, question.kind, question.text, choices, answer, question.key_points, question.section_id, toSessionId, question.position);
+  }
+  db.prepare("UPDATE sessions SET status = 'ready', prepared = total WHERE id = ?").run(toSessionId);
+}
+
+// Start the test after a lesson. An unfinished test is used again.
+// With again, the test uses the questions of the last finished test, for example to test a mastered concept again.
+// If the concept has no finished test, or again is false, the model must write 3 new questions: needsQuestions is true.
+export function startTest(db: Db, conceptId: number, again = false): { sessionId: number; needsQuestions: boolean } {
   const concept = conceptRow(db, conceptId);
   const lessons = db.prepare("SELECT COUNT(*) FROM lessons WHERE concept_id = ?").pluck().get(conceptId) as number;
   if (lessons === 0) throw new TutorError("Read the lesson first. The test comes after the lesson.", 409);
   const open = openTest(db, conceptId);
-  if (open !== null) return { sessionId: open, created: false };
-  return { sessionId: createSession(db, concept.theme_id, concept.module_id, [conceptId], "test"), created: true };
+  if (open !== null) return { sessionId: open, needsQuestions: false };
+  const last = again ? lastTest(db, conceptId) : null;
+  return db.transaction(() => {
+    const sessionId = createSession(db, concept.theme_id, concept.module_id, [conceptId], "test");
+    if (last === null) return { sessionId, needsQuestions: true };
+    copyQuestions(db, last, sessionId);
+    return { sessionId, needsQuestions: false };
+  })();
 }
 
 // The learner skips the test after a lesson, for example for a simple concept.

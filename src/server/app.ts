@@ -178,10 +178,12 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError }: Serve
 
   // The test after a lesson
 
-  app.post<{ Params: { id: string } }>("/api/concepts/:id/check", async (request) => {
+  // Start the test after a lesson. With again, the test uses the questions of the last finished test.
+  // The model is necessary in both cases, because it grades the open answers.
+  app.post<{ Params: { id: string }; Body: { again?: boolean } }>("/api/concepts/:id/check", async (request) => {
     const model = requireModel();
-    const result = startTest(db, Number(request.params.id));
-    if (result.created) runInBackground(prepareSession(db, model, dataDir, result.sessionId));
+    const result = startTest(db, Number(request.params.id), request.body?.again === true);
+    if (result.needsQuestions) runInBackground(prepareSession(db, model, dataDir, result.sessionId));
     return { sessionId: result.sessionId };
   });
 

@@ -62,7 +62,7 @@ function questionsPrompt(concepts: QuestionConcept[]): string {
 }
 
 // Put the correct option at a random position. Models often put it first.
-function shuffle(options: string[], correct: number): { options: string[]; correct: number } {
+export function shuffle(options: string[], correct: number): { options: string[]; correct: number } {
   const order = options.map((_, i) => i);
   for (let i = order.length - 1; i > 0; i--) {
     const j = randomInt(i + 1);

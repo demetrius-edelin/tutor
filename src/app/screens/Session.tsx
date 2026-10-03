@@ -534,7 +534,7 @@ function TestResults({ session }: { session: SessionView }) {
           <h1>You passed the test</h1>
         </div>
         <p className="lead">
-          {score} {concept.name} is now mastered, and it left your study queue.
+          {score} {concept.name} is mastered.
         </p>
         {wrongList}
         <p className="button-row">
@@ -567,6 +567,10 @@ function TestResults({ session }: { session: SessionView }) {
           ? "To pass, the answer to the apply question must be correct."
           : "To pass, answer 2 questions correctly. The apply question must be one of them."}
       </p>
+      {/* A failed test again of a mastered concept does not change its status. */}
+      {session.results?.[0]?.status === "mastered" && (
+        <p>{concept.name} stays mastered. To keep it so, leave this page. To learn it again, choose an action below.</p>
+      )}
       {wrongList}
       {outcome.failedTests >= 3 && outcome.hasPrerequisites && (
         <div className="suggestion">
