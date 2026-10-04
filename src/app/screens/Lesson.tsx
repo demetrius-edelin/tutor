@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import type { LessonReference, LessonView } from "../../server/api-types";
+import type { LessonReference, LessonView, QueueView } from "../../server/api-types";
 import { getJson, postJson } from "../api";
 import { CitedMarkdown, ReferenceList } from "../components/CitedMarkdown";
+import { Drawer } from "../components/Drawer";
 import { Layout, Notice } from "../components/Layout";
 import { SectionPanel } from "../components/SectionPanel";
 import { Spinner } from "../components/Spinner";
@@ -56,6 +57,7 @@ function LessonStart({ view, onStarted }: { view: LessonView; onStarted: (view: 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [section, setSection] = useState<number | null>(null);
+  const inQueue = view.concept.status === "queued" || view.concept.status === "learning";
 
   const start = async () => {
     setBusy("start");
@@ -84,6 +86,22 @@ function LessonStart({ view, onStarted }: { view: LessonView; onStarted: (view: 
     try {
       const { sessionId } = await postJson<{ sessionId: number }>(`/api/concepts/${conceptId}/test`);
       window.location.hash = href.session(sessionId);
+    } catch (problem) {
+      setError((problem as Error).message);
+      setBusy(null);
+    }
+  };
+
+  // Take the concept out of the study queue and open the next lesson in the queue.
+  // Later lets you choose the concept again, Skip marks it as skipped. If the queue is empty, show the queue.
+  const takeOut = async (status: "new" | "skipped") => {
+    setBusy(status);
+    setError(null);
+    const slug = view.concept.theme.slug;
+    try {
+      const queue = await postJson<QueueView>(`/api/themes/${encodeURIComponent(slug)}/queue/remove`, { conceptId: view.concept.id, status });
+      const next = queue.items[0];
+      window.location.hash = next ? href.lesson(next.conceptId) : href.queue(slug);
     } catch (problem) {
       setError((problem as Error).message);
       setBusy(null);
@@ -122,7 +140,7 @@ function LessonStart({ view, onStarted }: { view: LessonView; onStarted: (view: 
           </li>
         ))}
       </ul>
-      <p>
+      <p className="button-row">
         <button className="button" onClick={start} disabled={busy !== null}>
           {busy === "start" ? (
             <>
@@ -131,6 +149,21 @@ function LessonStart({ view, onStarted }: { view: LessonView; onStarted: (view: 
             </>
           ) : view.missingPrerequisites.length > 0 ? "Start the lesson anyway" : "Start the lesson"}
         </button>
+        {inQueue && (
+          <>
+            <button
+              className="text-button"
+              onClick={() => takeOut("new")}
+              disabled={busy !== null}
+              title="Take the concept out of the queue. You can choose it again another day."
+            >
+              Later
+            </button>
+            <button className="text-button" onClick={() => takeOut("skipped")} disabled={busy !== null} title="Take the concept out of the queue and mark it as skipped.">
+              Skip
+            </button>
+          </>
+        )}
       </p>
       {busy === "start" && (
         <p className="quiet" role="status">
@@ -150,6 +183,7 @@ function LessonStart({ view, onStarted }: { view: LessonView; onStarted: (view: 
 function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: LessonView) => void }) {
   const lesson = view.lesson!;
   const [open, setOpen] = useState<LessonReference | null>(null);
+  const [listOpen, setListOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
   const [rewriting, setRewriting] = useState(false);
@@ -221,10 +255,11 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
       </article>
 
       {lesson.references.length > 0 && (
-        <section aria-labelledby="references-heading">
-          <h2 id="references-heading">References</h2>
-          <ReferenceList references={lesson.references} onOpen={setOpen} />
-        </section>
+        <p className="references-link">
+          <button className="text-button" onClick={() => setListOpen(true)}>
+            Show the references ({lesson.references.length})
+          </button>
+        </p>
       )}
 
       <section aria-labelledby="questions-heading" className="chat">
@@ -335,7 +370,23 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
         )}
       </section>
 
-      {open && <SectionPanel sectionId={open.sectionId} quote={open.quote} onClose={() => setOpen(null)} />}
+      {open ? (
+        <SectionPanel
+          sectionId={open.sectionId}
+          quote={open.quote}
+          onClose={() => {
+            setOpen(null);
+            setListOpen(false);
+          }}
+          onBack={listOpen ? () => setOpen(null) : undefined}
+        />
+      ) : (
+        listOpen && (
+          <Drawer label="References" title="References" onClose={() => setListOpen(false)}>
+            <ReferenceList references={lesson.references} onOpen={setOpen} />
+          </Drawer>
+        )
+      )}
     </>
   );
 }

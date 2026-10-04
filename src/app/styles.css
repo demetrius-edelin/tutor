@@ -1670,6 +1670,10 @@ button.button {
   font-family: var(--reading);
 }
 
+.references-link {
+  margin-top: 1.5rem;
+}
+
 .chat {
   max-width: var(--measure);
 }
@@ -1765,6 +1769,12 @@ button.button {
   margin: 0;
   color: var(--graphite);
   font-size: var(--step--1);
+}
+
+.panel-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 1rem;
 }
 
 .reading {
