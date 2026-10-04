@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import type { Db } from "../db/index.js";
 import type { LlmClient } from "../llm/index.js";
@@ -59,7 +59,7 @@ export function themeDir(dataDir: string, themeName: string): string {
   return join(dataDir, "themes", slugify(themeName));
 }
 
-export function bookDir(dataDir: string, themeName: string, book: ParsedBook): string {
+export function bookDir(dataDir: string, themeName: string, book: Pick<ParsedBook, "title">): string {
   return join(themeDir(dataDir, themeName), "books", slugify(book.title));
 }
 
@@ -137,9 +137,12 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
   writeParsedBook(book, dir);
 
   // Stages 2 and 3, one chapter at a time. A cached chapter result is used again.
+  // "fresh" removes only the cached chapter results. The cached image texts stay.
   const workDir = join(dir, "work");
-  if (options.fresh) rmSync(workDir, { recursive: true, force: true });
   mkdirSync(workDir, { recursive: true });
+  if (options.fresh) {
+    for (const file of readdirSync(workDir)) if (/^chapter-\d+\.json$/.test(file)) rmSync(join(workDir, file));
+  }
   const chapters = book.chapters.filter((chapter) => !options.chapters || options.chapters.includes(chapter.number));
   const digests: ChapterDigest[] = [];
   for (const chapter of chapters) {

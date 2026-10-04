@@ -1,7 +1,7 @@
-import type { LlmClient, ObjectRequest, Source, TextRequest, TextResult } from "../../src/llm/index.js";
+import type { ImageInput, LlmClient, ObjectRequest, Source, TextRequest, TextResult } from "../../src/llm/index.js";
 import { checkReferences } from "../../src/llm/references.js";
 
-export type Stage = "extract" | "review" | "merge" | "questions" | "test" | "grade" | "lesson" | "chat";
+export type Stage = "extract" | "review" | "merge" | "questions" | "test" | "grade" | "image" | "lesson" | "chat";
 
 export interface FakeCall {
   stage: Stage;
@@ -28,6 +28,8 @@ export interface FakeHandlers {
   questions?: (conceptIds: string[], sources: Source[]) => unknown;
   test?: (prompt: string, sources: Source[]) => unknown;
   grade?: (prompt: string) => unknown;
+  // The handler can throw an error, as a model that does not accept images.
+  image?: (images: ImageInput[], call: number) => unknown;
   text?: (request: TextRequest) => TextResult;
 }
 
@@ -75,7 +77,9 @@ export class FakeLlm implements LlmClient {
             ? "test"
           : request.system.startsWith("You grade the answer")
             ? "grade"
-            : "merge";
+            : request.system.startsWith("You read one image")
+              ? "image"
+              : "merge";
     this.calls.push({ stage, request: request as ObjectRequest<unknown> });
     const sources = request.sources ?? [];
     let answer: unknown;
@@ -95,6 +99,8 @@ export class FakeLlm implements LlmClient {
         explain: { question: "Explain the concept.", keyPoints: ["point"], modelAnswer: "The point.", sectionId },
         apply: { question: "Use the concept in this case.", keyPoints: ["point"], modelAnswer: "The point, used.", sectionId },
       };
+    } else if (stage === "image") {
+      answer = this.handlers.image?.(request.images ?? [], this.count("image")) ?? { kind: "code", language: "sql", text: "SELECT 1;" };
     } else if (stage === "grade") {
       const learner = request.prompt.split("The answer of the learner:\n")[1] ?? "";
       answer = this.handlers.grade?.(request.prompt) ?? {

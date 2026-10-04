@@ -1,3 +1,5 @@
+import type { BookImage } from "./source.js";
+
 export type ChapterKind = "chapter" | "appendix" | "glossary" | "index" | "front" | "back" | "part";
 
 export type ChecklistSource = "summary" | "glossary" | "index" | "dfn" | "bold" | "emphasis";
@@ -20,6 +22,8 @@ export interface ParsedSection {
   // The words in the Markdown text and in the source XHTML text.
   words: number;
   sourceWords: number;
+  // The ids of the images in the section that the model can read, in order.
+  images: string[];
 }
 
 export interface ParsedChapter {
@@ -52,6 +56,7 @@ export type WarningCode =
   | "size_split"
   | "skipped_text"
   | "unassigned_terms"
+  | "unread_images"
   | "reader_note";
 
 export interface ParseWarning {
@@ -72,4 +77,6 @@ export interface ParsedBook {
   // Glossary and index terms that the parser did not find in the text of a chapter.
   unassignedTerms: ChecklistItem[];
   warnings: ParseWarning[];
+  // The images that the model can read, by id.
+  images: Map<string, BookImage>;
 }

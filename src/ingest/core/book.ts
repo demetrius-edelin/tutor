@@ -8,7 +8,7 @@ import {
   summaryItems,
 } from "./checklist.js";
 import { htmlToMarkdown } from "./markdown.js";
-import type { BookSource } from "./source.js";
+import { IMAGE_SRC, type BookImage, type BookSource } from "./source.js";
 import {
   buildLocator,
   buildSpans,
@@ -34,6 +34,8 @@ export interface ParseOptions {
   maxSectionWords?: number;
   // A section with fewer words than this joins a neighbor section.
   minSectionWords?: number;
+  // The text that the model read in each image, by image id. The text replaces the image in the Markdown.
+  imageText?: ReadonlyMap<string, string>;
 }
 
 const SOURCE_ORDER: ChecklistSource[] = ["summary", "glossary", "index", "dfn", "bold", "emphasis"];
@@ -89,7 +91,7 @@ export function buildBook(source: BookSource, options: ParseOptions = {}): Parse
 
     const number = chapters.length + 1;
     const rawSections = splitChapter(span.title, spanBlocks, split);
-    const sections = rawSections.map((raw, i) => toSection(number, i + 1, raw, pageAt));
+    const sections = rawSections.map((raw, i) => toSection(number, i + 1, raw, pageAt, source.images, options.imageText));
     const checklist: ChecklistItem[] = [];
 
     rawSections.forEach((raw, i) => {
@@ -185,6 +187,17 @@ export function buildBook(source: BookSource, options: ParseOptions = {}): Parse
     chapter.checklist = dedupe(chapter.checklist, (item) => item.term);
   }
 
+  // The images in the chapters. Images in front and back matter do not count.
+  const images = new Map<string, BookImage>();
+  for (const id of chapters.flatMap((chapter) => chapter.sections.flatMap((section) => section.images))) images.set(id, source.images.get(id)!);
+  const unread = [...images.keys()].filter((id) => !options.imageText?.has(id)).length;
+  if (unread > 0) {
+    warnings.push({
+      code: "unread_images",
+      message: `${unread} images in the chapters have no text, so the sections keep only their alternative text. Ingest and refresh read these images with the model.`,
+    });
+  }
+
   return {
     format: source.format,
     title: source.title,
@@ -196,14 +209,25 @@ export function buildBook(source: BookSource, options: ParseOptions = {}): Parse
     indexEntries: index.length,
     unassignedTerms,
     warnings,
+    images,
   };
 }
 
-function toSection(chapter: number, number: number, raw: RawSection, pageAt: (string | null)[]): ParsedSection {
+const IMAGE_IDS = new RegExp(`<img\\b[^>]*\\bsrc="${IMAGE_SRC}([0-9a-f]+)"`, "g");
+
+function toSection(
+  chapter: number,
+  number: number,
+  raw: RawSection,
+  pageAt: (string | null)[],
+  images: ReadonlyMap<string, BookImage>,
+  imageText: ReadonlyMap<string, string> | undefined,
+): ParsedSection {
   const markdown = raw.blocks
-    .map((block) => htmlToMarkdown(block.html))
+    .map((block) => htmlToMarkdown(block.html, imageText))
     .filter(Boolean)
     .join("\n\n");
+  const ids = raw.blocks.flatMap((block) => [...block.html.matchAll(IMAGE_IDS)].map((match) => match[1]!));
   const first = raw.blocks[0]!;
   return {
     id: `${chapter}.${number}`,
@@ -213,5 +237,6 @@ function toSection(chapter: number, number: number, raw: RawSection, pageAt: (st
     markdown,
     words: countWords(markdown),
     sourceWords: sum(raw.blocks, (block) => block.words),
+    images: [...new Set(ids)].filter((id) => images.has(id)),
   };
 }

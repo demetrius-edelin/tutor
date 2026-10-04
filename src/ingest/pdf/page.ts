@@ -1,3 +1,4 @@
+import { IMAGE_SRC } from "../core/source.js";
 import { escapeHtml, normalizeSpace } from "../core/text.js";
 
 // Turn the structure tags and the text of one PDF page into XHTML.
@@ -34,6 +35,8 @@ export interface StructNode {
   role: string;
   alt?: string;
   children?: (StructNode | StructContent)[];
+  // The ids of the images of a Figure. The PDF reader sets them.
+  images?: string[];
 }
 
 export interface OutlineAnchor {
@@ -365,9 +368,10 @@ function renderBlock(block: PageBlock, byMcid: Map<string, PdfTextItem[]>): stri
     case "Table":
       return renderTable(node, byMcid);
     case "Figure": {
-      const alt = cleanAlt(node.alt);
+      const alt = escapeHtml(cleanAlt(node.alt));
       const caption = visible(items).length > 0 ? `<figcaption>${inlineHtml(items)}</figcaption>` : "";
-      return `<figure><img alt="${escapeHtml(alt)}"/>${caption}</figure>`;
+      const images = node.images?.length ? node.images.map((id) => `<img src="${IMAGE_SRC}${id}" alt="${alt}"/>`) : [`<img alt="${alt}"/>`];
+      return `<figure>${images.join("")}${caption}</figure>`;
     }
     case "Note":
       return `<aside epub:type="footnote">${renderMixed(node, byMcid)}</aside>`;

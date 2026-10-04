@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { ConfigError, loadEnvFile, modelConfig } from "../config.js";
+import { encodePng } from "../ingest/core/png.js";
 import { createClient, LlmError, setModelLog, type Source } from "../llm/index.js";
 
-// Check the model in .env with one JSON request and one text request with references.
+// Check the model in .env with one JSON request, one text request with references, and one request with an image.
 
 const source: Source = {
   id: "sample",
@@ -40,6 +41,24 @@ async function main(): Promise<void> {
   console.log(`\n2. Text answer with references (${((Date.now() - start) / 1000).toFixed(1)} s):\n   ${answer.text}`);
   for (const reference of answer.references) console.log(`   [${reference.number}] "${reference.quote}"`);
   if (answer.references.length === 0) console.log("   Warning: the answer has no valid reference.");
+
+  // A red square. Ingest and refresh send the images of a book in the same way.
+  const red = encodePng({ width: 64, height: 64, channels: 3, data: new Uint8Array(64 * 64 * 3).map((_, i) => (i % 3 === 0 ? 220 : 30)) });
+  start = Date.now();
+  try {
+    const seen = await client.object({
+      system: "You describe images.",
+      images: [{ mediaType: "image/png", data: red }],
+      prompt: "What is the main color of the image? Answer with one word.",
+      schema: z.object({ color: z.string() }),
+    });
+    console.log(`\n3. Image answer (${((Date.now() - start) / 1000).toFixed(1)} s): the color is "${seen.color}".`);
+    if (!/red/i.test(seen.color)) console.log("   Warning: the image is red. The model did not read the image correctly.");
+  } catch (error) {
+    if (!(error instanceof LlmError)) throw error;
+    console.log(`\n3. Image answer: the model did not accept the image. ${error.message}`);
+    console.log("   Ingest and refresh then keep the image placeholders. The other parts of the tutor work.");
+  }
   console.log("\nThe model works.\n");
 }
 

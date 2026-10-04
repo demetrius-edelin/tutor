@@ -13,6 +13,7 @@
     "parse": "tsx src/cli/parse.ts",
     "llm:check": "tsx src/cli/llm-check.ts",
     "ingest": "tsx src/cli/ingest.ts",
+    "refresh": "tsx src/cli/refresh.ts",
     "build": "vite build",
     "start": "vite build && tsx src/server/main.ts",
     "dev:server": "tsx watch src/server/main.ts",

@@ -12,6 +12,7 @@ import {
   semanticTypes,
   type Doc,
 } from "./dom.js";
+import { IMAGE_SRC } from "./source.js";
 import { escapeHtml, normalizeSpace } from "./text.js";
 
 const turndown = new TurndownService({
@@ -53,7 +54,8 @@ function codeLanguage(pre: HTMLElement): string {
 
 function placeholder(text: string): string {
   // The span needs text. Turndown removes empty elements before it uses the rules.
-  return `<span data-placeholder="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
+  // The text of the span has no space at its ends, because turndown copies such a space next to the placeholder.
+  return `<span data-placeholder="${escapeHtml(text)}">${escapeHtml(text.trim())}</span>`;
 }
 
 function calloutLabel(element: Element, types: string[]): string | null {
@@ -66,7 +68,13 @@ function calloutLabel(element: Element, types: string[]): string | null {
   return keyword.charAt(0).toUpperCase() + keyword.slice(1).toLowerCase();
 }
 
-function simplify($: Doc): void {
+// The id of an image that the reader loaded, or null.
+export function imageIdOf(image: Element): string | null {
+  const src = image.attribs.src ?? "";
+  return src.startsWith(IMAGE_SRC) ? src.slice(IMAGE_SRC.length) : null;
+}
+
+function simplify($: Doc, imageText: ReadonlyMap<string, string>): void {
   $("[data-page]").remove();
 
   for (const link of descendants($).filter((element) => localName(element) === "a")) {
@@ -77,7 +85,16 @@ function simplify($: Doc): void {
   for (const image of descendants($).filter((element) => ["img", "svg", "image"].includes(localName(element)))) {
     const alt = normalizeSpace(image.attribs.alt ?? "");
     const useful = alt && !/\.(png|jpe?g|gif|svg|webp)$/i.test(alt);
-    $(image).replaceWith(placeholder(useful ? `[Image: ${alt}]` : "[Image]"));
+    const fallback = useful ? `[Image: ${alt}]` : "[Image]";
+    // The text that the model read in the image. A block of text, for example code, cannot go into a table cell.
+    const id = imageIdOf(image);
+    const text = id === null ? undefined : imageText.get(id);
+    const block = text?.includes("\n") ?? false;
+    if (text === undefined || (block && $(image).closest("td, th").length > 0)) {
+      $(image).replaceWith(placeholder(fallback));
+    } else {
+      $(image).replaceWith(placeholder(block ? `\n\n${text}\n\n` : text));
+    }
   }
   for (const caption of descendants($).filter((element) => localName(element) === "figcaption")) {
     $(caption).replaceWith(`<p><em>${escapeHtml(normalizeSpace($(caption).text()))}</em></p>`);
@@ -112,10 +129,11 @@ function simplify($: Doc): void {
   }
 }
 
-export function htmlToMarkdown(html: string): string {
+// The image text replaces each image that the model read. Other images become a placeholder, for example "[Image: diagram]".
+export function htmlToMarkdown(html: string, imageText: ReadonlyMap<string, string> = new Map()): string {
   if (!html.trim()) return "";
   const $ = loadFragment(html);
-  simplify($);
+  simplify($, imageText);
   return turndown
     .turndown($.html())
     .replace(/\n{3,}/g, "\n\n")

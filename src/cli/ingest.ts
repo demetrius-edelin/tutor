@@ -2,8 +2,10 @@ import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { ConfigError, loadEnvFile, modelConfig } from "../config.js";
 import { openDb } from "../db/index.js";
-import { cachedChapters, chapterInput, ingestBook, type IngestReport } from "../ingest/ingest.js";
-import { parseBook } from "../ingest/parse.js";
+import { buildBook } from "../ingest/core/book.js";
+import { cachedImageText, imageCacheFile, imagesToRead, readImages } from "../ingest/images.js";
+import { bookDir, cachedChapters, chapterInput, ingestBook, type IngestReport } from "../ingest/ingest.js";
+import { readBookSource } from "../ingest/parse.js";
 import { requestsFor } from "../ingest/stages/digest.js";
 import { createClient, LlmError } from "../llm/index.js";
 
@@ -60,16 +62,21 @@ async function main(): Promise<void> {
 
   loadEnvFile();
   const config = modelConfig();
-  const book = await parseBook(readFileSync(bookFile), bookFile);
+  // The sections get the image texts from the cache now. The model reads the other images after the question.
+  const source = await readBookSource(readFileSync(bookFile), bookFile);
+  const cacheFile = imageCacheFile(bookDir("data", themeName, source));
+  let book = buildBook(source, { imageText: cachedImageText(cacheFile) });
   const chapters = chaptersValue ? parseChapters(chaptersValue) : undefined;
   const selected = book.chapters.filter((chapter) => !chapters || chapters.includes(chapter.number));
   if (selected.length === 0) throw new Error("No chapter matches the --chapters list.");
 
   // Cached chapters need no extract and review requests. Each chapter needs one merge request.
   const cached = flag("--fresh") ? new Set<number>() : cachedChapters("data", themeName, book);
+  const images = imagesToRead(book, cacheFile, chapters).length;
   const requests =
     selected.filter((chapter) => !cached.has(chapter.number)).reduce((total, chapter) => total + requestsFor(chapterInput(chapter)), 0) +
-    selected.length;
+    selected.length +
+    images;
   const words = selected.reduce((total, chapter) => total + chapter.words, 0);
   console.log(`\nBook: ${book.title}`);
   console.log(`Theme: ${themeName}`);
@@ -77,6 +84,7 @@ async function main(): Promise<void> {
   const mode = !chapters ? "" : flag("--save") ? " (saved to the database)" : " (preview, the database does not change)";
   console.log(`Chapters: ${selected.length} of ${book.chapters.length}${mode}`);
   console.log(`Text: ${words.toLocaleString("en-US")} words`);
+  if (images > 0) console.log(`Images: ${images} to read with the model`);
   const cachedCount = selected.filter((chapter) => cached.has(chapter.number)).length;
   console.log(`Model requests: about ${requests}${cachedCount > 0 ? ` (${cachedCount} chapters come from the cache)` : ""}.\n`);
 
@@ -90,10 +98,17 @@ async function main(): Promise<void> {
     }
   }
 
+  const llm = createClient(config);
+  if (images > 0) {
+    const imageReport = await readImages(llm, book, cacheFile, { ...(chapters ? { chapters } : {}), log: (line) => console.log(line) });
+    if (imageReport.warning) console.log(`\n${imageReport.warning}\n`);
+    book = buildBook(source, { imageText: imageReport.text });
+  }
+
   const db = openDb("data/tutor.db");
   try {
     const report = await ingestBook({
-      llm: createClient(config),
+      llm,
       db,
       dataDir: "data",
       themeName,

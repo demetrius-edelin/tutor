@@ -89,6 +89,9 @@ export class AnthropicClient implements LlmClient {
       // The sources come first and have a cache marker, so that later calls with the same sources cost less.
       content.push({ type: "text", text: formatSources(request.sources), cache_control: { type: "ephemeral" } });
     }
+    for (const image of request.images ?? []) {
+      content.push({ type: "image", source: { type: "base64", media_type: image.mediaType, data: Buffer.from(image.data).toString("base64") } });
+    }
     content.push({ type: "text", text: request.prompt });
     const messages: Anthropic.MessageParam[] = [{ role: "user", content }];
     const format = zodOutputFormat(request.schema as never);

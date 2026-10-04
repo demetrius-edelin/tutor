@@ -20,9 +20,17 @@ export interface Message {
   content: string;
 }
 
+// An image for the model, for example a page of a book with code on it.
+export interface ImageInput {
+  mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+  data: Uint8Array;
+}
+
 export interface ObjectRequest<T> {
   system: string;
   sources?: Source[];
+  // Images for the model to read. They come before the prompt.
+  images?: ImageInput[];
   prompt: string;
   schema: z.ZodType<T>;
 }

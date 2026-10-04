@@ -3,7 +3,8 @@ import { flattenXhtml } from "../src/ingest/core/blocks.js";
 import { splitChapter } from "../src/ingest/core/structure.js";
 import { htmlToMarkdown } from "../src/ingest/core/markdown.js";
 import { pageToXhtml, type FontStyle, type PdfTextItem, type StructNode } from "../src/ingest/pdf/page.js";
-import { joinAcrossPages, joinLabels, styleOfFont } from "../src/ingest/pdf/read.js";
+import { ImageKind } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { attachImages, joinAcrossPages, joinLabels, pixelsOf, styleOfFont } from "../src/ingest/pdf/read.js";
 
 const regular: FontStyle = { bold: false, italic: false, mono: false };
 const bold: FontStyle = { ...regular, bold: true };
@@ -29,9 +30,9 @@ function item(mcid: string | null, str: string, line: number, options: Partial<P
 const content = (id: string) => ({ type: "content", id });
 const node = (role: string, ...children: StructNode["children"] & {}) => ({ role, children });
 
-function markdownOf(xhtml: string): string {
+function markdownOf(xhtml: string, imageText: Map<string, string> = new Map()): string {
   return flattenXhtml("page-0001", xhtml, 0, new Map())
-    .map((block) => htmlToMarkdown(block.html))
+    .map((block) => htmlToMarkdown(block.html, imageText))
     .filter(Boolean)
     .join("\n\n");
 }
@@ -114,6 +115,17 @@ describe("pageToXhtml", () => {
     expect(markdown).toBe("[Image: A black screen with white text]");
   });
 
+  it("points a figure to its images, and puts the text of an image in its place", () => {
+    const tree = node("Root", { role: "Figure", alt: "A black screen", images: ["a1", "b2"], children: [] }, node("P", content("after")));
+    const items = [item("after", "The query finds the rows.", 3)];
+    const xhtml = pageToXhtml({ tree, items, label: null, anchors: [] }).xhtml;
+    expect(xhtml).toContain('<figure><img src="image:a1" alt="A black screen"/><img src="image:b2" alt="A black screen"/></figure>');
+    const imageText = new Map([["a1", "_The tutor read this code from an image:_\n\n```sql\nSELECT 1;\n```"]]);
+    expect(markdownOf(xhtml, imageText)).toBe(
+      "_The tutor read this code from an image:_\n\n```sql\nSELECT 1;\n```\n\n[Image: A black screen]\n\nThe query finds the rows.",
+    );
+  });
+
   it("puts each outline anchor just before the block at its destination", () => {
     const tree = node("Root", node("P", content("intro")), node("H2", content("q18")), node("P", content("a18")), node("H2", content("q19")));
     const items = [
@@ -186,5 +198,31 @@ describe("section titles", () => {
     const blocks = flattenXhtml("c.xhtml", xhtml, 0, new Map());
     const titles = splitChapter("Chapter", blocks, { maxWords: 2500, minWords: 1 }).map((section) => section.title);
     expect(titles).toEqual(["Chapter", "Question 1: Difference between UNION and UNION ALL", "Question 2"]);
+  });
+});
+
+describe("PDF images", () => {
+  it("gives each figure the images of its marked content", () => {
+    const figure: StructNode = { role: "Figure", children: [content("p12R_mc7"), content("p12R_mc9")] };
+    const tree = node("Root", node("Sect", figure), node("P", content("p12R_mc8")));
+    attachImages(tree, new Map([[7, "a1"], [8, "b2"], [9, "a1"]]));
+    expect(figure.images).toEqual(["a1"]);
+    expect((tree.children[1] as StructNode).images).toBeUndefined();
+  });
+
+  it("reads RGB, RGBA, and one-bit pixels", () => {
+    const rgb = Uint8ClampedArray.from([1, 2, 3]);
+    expect(pixelsOf({ width: 1, height: 1, kind: ImageKind.RGB_24BPP, data: rgb })).toEqual({ width: 1, height: 1, channels: 3, data: Uint8Array.from([1, 2, 3]) });
+    expect(pixelsOf({ width: 1, height: 1, kind: ImageKind.RGBA_32BPP, data: Uint8Array.from([1, 2, 3, 4]) })?.channels).toBe(4);
+    // Each row starts at a new byte. A set bit is white.
+    const bits = Uint8Array.from([0b10100000, 0b01000000]);
+    expect(pixelsOf({ width: 3, height: 2, kind: ImageKind.GRAYSCALE_1BPP, data: bits })).toEqual({
+      width: 3,
+      height: 2,
+      channels: 1,
+      data: Uint8Array.from([255, 0, 255, 0, 255, 0]),
+    });
+    expect(pixelsOf({ width: 1, height: 1, kind: 99, data: rgb })).toBeNull();
+    expect(pixelsOf({})).toBeNull();
   });
 });

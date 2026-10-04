@@ -57,7 +57,21 @@ const chat = (content: string | null, finish_reason = "stop", reasoning?: string
   usage: { completion_tokens: 900, completion_tokens_details: { reasoning_tokens: 850 } },
 });
 
+const image = { mediaType: "image/png" as const, data: Uint8Array.from([1, 2, 3]) };
+
 describe("AnthropicClient", () => {
+  it("sends images before the prompt, as base64 data", async () => {
+    const { sdk, requests } = fakeAnthropic([
+      { stop_reason: "end_turn", content: [{ type: "text", text: '{"facts":["a"]}' }], parsed_output: { facts: ["a"] } },
+    ]);
+    await new AnthropicClient(anthropicConfig(), sdk).object({ system: "s", images: [image], prompt: "p", schema });
+    const content = (requests[0]!.params.messages as { content: Record<string, unknown>[] }[])[0]!.content;
+    expect(content).toEqual([
+      { type: "image", source: { type: "base64", media_type: "image/png", data: "AQID" } },
+      { type: "text", text: "p" },
+    ]);
+  });
+
   it("returns parsed JSON, and puts the sources first with a cache marker", async () => {
     const { sdk, requests } = fakeAnthropic([
       { stop_reason: "end_turn", content: [{ type: "text", text: '{"facts":["a"]}' }], parsed_output: { facts: ["a"] } },
@@ -172,6 +186,20 @@ describe("OpenAiClient", () => {
   it("reports an answer that is too long", async () => {
     const { sdk } = fakeOpenAi([chat("{", "length")]);
     await expect(new OpenAiClient(config, sdk).object({ system: "s", prompt: "p", schema })).rejects.toThrow(LlmError);
+  });
+
+  it("sends images before the prompt, as data URLs, also when it asks for JSON in the prompt", async () => {
+    const { sdk, requests } = fakeOpenAi([
+      new OpenAI.BadRequestError(400, undefined, "response_format json_schema is not supported", new Headers()),
+      chat('{"facts":["a"]}'),
+    ]);
+    await new OpenAiClient(config, sdk).object({ system: "s", images: [image], prompt: "p", schema });
+    for (const request of requests) {
+      const content = (request.messages as { content: Record<string, unknown>[] }[])[1]!.content;
+      expect(content[0]).toEqual({ type: "image_url", image_url: { url: "data:image/png;base64,AQID" } });
+      expect(content[1]).toMatchObject({ type: "text", text: expect.stringContaining("p") });
+    }
+    expect(requests).toHaveLength(2);
   });
 
   it("sends the reasoning level to OpenRouter in its own format", async () => {

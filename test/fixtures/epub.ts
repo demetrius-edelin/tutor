@@ -16,7 +16,8 @@ export function words(count: number, word = "lorem"): string {
 
 export interface FixtureBook {
   title?: string;
-  files: Record<string, string>;
+  // The text of each file, or the bytes of a binary file, for example an image.
+  files: Record<string, string | Uint8Array>;
   spine: string[];
   nav?: string;
   ncx?: string;
@@ -26,7 +27,8 @@ export async function buildEpub(book: FixtureBook): Promise<Uint8Array> {
   const zip = new JSZip();
   const paths = Object.keys(book.files);
   const idOf = (path: string) => `f${paths.indexOf(path)}`;
-  const mediaType = (path: string) => (path.endsWith(".css") ? "text/css" : "application/xhtml+xml");
+  const mediaType = (path: string) =>
+    path.endsWith(".css") ? "text/css" : path.endsWith(".png") ? "image/png" : "application/xhtml+xml";
   const items = paths.map((path) => `<item id="${idOf(path)}" href="${path}" media-type="${mediaType(path)}"/>`);
   if (book.nav) {
     items.push(`<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>`);

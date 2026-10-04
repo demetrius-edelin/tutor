@@ -26,7 +26,7 @@ Status: draft 2. Date: 2026-10-03. The design is in `DESIGN-v3.md`. This file gi
 - Lesson length fix: done. The tutor writes one lesson with references in one call. The length follows the concept, and the prompt has no minimum length. The "Explain in more detail" button is gone. Schema version 6 keeps the detailed version of each old lesson.
 - Milestone 11: done. The "Review board" tab shows one line for each concept, with the status filters, the star filter, and the search. The address keeps the filters.
 - Milestone 12: done. "Test me again" on the lesson page of a mastered concept uses the questions of the last test, with no model call to write questions. "Learn again" is dropped, because a click on the board opens the lesson. Phase 2 is complete.
-- Milestone 13: planned. See "Later milestones".
+- Milestone 13: built. The parser keeps the images of PDF and EPUB books, ingest reads them with the model, and `npm run refresh` adds them to an ingested book. A run with a fake model on a copy of the user data matched all sections and kept all lessons. The exit test needs a run of `npm run refresh` with the model of the user.
 
 ## Milestones
 

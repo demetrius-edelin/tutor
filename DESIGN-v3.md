@@ -1,6 +1,6 @@
 # Engineering Skills Tutor: Design
 
-Status: draft 3, revision 10. Date: 2026-10-03. This file replaces `DESIGN.md` (draft 2).
+Status: draft 3, revision 11. Date: 2026-10-04. This file replaces `DESIGN.md` (draft 2).
 
 ## Purpose
 
@@ -14,7 +14,8 @@ The tutor uses one large language model (LLM) from Anthropic, OpenAI, or OpenRou
 
 - Themes are neutral. The tutor has no built-in themes and no code for a specific subject. The user creates a theme with a name and adds books to it. The books define the content of the theme.
 - Books are EPUB files or tagged PDF files.
-- Phase 1 is a local app on the laptop of the user. It has no Telegram bot and no other messaging.
+- Until phase 4, the tutor runs on the laptop of the user. In phase 4, each user can also run it on a server. The tutor has no Telegram bot and no other messaging.
+- The tutor is free and open source. Each user hosts their own copy. The project offers no public hosted version. See "Self-hosted release (phase 4)".
 - The review board shows what the user learned. The user decides what to read again or to test again. The tutor has no review schedule.
 - The user makes each decision about what to test, what to learn, what to skip, and the order of study. The tutor only suggests.
 - The tutor uses one model. The user selects the provider, the model, and the API key in the `.env` file. The tutor has no default model.
@@ -72,7 +73,7 @@ Each theme has one concept map. The map has modules, and each module has concept
 Each concept has these properties:
 
 - A name and a one-line objective.
-- A kind: `knowledge` or `skill`. A `skill` concept can get hands-on exercises.
+- A kind: `knowledge` or `skill`. A `skill` concept is a task that the user must do, for example write a query.
 - A level: `basic`, `intermediate`, or `advanced`.
 - The prerequisites: other concepts that the user must know first.
 - The sources: the book sections that teach the concept.
@@ -91,9 +92,9 @@ Ingest is the most important step. If ingest misses a concept, the user never se
 
 Ingest keeps a doubtful concept. The user can skip a concept with one click, but the user cannot see a concept that ingest missed.
 
-The user adds a book on the theme screen. The app copies the EPUB file into the data folder of the theme and starts ingest. The theme screen shows the progress.
+Until phase 3, the user starts ingest from the command line. In phase 3, the user adds a book on the theme screen. See "Ingest in the app (phase 3)".
 
-Ingest has four stages: parse, extract, review, and merge. At the end, it writes an ingest report.
+Ingest has four stages: parse, extract, review, and merge. Between the parse and the extract stage, the model reads the images. At the end, ingest writes an ingest report.
 
 ### Stage 1: Parse
 
@@ -115,7 +116,7 @@ The parser keeps these parts of the text:
 - Footnotes.
 - Figure captions and the alternative text of images.
 
-The parser does not read the content of images. Thus, a diagram without a caption or alternative text is lost. Image descriptions are an option for later, with a model that reads images.
+The parser keeps the data of each image in a format that a model can read: PNG, JPEG, GIF, and WebP. The model reads these images after the parse. See "Stage 1b: Images".
 
 ### Stage 1 for PDF files
 
@@ -133,15 +134,34 @@ The reader also does these things:
 - It joins consecutive lines of code into one code block, and it keeps the indentation.
 - It joins a paragraph that continues on the next page.
 - It joins a chapter label with the chapter name in the outline, for example "CHAPTER 1:" and "SQL Interview Questions".
+- It finds the image of each figure. pdf.js draws the image inside the marked content of the figure, so the marked content id connects the two. The reader saves the image as a PNG file, with a longest side of 1568 pixels or less.
 - It compares the words of each page with the words of the result, and reports the pages that lost text.
 
-An untagged PDF has only text at positions on the page. Many LaTeX books and all scanned books are untagged. The reader stops with a clear message for these books. Some PDF books show code as images. The parser does not read these images.
+An untagged PDF has only text at positions on the page. Many LaTeX books and all scanned books are untagged. The reader stops with a clear message for these books.
 
 The parser checks its own output:
 
 - It counts the words in each XHTML file and in the Markdown result. A large difference means lost text, and the parser records a warning.
 - It records empty sections.
 - It records files that belong to no chapter.
+
+### Stage 1b: Images
+
+Some books show code, tables, or query results as images. Without the content of these images, a lesson misses the main example of a section.
+
+The model reads each image of the chapters one time. The result has one of three kinds:
+
+- Code: the text of the code. It becomes a code block in the section.
+- Table: a Markdown table in the section.
+- Other: a description of one sentence, for example "[Image: A diagram of the three states of a file]".
+
+The result replaces the image in the section. A line before code or a table tells the reader that the tutor read it from an image, because the model can make an error. A code block or a table cannot go into a table cell, so an image in a table cell keeps its placeholder.
+
+The results go to `work/images.json` in the folder of the book. The key of each result is a hash of the image, so each image costs one model call only one time. The `--fresh` option does not remove these results.
+
+If three calls fail in a row, the model probably does not accept images, and the reading stops. Then the sections keep the placeholders, and the command shows a warning. A later run reads the other images. An image larger than 4 MB keeps its placeholder.
+
+The parse report shows a warning with the number of images that have no text.
 
 ### Stage 2: Extract
 
@@ -183,7 +203,7 @@ In the merge step, the model gets only the names and objectives of the concepts,
 
 ### Ingest report
 
-After ingest, the theme screen shows a report for the book:
+After ingest, the tutor writes a report for the book. In phase 3, the theme screen shows it:
 
 - The parse warnings: lost text, empty sections, and files outside of chapters.
 - The number of sections and concepts in each chapter.
@@ -201,6 +221,19 @@ The report shows the gaps, and the user decides what to fix.
 ### References
 
 A reference gives the book, the chapter title, and the section title. If the EPUB file has a page list, the reference also gives the page of the print book.
+
+### Refresh a book
+
+A change to the parser, for example a fix for code blocks or the image texts, changes the text of the sections. `npm run refresh -- <theme> <book>` gives an ingested book the new parse:
+
+1. Parse the book again with the current parser.
+2. Read the images that are not in the cache, but only in the chapters with concepts. A book can have concepts from some chapters only, after `ingest --chapters <list> --save`. Ingest reads the images of the other chapters when it ingests them.
+3. Check that each section of the new parse has its row in the database, with the same file. If one section does not match, stop and change no section.
+4. Write the section files and the word counts of the sections.
+
+The ids of the sections stay, so the concepts, the progress, the lessons, and the test answers do not change. The command lists the concepts with a lesson from the old text. "Teach it again" writes a new lesson from the new text.
+
+A parser change that splits a book into different sections makes the check fail. Then only `ingest --replace` can update the book. It removes the book row, so all sections get new ids, and the references of the old lessons break.
 
 ### Ingest test (later)
 
@@ -298,7 +331,7 @@ A test has 3 new questions on the concept:
 
 1. Recall: a multiple-choice question.
 2. Explain: a short answer of 1 to 3 sentences.
-3. Apply: a scenario or a task. If the theme has an exercise runner, the apply question of a `skill` concept is a hands-on exercise.
+3. Apply: a scenario or a task. The user writes the answer, and the grader scores it.
 
 The model writes the questions from the sections of the concept. The prompt includes the questions that the user saw before, so that each test has new questions. If the user leaves a test before the end, "Test me" opens the same test again.
 
@@ -322,7 +355,7 @@ After 3 fails on one concept, the tutor also offers "Test the prerequisites". A 
 
 ## Grader
 
-The grader scores short answers and written apply answers. The model gets the question, the key points of a good answer, and the source section. It returns a score and the key points that the answer does not have:
+The grader scores short answers and apply answers. The model gets the question, the key points of a good answer, and the source section. It returns a score and the key points that the answer does not have:
 
 - 0: wrong.
 - 1: partly correct.
@@ -331,6 +364,8 @@ The grader scores short answers and written apply answers. The model gets the qu
 Only a score of 2 counts as correct.
 
 The user can dispute a grade with a button. A disputed answer counts as correct, and the tutor records the case. Use the recorded cases to improve the grader prompt.
+
+The tutor does not run the code of the user. The model reads the code and grades it. If a grade looks wrong, the user can run the code and dispute the grade.
 
 ## Review board (phase 2)
 
@@ -382,23 +417,182 @@ The user stars the important concepts. The star has no effect on the status or o
 
 The star button is on the board line, in the header of the lesson page, and on the concept row of the concept map. One click adds the star, and one more click removes it.
 
-## Exercise runners (phase 3)
+## Ingest in the app (phase 3)
 
-An exercise runner is an optional plug-in. It runs the answer of the user and checks it with a program. The tutor has no runner by default. The user can turn on a runner for a theme on the theme screen. For example, the user can turn on the SQL runner for a theme about databases.
+Now, ingest runs only from the command line. Phase 3 moves ingest into the app, so that the user adds a book with no terminal. Phase 4 needs this step, because the book files are on the laptop and the tutor is on the server.
 
-Without a runner, the apply question is a written task, and the grader scores it.
+The `npm run ingest` command stays. The app and the command use the same ingest code.
 
-With a runner, a program decides pass or fail. Then the model explains the problems. The model does not decide pass or fail.
+### Create a theme
 
-Before the tutor gives an exercise, it runs the reference solution against the check. If the reference solution fails, the tutor discards the exercise. This step stops exercises that contain errors from the model.
+The home screen has a field to create a theme. The user types a name, and the tutor creates an empty theme. Then the theme screen opens, with the "Add book" button.
 
-These runners are planned:
+### Add a book
 
-- SQL runner: it runs the query of the user and the reference query on a sandbox database. Then it compares the result sets. For tuning tasks, it compares the `EXPLAIN ANALYZE` output. The database engine is a setting of the runner.
-- TypeScript runner: it runs `tsc --strict` and the tests that the model wrote.
-- Testing runner: the tutor supplies code, and the user writes tests for it. The tests must pass on the correct code. They must also fail on 3 to 5 hidden copies of the code with one bug each (mutants).
+The theme screen has the "Add book" button. The flow has these steps:
 
-The user writes the answer in a code box in the app. The runners use Docker containers. Thus, the tutor needs Docker only from phase 3.
+1. The user selects an EPUB file or a tagged PDF file.
+2. The browser sends the file to the server. The server keeps the file in `data/uploads/` and parses it. The parse uses no model, so it costs nothing.
+3. The app shows the parse result: the chapters, the kept text of each chapter, the parse warnings, and the number of model requests. The command line shows the same data.
+4. The user starts a preview or a full run.
+
+If the parser cannot read the file, for example an untagged PDF file, the app shows the message of the parser. Then the app offers no run.
+
+If `.env` has no model, the app shows the parse result and the message about the model. The app shows no start button.
+
+The browser sends the file as the body of one request. Thus, the server needs no package for multipart uploads. The upload route needs a body limit that fits a large PDF file.
+
+The app has two types of run:
+
+- Preview: the user selects some chapters. Ingest runs on these chapters and does not change the database. The app shows the preview concept map and the preview report.
+- Full run: ingest runs on all chapters and saves the result. The chapters of an earlier preview come from the cache and cost nothing.
+
+The command keeps the options `--save`, `--fresh`, and `--replace`. The app does not offer them.
+
+Before each run, the app shows the number of model requests, as the command does. If ingest reads the images of the book (milestone 13 in `PLAN.md`), the number includes the images.
+
+A theme can get a second book in phase 3, because the merge step exists already. Phase 5 tests the merge on real books and makes it better.
+
+### Progress
+
+Ingest of a full book takes a long time. Thus, ingest runs in the background, in the server process, as the preparation of a diagnosis does. The tutor has no job queue.
+
+- The new table `ingests` keeps each run, with its status and its progress. See "Data model".
+- The theme screen shows the run in progress: the current step, for example "Chapter 4 of 12: review", and the "Stop" button. The app asks the server for the progress every few seconds.
+- "Stop" ends the run after the current chapter. The finished chapters stay in the cache. Thus, the next run does not pay for them again.
+- Only one ingest runs at a time. Two runs on one theme can overwrite the merge result of each other.
+- If the server stops during a run, the run becomes `failed` at the next start. A new run continues from the cache.
+- A full run saves the book, its sections, and the concept map in one transaction at the end, as now. Thus, a run that fails or stops does not change the concept map.
+
+### Ingest report in the app
+
+After a run, the theme screen shows the ingest report of the book. The section "Ingest report" gives the content. The app reads the report from the `ingest-report.json` file of the book.
+
+The two actions of the report work in this way:
+
+- Add as concept: the model writes one concept for a "minor" item or for a section without a concept. Then the merge step adds the concept to the concept map.
+- Run again: ingest runs the extract and review stages again for one chapter, with no cache. Then the merge step adds the new concepts.
+
+"Run again" keeps the section rows and their IDs. It adds concepts and sources. It does not remove a concept or change its progress.
+
+The app does not offer a full replace of a saved book. A replace removes the book row, and all sections get new IDs. Then the old lessons and the old questions lose their sections.
+
+## Self-hosted release (phase 4)
+
+Phase 4 makes the tutor ready for other people to run. The tutor is free and open source on GitHub. Each user runs their own copy, with their own books and their own API key. Then the user can learn on each device, for example a phone or a second computer.
+
+The project offers no public hosted version. A hosted service stores the text of books that its users bought, and sends the text to model providers. One developer cannot carry this copyright risk.
+
+Each copy of the tutor stays an app for one user.
+
+### Where a user can run the tutor
+
+- Laptop: `npm start`, as now. This needs no Docker and no login.
+- Laptop or home server, with Tailscale: Tailscale connects the devices of the user in a private network. The phone reaches the tutor with no public address.
+- Rented server: any virtual private server (VPS) with Docker. The compose file of the tutor does the full setup. See "Compose file".
+- Server with a reverse proxy already, for example Traefik: the user runs the image behind the existing proxy.
+- Platforms with a persistent disk, for example Fly.io, Railway, or Render. Self-hosted platforms such as Coolify or Dokku can also run the compose file.
+
+### Platforms that do not fit
+
+Serverless platforms such as Vercel do not fit the tutor:
+
+- They keep no files between requests. Thus, `tutor.db` and `data/` disappear.
+- They stop each request after a time limit. Ingest runs in the background for many minutes.
+- A port to such a platform needs a hosted database, file storage, and a job queue. This is a rewrite, and the tutor stays a light build.
+
+### Container image
+
+- A `Dockerfile` builds the image with Node.js 22. The image builds the app one time. On the laptop, `npm start` builds the app at each start, as now.
+- A GitHub Action builds the image for each release, for amd64 and arm64 processors. It publishes the image to the GitHub Container Registry (`ghcr.io`).
+- `better-sqlite3` is a native module. The published image has the build for each processor type, so the user builds nothing.
+- The image has a tag for each version and the tag `latest`. To stay on one version, set its tag in `compose.yaml`.
+- The image keeps the data in `/app/data`. A volume must hold this folder. Without a volume, the data disappears at the next update.
+- The image has no `.env` file. On a server, the `.env` file is next to the compose file. On a platform, the same values go into the environment variables of the platform.
+- The route `/health` answers without a login. The health checks of the platforms use it.
+
+### Compose file
+
+The repository has a `compose.yaml` file and a `Caddyfile`. Caddy is a web server that gets HTTPS certificates automatically. The compose file starts the tutor and Caddy.
+
+To run the tutor on a rented server:
+
+1. Install Docker on the server.
+2. Point a domain name to the address of the server.
+3. Copy `compose.yaml`, `Caddyfile`, and `.env.example` to the server.
+4. Copy `.env.example` to `.env`.
+5. In `.env`, set the model, the API key, `TUTOR_PASSWORD`, and `DOMAIN`.
+6. Run `docker compose up -d`.
+
+On a server with a reverse proxy already, remove the Caddy service from the compose file. Then connect the tutor to the existing proxy. The guide gives an example for Traefik.
+
+### Platform guides
+
+Each platform guide is a short file in `docs/deploy/`. If the platform needs a config file, the guide gives it. For example, Fly.io uses `fly.toml`.
+
+Write a guide only after a test deploy on that platform. Start with the compose file, then add one platform at a time.
+
+Each guide tells the user to do these steps:
+
+- Attach a persistent disk at `/app/data`. Free plans often have no persistent disk.
+- Run exactly one instance, because SQLite works with one process on one disk.
+- Turn off the automatic stop of idle machines. A stopped machine stops an ingest run.
+- Set the timeouts of the platform so that a long lesson request and a large upload can finish.
+
+### Login
+
+On the laptop, the server listens on localhost only, so it needs no login. On a server, other people can reach the tutor. It holds the text of books that the user bought, and each model request costs money. Thus, each request needs a login.
+
+- The new value `HOST` in `.env` sets the address of the server. The default stays `127.0.0.1`.
+- The new value `TUTOR_PASSWORD` in `.env` sets the password.
+- If `HOST` is not a localhost address and `TUTOR_PASSWORD` is empty, the server does not start. It shows a clear message.
+- The login page asks for the password. After a correct password, the server sets a login cookie for 30 days. The cookie is `HttpOnly`, `Secure`, and `SameSite=Strict`.
+- The server signs the cookie with a key from the password. Thus, a new password ends all logins.
+- After a wrong password, the server waits 2 seconds before it answers. This makes a password guess slow.
+- Each route needs the cookie, except the login page, the login request, and `/health`.
+- The tutor has no user accounts and no user table.
+
+### Data on the server
+
+After the move, the server has the only copy of the data. Do not use the tutor on the laptop with a second copy of `data/`. The two copies change in different ways, and the tutor cannot join them.
+
+To move the data:
+
+1. Stop the tutor on the laptop.
+2. Copy `data/` to the volume of the server, for example with `rsync`.
+3. Start the container. The migrations run at the start, as on the laptop.
+
+SQLite uses a write-ahead log (WAL), a second file with the recent changes. Thus, a plain copy of `tutor.db` can be incomplete. Make backups in this way:
+
+- The new command `npm run backup` writes a copy of `tutor.db` with the backup function of SQLite.
+- A daily cron job on the server runs the command in the container.
+- Copy the backups and the book folders to a second place, for example the laptop.
+
+### Updates
+
+On a server with the compose file:
+
+1. Make a backup, because a new version can run a migration.
+2. Run `docker compose pull` to get the new image.
+3. Run `docker compose up -d` to start the new version.
+
+On a platform, make a backup, then deploy the new image. The guide of the platform gives the steps.
+
+### Phone use
+
+The user can open the tutor on a phone. Check each screen at phone width, and correct the layout where necessary. Check the lesson, the test, the study queue, the review board, and the concept map first.
+
+### Long requests
+
+Some requests wait for the model, for example a new lesson. A book upload can also be large. Make sure that the timeouts of the proxy let these requests finish.
+
+### Before the repository becomes public
+
+- Scan the full git history for book text, for example in test fixtures or in copied model output. `data/` is not in git, but an old commit can contain an excerpt.
+- If the scan finds book text, remove it from the history before the release.
+- Select a license. See "Open questions".
+- The README tells the user that the project ships no books. Each user brings books that they own.
+- The README tells the user that each model request sends book text to the provider that the user selects.
 
 ## Concept status
 
@@ -413,8 +607,8 @@ The user writes the answer in a code box in the app. The runners use Docker cont
 
 ## Screens
 
-- Home: the list of themes, with the progress of each theme. A field to create a new theme.
-- Theme: the books of the theme and the progress. Later: the "Add book" button, the ingest progress, and the ingest report of each book. Until then, ingest runs from the command line. The "Next to learn" card opens the lesson of the first concept in the queue.
+- Home: the list of themes, with the progress of each theme. A field to create a new theme (phase 3).
+- Theme: the books of the theme and the progress. In phase 3: the "Add book" button, the ingest progress, and the ingest report of each book. Until then, ingest runs from the command line. The "Next to learn" card opens the lesson of the first concept in the queue.
 - Map: the modules and concepts, with the status, the star, and the sources of each concept. Open a module here to mark its concepts. Undo a skip here.
 - Diagnosis: the questions one at a time. Then the results, with the "Learn" and "Skip" choices.
 - Queue: the study queue, with drag and drop and the queue buttons.
@@ -426,15 +620,14 @@ The user writes the answer in a code box in the app. The runners use Docker cont
 
 ```
  Browser (React app)
-        │  HTTP, localhost only
+        │  HTTP on localhost, or HTTPS with a login on a server (phase 4)
         ▼
  [Server] ──► [Ingest] ──► data/themes/<theme>/sections/ (Markdown)
     │
     ├──► [Tutor loop]: select, diagnose, queue, teach, test, board
     │         │
     │         ├──► [Grader]
-    │         ├──► [Model client] ──► Anthropic, OpenAI, or OpenRouter
-    │         └──► [Exercise runners] (phase 3)
+    │         └──► [Model client] ──► Anthropic, OpenAI, or OpenRouter
     │
     └──► SQLite: themes, books, concept map, progress
 ```
@@ -442,7 +635,7 @@ The user writes the answer in a code box in the app. The runners use Docker cont
 ## Data model (SQLite)
 
 ```sql
-themes           (id, slug, name, runners, created_at)
+themes           (id, slug, name, created_at)
 books            (id, theme_id, title, file, status, created_at)
 sections         (id, book_id, chapter, number, chapter_title, title, page, path, words)
 modules          (id, theme_id, position, name)
@@ -453,31 +646,36 @@ questions        (id, concept_id, purpose, kind, text, choices, answer, key_poin
 attempts         (id, question_id, answer, score, feedback, disputed, created_at)
 lessons          (id, concept_id, round, text, refs, created_at)
 lesson_messages  (id, lesson_id, role, text, created_at)
-exercises        (id, concept_id, runner, spec, status, created_at)
+ingests          (id, theme_id, file, title, mode, chapters, status, done, total, step, error, created_at)
 ```
 
-- `themes.runners`: the exercise runners that the user turned on for the theme (phase 3).
-- `books.status`: `ingesting`, `ready`, or `failed`.
+- `books.status`: `ingesting`, `ready`, or `failed`. The tutor saves a book only at the end of a full run, so a saved book is `ready`.
 - `sections.page`: the print page from the EPUB page list. For an EPUB file without a page list, it is empty.
 - `questions.purpose`: `diagnose` or `test`.
 - `questions.kind`: `choice`, `short`, or `apply`.
 - `concepts.status`: see "Concept status".
 - `concepts.queue_pos`: the position in the study queue. It is empty for a concept that is not in the queue.
 - `concepts.starred`: 1 for a concept with a star, else 0.
+- `ingests` (phase 3): one row for each ingest run in the app.
+- `ingests.mode`: `preview`, `full`, or `chapter`. The mode `chapter` is "Run again" for one chapter.
+- `ingests.chapters`: the chapters of a preview, as a JSON list. It is empty for a full run.
+- `ingests.status`: `running`, `done`, `stopped`, or `failed`.
+- `ingests.done` and `ingests.total`: the finished chapters and all chapters of the run.
+- `ingests.step`: the current step, for example "Chapter 4 of 12: review".
 
 The concept map is in SQLite, because the merge step changes it for each new book. The section text stays in Markdown files.
 
 ## Stack
 
 - TypeScript on Node.js, for the server and for the app.
-- Fastify for the HTTP server. The server listens on localhost only.
+- Fastify for the HTTP server. On the laptop, the server listens on localhost only. On a server (phase 4), it needs a login.
 - React with Vite for the app in the browser.
 - SQLite with `better-sqlite3`.
 - `jszip` to read EPUB files, and `turndown` to convert XHTML to Markdown.
 - The Anthropic TypeScript SDK and the OpenAI TypeScript SDK (software development kits), behind one interface. See "Model".
 - zod for the JSON schemas and for the check of model output.
 
-The design has no Telegram bot, no job queue, no vector database, and no cloud account. The concept map links each concept to its sections. Thus, the tutor needs no search.
+The design has no Telegram bot, no job queue, no vector database, and no cloud services. In phase 4, the tutor runs in one container. The concept map links each concept to its sections. Thus, the tutor needs no search.
 
 ## Model
 
@@ -517,10 +715,14 @@ interface Source { id: string; title: string; text: string }
 // The text marks the reference with its number, for example "[2]".
 interface Reference { number: number; sourceId: string; quote: string }
 
+// An image for the model, for example a code image of a book.
+interface ImageInput { mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp"; data: Uint8Array }
+
 interface LlmClient {
   // Return JSON that matches the schema.
+  // The images come before the prompt.
   object<T>(req: {
-    system: string; sources?: Source[]; prompt: string; schema: z.ZodType<T>;
+    system: string; sources?: Source[]; images?: ImageInput[]; prompt: string; schema: z.ZodType<T>;
   }): Promise<T>;
 
   // Return free text, with references to the sources.
@@ -542,13 +744,14 @@ The two classes do the same work in different ways:
 - Prompt cache: each client puts the sources at the start of the prompt, in the same order for each call. `AnthropicClient` adds a cache marker after the sources. OpenAI caches long prompt prefixes without a marker.
 - Reasoning level: `OpenAiClient` sends `reasoning_effort` to OpenAI. OpenRouter uses a different format, so the client sends `reasoning: { effort }` to OpenRouter.
 - Empty answers: some reasoning models on OpenRouter sometimes return an empty answer with a normal finish. The text is then only in the reasoning field. After an empty answer, `OpenAiClient` asks one more time. After a second empty answer, it shows an error with the finish reason, the token counts, and the provider. The tutor never saves an empty lesson or an empty chat answer.
+- Images: `AnthropicClient` sends each image as a base64 image block. `OpenAiClient` sends each image as a data URL. OpenRouter accepts the same format.
 - Log: each client writes one line for each model call, with the time and the result. The server and `npm run llm:check` print the lines. The tests print nothing.
 
 For each provider, the tutor checks that each quote is in the text of its source. If a quote is not in the source, the tutor removes the reference. If a lesson has no valid reference, the tutor shows a warning on the lesson.
 
 For some Claude models (Claude Fable 5.1, Claude Opus 5.5, Claude Opus 5, and Claude Sonnet 5.5), `AnthropicClient` turns on the server-side fallback. If the model refuses a request, the API runs the request again on a different Claude model.
 
-To check the model in `.env`, run `npm run llm:check`. The command sends one JSON request and one text request with references.
+To check the model in `.env`, run `npm run llm:check`. The command sends one JSON request, one text request with references, and one request with an image. If the model does not accept images, the command says so. The other parts of the tutor work without images.
 
 ### Cost
 
@@ -560,9 +763,11 @@ These numbers are rough estimates for one large model (Claude Opus 5.5) from the
 
 ## Where it runs
 
-The tutor runs on the laptop of the user. Start it with `npm start`, then open `http://localhost:3000` in a browser. Phase 1 needs no Docker.
+Until phase 4, the tutor runs on the laptop of the user. Start it with `npm start`, then open `http://localhost:3000` in a browser. The laptop needs no Docker.
 
-A Telegram client on the phone is an option for later. A move to a server is also an option for later.
+In phase 4, the user can also run the tutor on a home server, a rented server, or a platform. See "Self-hosted release (phase 4)".
+
+A Telegram client on the phone is an option for later. It needs a server, as in phase 4.
 
 ## Repository layout
 
@@ -574,9 +779,10 @@ data/                 (not in git)
     books/<book>/
       <book file>     a copy of the EPUB or PDF file
       sections/       section text in Markdown
-      work/           cached results of the extract and review stages
+      work/           cached results of the extract and review stages, and the image texts
       parse-report.json
       ingest-report.json
+  uploads/            uploaded book files that wait for ingest (phase 3)
 src/
   server/             HTTP API
   app/                React app
@@ -588,9 +794,13 @@ src/
   grader/             scores for short and apply answers
   llm/                model client for each provider, and prompts
   db/                 SQLite schema and queries
-  runners/            exercise runners (phase 3)
 .env                  the provider, the model, and the API keys (not in git)
 .env.example          the format of .env
+Dockerfile            the container image (phase 4)
+compose.yaml          the tutor and Caddy, for a rented server (phase 4)
+Caddyfile             the HTTPS setup for Caddy (phase 4)
+docs/deploy/          one guide for each platform (phase 4)
+.github/workflows/    the build of the image for each release (phase 4)
 ```
 
 Do not commit `data/`. It contains the text of books that the user bought, and the progress of the user.
@@ -601,13 +811,14 @@ Each phase ends with a tool that the user can learn with.
 
 1. Phase 1: the app, with themes and one book for each theme. Add EPUB ingest with the parse checks, the review stage, and the ingest report. Add the concept map, select and diagnose, the study queue, lessons with references, and tests with multiple-choice and short answers. Add the model client and the `.env` file.
 2. Phase 2: the review board and the stars. The user sees what they learned, tests a concept again, and keeps a list of the key concepts.
-3. Phase 3: the exercise runners and Docker.
-4. Phase 4: more books for each theme, with the merge step.
-5. Later: the ingest test, image descriptions, a Telegram client, more runners, untagged PDF files, and a move to a server.
+3. Phase 3: ingest in the app. The user creates a theme, adds a book, follows the progress, and reads the ingest report in the app. See "Ingest in the app (phase 3)".
+4. Phase 4: the self-hosted release. Each user runs their own copy on a laptop, a home server, a rented server, or a platform, with a password and HTTPS. See "Self-hosted release (phase 4)".
+5. Phase 5: more books for each theme. Test the merge step on real books and make it better.
+6. Later: the ingest test, a Telegram client, and untagged PDF files.
 
 ## Risks
 
-1. The merge step can join two different ideas, or keep two copies of one idea. Test the merge on two books of one theme early in phase 4. The map screen shows the sources of each concept, so bad merges are easy to see.
+1. The merge step can join two different ideas, or keep two copies of one idea. Test the merge on two books of one theme early in phase 5. The map screen shows the sources of each concept, so bad merges are easy to see.
 2. A guess can pass a multiple-choice question. Thus, each diagnosis and each test includes a short answer or an apply question.
 3. The model can teach content that is not in the books. The checked references and the "not from the books" mark make this content visible.
 4. Two books can split one idea into concepts of different sizes. The size rule in "Concept map" tells the model the correct size.
@@ -619,4 +830,4 @@ Each phase ends with a tool that the user can learn with.
 
 ## Open questions
 
-None at this time.
+- Phase 4: the license of the repository.

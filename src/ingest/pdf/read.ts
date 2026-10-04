@@ -1,8 +1,9 @@
 import { basename, extname } from "node:path";
-import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { getDocument, ImageKind, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFDocumentProxy, PDFPageProxy, TextItem, TextMarkedContent } from "pdfjs-dist/types/src/display/api.js";
 import { flattenXhtml, type Block } from "../core/blocks.js";
-import type { BookSource, TocEntry } from "../core/source.js";
+import { encodePng, imageId, shrink, type Pixels } from "../core/png.js";
+import type { BookImage, BookSource, TocEntry } from "../core/source.js";
 import { classify } from "../core/structure.js";
 import { countWords, normalizeSpace, sum } from "../core/text.js";
 import { pageToXhtml, plainText, type FontStyle, type OutlineAnchor, type PdfTextItem, type StructNode } from "./page.js";
@@ -152,6 +153,87 @@ export async function readPageItems(page: PDFPageProxy): Promise<PdfTextItem[]> 
   return items;
 }
 
+// An image as pdf.js gives it after it decodes the image.
+export interface PdfImage {
+  width?: number;
+  height?: number;
+  kind?: number;
+  data?: Uint8Array | Uint8ClampedArray;
+}
+
+// The pixels of a pdf.js image, or null for a format that the reader does not know.
+export function pixelsOf(image: PdfImage): Pixels | null {
+  const { width, height, kind, data } = image;
+  if (!data || !width || !height) return null;
+  const bytes = new Uint8Array(data.buffer, data.byteOffset, data.length);
+  if (kind === ImageKind.RGB_24BPP) return { width, height, channels: 3, data: bytes };
+  if (kind === ImageKind.RGBA_32BPP) return { width, height, channels: 4, data: bytes };
+  if (kind === ImageKind.GRAYSCALE_1BPP) {
+    // One bit for each pixel, and each row starts at a new byte. A set bit is white.
+    const rowBytes = Math.ceil(width / 8);
+    const gray = new Uint8Array(width * height);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) gray[y * width + x] = (bytes[y * rowBytes + (x >> 3)]! >> (7 - (x & 7))) & 1 ? 255 : 0;
+    }
+    return { width, height, channels: 1, data: gray };
+  }
+  return null;
+}
+
+// The longest wait for the decoded data of one image.
+const IMAGE_TIMEOUT_MS = 10_000;
+
+// pdf.js sends the decoded data of an image after the operator list, so wait for it.
+// pdf.js keeps an image that many pages use with the common objects. The id of such an image starts with "g_".
+function imageObject(page: PDFPageProxy, id: string): Promise<PdfImage> {
+  const objects = id.startsWith("g_") ? page.commonObjs : page.objs;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({}), IMAGE_TIMEOUT_MS);
+    objects.get(id, (data: unknown) => {
+      clearTimeout(timer);
+      resolve((data ?? {}) as PdfImage);
+    });
+  });
+}
+
+// The images that a page draws, by the marked content id around them. Each image becomes a PNG file in the images map.
+// An image without a marked content id is decoration, so the reader ignores it.
+export async function readPageImages(page: PDFPageProxy, images: Map<string, BookImage>): Promise<Map<number, string>> {
+  const operators = await page.getOperatorList();
+  const result = new Map<number, string>();
+  const stack: (number | null)[] = [];
+  for (const [i, fn] of operators.fnArray.entries()) {
+    const args = (operators.argsArray[i] ?? []) as unknown[];
+    if (fn === OPS.beginMarkedContentProps) stack.push(typeof args[1] === "number" ? args[1] : null);
+    else if (fn === OPS.beginMarkedContent) stack.push(null);
+    else if (fn === OPS.endMarkedContent) stack.pop();
+    else if (fn === OPS.paintImageXObject) {
+      const mcid = [...stack].reverse().find((id) => id !== null);
+      if (mcid === undefined || mcid === null || result.has(mcid)) continue;
+      const pixels = pixelsOf(await imageObject(page, String(args[0])));
+      if (!pixels) continue;
+      const data = encodePng(shrink(pixels));
+      const id = imageId(data);
+      images.set(id, { mediaType: "image/png", data });
+      result.set(mcid, id);
+    }
+  }
+  return result;
+}
+
+// Give each Figure the images in its marked content. A content id ends with the marked content id, for example "p4912R_mc7".
+export function attachImages(node: StructNode, images: Map<number, string>): void {
+  const contentIds = (current: StructNode): string[] =>
+    (current.children ?? []).flatMap((child) => ("role" in child ? contentIds(child) : child.type === "content" ? [child.id] : []));
+  if (node.role === "Figure") {
+    const ids = contentIds(node)
+      .map((id) => images.get(Number(/_mc(\d+)$/.exec(id)?.[1] ?? NaN)))
+      .filter((id): id is string => id !== undefined);
+    if (ids.length > 0) node.images = [...new Set(ids)];
+  }
+  for (const child of node.children ?? []) if ("role" in child) attachImages(child, images);
+}
+
 // Join a paragraph that continues on the next page: the first part has no end punctuation,
 // and the second part starts with a lower case letter.
 export function joinAcrossPages(blocks: Block[]): Block[] {
@@ -220,14 +302,17 @@ export async function readPdf(data: Uint8Array, fileName: string): Promise<BookS
     };
     const toc = outline.map(toToc);
 
-    // Read the tags and the text of each page.
+    // Read the tags, the text, and the images of each page.
     const pages: { tree: StructNode | null; items: PdfTextItem[]; footerNumber: string | null }[] = [];
+    const images = new Map<string, BookImage>();
     let pagesWithText = 0;
     let pagesWithTags = 0;
     for (let number = 1; number <= doc.numPages; number++) {
       const page = await doc.getPage(number);
       const items = await readPageItems(page);
+      const pageImages = await readPageImages(page, images);
       const tree = ((await page.getStructTree()) as StructNode | null) ?? null;
+      if (tree && pageImages.size > 0) attachImages(tree, pageImages);
       const hasText = items.some((item) => !item.artifact && item.str.trim() !== "");
       if (hasText) pagesWithText++;
       if (hasText && tree && (tree.children ?? []).length > 0) pagesWithTags++;
@@ -300,6 +385,7 @@ export async function readPdf(data: Uint8Array, fileName: string): Promise<BookS
       toc,
       landmarks: [],
       blocks,
+      images,
       notes,
     };
   } finally {

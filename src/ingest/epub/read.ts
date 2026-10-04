@@ -1,8 +1,18 @@
 import JSZip from "jszip";
 import type { Element } from "domhandler";
+import { posix } from "node:path";
 import { flattenXhtml, type Block } from "../core/blocks.js";
-import { childElements, elementsNamed, loadXml, localName, semanticTypes, type Doc } from "../core/dom.js";
-import { resolveHref, type BookSource, type Landmark, type PageTarget, type TocEntry } from "../core/source.js";
+import { childElements, descendants, elementsNamed, loadFragment, loadXml, localName, semanticTypes, type Doc } from "../core/dom.js";
+import { imageId } from "../core/png.js";
+import {
+  IMAGE_SRC,
+  resolveHref,
+  type BookImage,
+  type BookSource,
+  type Landmark,
+  type PageTarget,
+  type TocEntry,
+} from "../core/source.js";
 import { parseStylesheet, type StyleMap } from "../core/styles.js";
 import { normalizeSpace } from "../core/text.js";
 
@@ -18,6 +28,8 @@ export interface EpubPackage {
   // The CSS files of the book.
   stylesheets: string[];
   readText(path: string): Promise<string>;
+  // The bytes of a file, or null if the EPUB file does not contain it.
+  readBinary(path: string): Promise<Uint8Array | null>;
 }
 
 export async function openEpub(data: Uint8Array): Promise<EpubPackage> {
@@ -32,6 +44,7 @@ export async function openEpub(data: Uint8Array): Promise<EpubPackage> {
     if (!entry) throw new Error(`The EPUB file does not contain "${path}".`);
     return entry.async("string");
   };
+  const readBinary = async (path: string) => (await entryFor(path)?.async("uint8array")) ?? null;
 
   const container = loadXml(await readText("META-INF/container.xml"));
   const opfPath = elementsNamed(container, "rootfile")[0]?.attribs["full-path"];
@@ -113,6 +126,7 @@ export async function openEpub(data: Uint8Array): Promise<EpubPackage> {
     landmarks,
     stylesheets,
     readText,
+    readBinary,
   };
 }
 
@@ -192,6 +206,44 @@ function parseNcx(xml: string, ncxFile: string) {
   return { toc, pageList };
 }
 
+const IMAGE_TYPES: Record<string, BookImage["mediaType"]> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+};
+
+// Load the images of the blocks that the model can read. Each <img> element of a loaded image then points to the image by its id.
+// Other images, for example SVG files, keep their src.
+async function loadImages(epub: EpubPackage, blocks: Block[]): Promise<Map<string, BookImage>> {
+  const images = new Map<string, BookImage>();
+  const idOfFile = new Map<string, string | null>();
+  for (const block of blocks) {
+    if (!block.html.includes("<img")) continue;
+    const $ = loadFragment(block.html);
+    let changed = false;
+    for (const image of descendants($).filter((element) => localName(element) === "img")) {
+      const src = image.attribs.src;
+      if (!src || /^(data|https?):/i.test(src)) continue;
+      const file = resolveHref(block.file, src).file;
+      if (!idOfFile.has(file)) {
+        const mediaType = IMAGE_TYPES[posix.extname(file).toLowerCase()];
+        const data = mediaType ? await epub.readBinary(file) : null;
+        const id = mediaType && data ? imageId(data) : null;
+        if (id) images.set(id, { mediaType: mediaType!, data: data! });
+        idOfFile.set(file, id);
+      }
+      const id = idOfFile.get(file);
+      if (!id) continue;
+      image.attribs.src = `${IMAGE_SRC}${id}`;
+      changed = true;
+    }
+    if (changed) block.html = $.html();
+  }
+  return images;
+}
+
 // Read an EPUB file into blocks and a table of contents.
 export async function readEpub(data: Uint8Array): Promise<BookSource> {
   const epub = await openEpub(data);
@@ -213,6 +265,7 @@ export async function readEpub(data: Uint8Array): Promise<BookSource> {
     toc: epub.toc,
     landmarks: epub.landmarks,
     blocks,
+    images: await loadImages(epub, blocks),
     notes: [],
   };
 }

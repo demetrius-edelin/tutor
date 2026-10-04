@@ -104,4 +104,25 @@ describe("migrations", () => {
     expect(columns).not.toContain("detail");
     expect(columns).not.toContain("detail_refs");
   });
+
+  it("removes the runner data in version 7 and keeps the themes", async () => {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const Database = (await import("better-sqlite3")).default;
+    const { MIGRATIONS } = await import("../src/db/schema.js");
+    const file = join(mkdtempSync(join(tmpdir(), "tutor-db-")), "old.db");
+    const old = new Database(file);
+    for (const migration of MIGRATIONS.slice(0, 6)) old.exec(migration);
+    old.pragma("user_version = 6");
+    old.prepare("INSERT INTO themes (slug, name, runners) VALUES ('sql', 'SQL', '[\"sql\"]')").run();
+    old.close();
+
+    const db = openDb(file);
+    expect(db.prepare("SELECT slug, name FROM themes").get()).toEqual({ slug: "sql", name: "SQL" });
+    const columns = db.prepare("SELECT name FROM pragma_table_info('themes')").pluck().all();
+    expect(columns).not.toContain("runners");
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").pluck().all();
+    expect(tables).not.toContain("exercises");
+  });
 });

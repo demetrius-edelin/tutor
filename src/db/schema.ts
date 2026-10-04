@@ -175,6 +175,12 @@ ALTER TABLE lessons DROP COLUMN detail;
 ALTER TABLE lessons DROP COLUMN detail_refs;
 `;
 
-export const MIGRATIONS = [V1, V2, V3, V4, V5, V6];
+// Version 7: the tutor has no exercise runners. The grader scores each answer, so the runner data goes.
+const V7 = `
+DROP TABLE exercises;
+ALTER TABLE themes DROP COLUMN runners;
+`;
+
+export const MIGRATIONS = [V1, V2, V3, V4, V5, V6, V7];
 export const SCHEMA_VERSION = MIGRATIONS.length;
 

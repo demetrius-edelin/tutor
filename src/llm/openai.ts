@@ -128,9 +128,18 @@ export class OpenAiClient implements LlmClient {
   async object<T>(request: ObjectRequest<T>): Promise<T> {
     const schema = strictJsonSchema(request.schema);
     const prompt = request.sources?.length ? `${formatSources(request.sources)}\n\n${request.prompt}` : request.prompt;
+    // The images come before the prompt, as data URLs.
+    const images: OpenAI.Chat.Completions.ChatCompletionContentPart[] = (request.images ?? []).map((image) => ({
+      type: "image_url",
+      image_url: { url: `data:${image.mediaType};base64,${Buffer.from(image.data).toString("base64")}` },
+    }));
+    const userMessage = (text: string): ChatMessage => ({
+      role: "user",
+      content: images.length > 0 ? [...images, { type: "text", text }] : text,
+    });
     const messages: ChatMessage[] = [
       { role: "system", content: request.system },
-      { role: "user", content: this.schemaSupported ? prompt : `${prompt}\n\n${jsonInstructions(schema)}` },
+      userMessage(this.schemaSupported ? prompt : `${prompt}\n\n${jsonInstructions(schema)}`),
     ];
 
     for (let attempt = 1; attempt <= 2; attempt++) {
@@ -143,7 +152,7 @@ export class OpenAiClient implements LlmClient {
       } catch (error) {
         if (!isSchemaUnsupported(error)) throw error;
         this.schemaSupported = false;
-        messages[1] = { role: "user", content: `${prompt}\n\n${jsonInstructions(schema)}` };
+        messages[1] = userMessage(`${prompt}\n\n${jsonInstructions(schema)}`);
         text = await this.complete(messages);
       }
       let value: unknown;

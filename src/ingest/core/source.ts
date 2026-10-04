@@ -21,6 +21,15 @@ export interface Landmark extends Target {
   type: string;
 }
 
+// An image of the book, in a format that the model can read.
+export interface BookImage {
+  mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+  data: Uint8Array;
+}
+
+// The src of an <img> element for an image that the reader loaded, for example "image:3f2a9c0d1b7e4a55".
+export const IMAGE_SRC = "image:";
+
 // The result of a format reader (EPUB or PDF). The core turns it into chapters and sections.
 export interface BookSource {
   format: "epub" | "pdf";
@@ -31,6 +40,8 @@ export interface BookSource {
   landmarks: Landmark[];
   // All blocks of the book in reading order. The index of a block is its position in this list.
   blocks: Block[];
+  // The images that the reader loaded, by id. An <img> element points to its image with IMAGE_SRC and the id.
+  images: Map<string, BookImage>;
   // Problems that the reader found, for the parse report.
   notes: string[];
 }
