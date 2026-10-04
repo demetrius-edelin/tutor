@@ -1609,6 +1609,13 @@ button.button {
   font-size: var(--step--1);
 }
 
+.sources-list .text-button {
+  color: var(--graphite);
+  font-weight: 400;
+  line-height: inherit;
+  text-align: left;
+}
+
 .lesson {
   max-width: var(--measure);
   margin-top: 1.5rem;

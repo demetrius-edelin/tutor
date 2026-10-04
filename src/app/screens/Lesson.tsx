@@ -55,6 +55,7 @@ function ConceptHeader({ view, onChange }: { view: LessonView; onChange: (view: 
 function LessonStart({ view, onStarted }: { view: LessonView; onStarted: (view: LessonView) => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [section, setSection] = useState<number | null>(null);
 
   const start = async () => {
     setBusy("start");
@@ -114,8 +115,10 @@ function LessonStart({ view, onStarted }: { view: LessonView; onStarted: (view: 
       <ul className="plain-list sources-list">
         {view.sources.map((source) => (
           <li key={source.sectionId}>
-            {source.book}, section {source.ref} {source.title}
-            {source.page ? `, page ${source.page}` : ""}
+            <button className="text-button" onClick={() => setSection(source.sectionId)}>
+              {source.book}, section {source.ref} {source.title}
+              {source.page ? `, page ${source.page}` : ""}
+            </button>
           </li>
         ))}
       </ul>
@@ -139,6 +142,7 @@ function LessonStart({ view, onStarted }: { view: LessonView; onStarted: (view: 
           {error}
         </p>
       )}
+      {section !== null && <SectionPanel sectionId={section} onClose={() => setSection(null)} />}
     </>
   );
 }
