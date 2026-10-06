@@ -2,7 +2,7 @@
 
 > See also my other project, [Tapas Habit & Goal Tracker](https://tapastracker.app), a full-featured habit tracker for iPhone and Android.
 
-A personal tutor that teaches from your own books. You make a theme of study, for example "SQL", and add books to it. The tutor finds the concepts in the books and checks which concepts you know. Then it teaches the other concepts one at a time, with references to the books, and tests each one.
+A personal tutor that teaches from your own books. You make a subject of study, for example "SQL", and add books to it. The tutor finds the concepts in the books and checks which concepts you know. Then it teaches the other concepts one at a time, with references to the books, and tests each one.
 
 The tutor runs on your computer. It uses one large language model (LLM) from Anthropic, OpenAI, or OpenRouter. You select the model.
 
@@ -10,7 +10,7 @@ The tutor runs on your computer. It uses one large language model (LLM) from Ant
 
 A chat with a book answers the questions that you think of. The tutor turns your books into a course:
 
-- **Structure.** The tutor puts the concepts of a theme into modules on a concept map. It teaches them one at a time, from a study queue.
+- **Structure.** The tutor puts the concepts of a subject into modules on a concept map. It teaches them one at a time, from a study queue.
 - **All the concepts.** Ingest finds the concepts in each chapter. Then it makes sure that the concepts cover the bold and italic terms of the book.
 - **Visible progress.** The concept map and the review board show the status of each concept, for example known, learning, or mastered.
 - **Your control.** You select the concepts to test, to learn, and to skip. You also set the order of the study queue. The tutor only suggests.
@@ -25,13 +25,13 @@ cd tutor
 npm install
 cp .env.example .env                       # then set the provider, the model, and the API key
 npm run llm:check                          # optional: send 3 small test requests to the model
-npm run ingest -- SQL /path/to/book.epub   # add a book to the theme "SQL"
+npm run ingest -- SQL /path/to/book.epub   # add a book to the subject "SQL"
 npm start                                  # then open http://localhost:3000
 ```
 
 In the Windows command prompt, use `copy` instead of `cp`.
 
-The `ingest` command shows the number of model requests and asks before it starts. To start with some chapters of the book only, see [Step 3 of the usage guide](docs/usage.md#step-3-add-a-book-to-a-theme).
+The `ingest` command shows the number of model requests and asks before it starts. To start with some chapters of the book only, see [Step 3 of the usage guide](docs/usage.md#step-3-add-a-book-to-a-subject).
 
 ## How it works
 
@@ -48,14 +48,14 @@ flowchart LR
 
 1. [Set up the tutor](docs/usage.md#step-1-set-up-the-tutor). Do this one time.
 2. [Check the model and the book](docs/usage.md#step-2-check-the-model-and-the-book-optional). This step is optional. It saves no data.
-3. [Add a book to a theme](docs/usage.md#step-3-add-a-book-to-a-theme). Add the full book, or only the chapters that you want to study now. Only this step puts books into the tutor.
+3. [Add a book to a subject](docs/usage.md#step-3-add-a-book-to-a-subject). Add the full book, or only the chapters that you want to study now. Only this step puts books into the tutor.
 4. [Study in the browser](docs/usage.md#step-4-study-in-the-browser). Start the app and learn. The app shows the next action at each stage.
 
 The [usage guide](docs/usage.md) explains each step and each command.
 
 ### In the app
 
-In the app, you open a theme and go through these stages:
+In the app, you open a subject and go through these stages:
 
 - Choose: on the concept map, test, learn, or skip each concept. To do this for many concepts in one step, select their checkboxes and use the bar at the bottom of the page.
 - Diagnosis: the tutor asks 2 questions about each concept that you selected for a test. To start it, click "Test it" next to a concept, or select concepts and click "Test them".
@@ -71,13 +71,13 @@ The model writes the questions and grades the open answers. If you think that a 
 |---|---|---|---|
 | `npm run llm:check` | Optional. After a change to `.env`. | Yes, 3 small requests. | Nothing. |
 | `npm run parse -- <book>` | Optional. To check a book and to find the chapter numbers for `--chapters`. | No. | A report in `data/parse/<book>/`, for you to read. |
-| `npm run ingest -- <theme> <book> --chapters <list> --preview` | Recommended. To check the concepts of some chapters before you save them. | Yes. | Preview files in the folder of the book. The database does not change. |
-| `npm run ingest -- <theme> <book> --chapters <list>` | To study some chapters of a book. | Yes. | The folder of the book and the database. |
-| `npm run ingest -- <theme> <book>` | To study all the chapters of a book. | Yes. | The folder of the book and the database. |
+| `npm run ingest -- <subject> <book> --chapters <list> --preview` | Recommended. To check the concepts of some chapters before you save them. | Yes. | Preview files in the folder of the book. The database does not change. |
+| `npm run ingest -- <subject> <book> --chapters <list>` | To study some chapters of a book. | Yes. | The folder of the book and the database. |
+| `npm run ingest -- <subject> <book>` | To study all the chapters of a book. | Yes. | The folder of the book and the database. |
 | `npm start` | Each time that you want to study. | Yes, for the diagnosis, the lessons, and the tests. | Your progress in the database. |
-| `npm run refresh -- <theme> <book>` | Only after an update of the tutor that changes the parser. | Only for new images. | The section files of the book. |
+| `npm run refresh -- <subject> <book>` | Only after an update of the tutor that changes the parser. | Only for new images. | The section files of the book. |
 
-The folder of the book is `data/themes/<theme>/books/<book>/`. The database is `data/tutor.db`.
+The folder of the book is `data/subjects/<subject>/books/<book>/`. The database is `data/tutor.db`.
 
 ## Configuration
 
@@ -135,8 +135,8 @@ PORT=8080 npm start
 - **Do I pay two times for the chapters of a preview?** No. The tutor keeps the model results of each run, so a later run does not pay for these chapters again.
 - **How do I add more chapters later?** Run `ingest` again with `--replace`, for the full book or for a longer chapter list. See [Add more chapters later](docs/usage.md#add-more-chapters-later).
 - **Can I move or delete the book file after ingest?** Yes. Ingest keeps a copy of the book file in the folder of the book.
-- **How do I add a second book to a theme?** Run `npm run ingest` again with the same theme name. The tutor adds the concepts of the new book to the concept map of the theme.
-- **How do I make a new theme?** Run `npm run ingest` with a new theme name. The first book makes the theme.
+- **How do I add a second book to a subject?** Run `npm run ingest` again with the same subject name. The tutor adds the concepts of the new book to the concept map of the subject.
+- **How do I make a new subject?** Run `npm run ingest` with a new subject name. The first book makes the subject.
 - **Can I delete `data/parse/`?** Yes. Nothing else uses it.
 
 ## Status and roadmap

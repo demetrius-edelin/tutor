@@ -19,10 +19,10 @@ import { href } from "../router";
 const LEVEL: Record<QueueItem["level"], string> = { basic: "Basic", intermediate: "Intermediate", advanced: "Advanced" };
 
 export function Queue({ slug }: { slug: string }) {
-  const loaded = useApi<QueueView>(`/api/themes/${encodeURIComponent(slug)}/queue`);
-  const name = loaded.state === "ready" ? loaded.data.theme.name : slug;
+  const loaded = useApi<QueueView>(`/api/subjects/${encodeURIComponent(slug)}/queue`);
+  const name = loaded.state === "ready" ? loaded.data.subject.name : slug;
   return (
-    <Layout theme={{ slug, name }} tab="queue">
+    <Layout subject={{ slug, name }} tab="queue">
       {loaded.state === "loading" && <p className="quiet">Loading the study queue.</p>}
       {loaded.state === "error" && <Notice title="The study queue did not load">{<p>{loaded.message}</p>}</Notice>}
       {loaded.state === "ready" && <QueueEditor slug={slug} initial={loaded.data} />}
@@ -80,7 +80,7 @@ function QueueEditor({ slug, initial }: { slug: string; initial: QueueView }) {
   };
 
   const order = (items: QueueItem[]) =>
-    save(`/api/themes/${encodeURIComponent(slug)}/queue/order`, { conceptIds: items.map((item) => item.conceptId) }, items);
+    save(`/api/subjects/${encodeURIComponent(slug)}/queue/order`, { conceptIds: items.map((item) => item.conceptId) }, items);
 
   const move = (from: number, to: number) => {
     if (to < 0 || to >= queue.items.length || from === to) return;
@@ -111,7 +111,7 @@ function QueueEditor({ slug, initial }: { slug: string; initial: QueueView }) {
     setError(null);
     try {
       await postJson(`/api/concepts/${conceptId}/top`);
-      setQueue(await getJson<QueueView>(`/api/themes/${encodeURIComponent(slug)}/queue`));
+      setQueue(await getJson<QueueView>(`/api/subjects/${encodeURIComponent(slug)}/queue`));
     } catch (problem) {
       setError((problem as Error).message);
     }
@@ -119,13 +119,13 @@ function QueueEditor({ slug, initial }: { slug: string; initial: QueueView }) {
   };
 
   const remove = (item: QueueItem, status: "skipped" | "new") =>
-    save(`/api/themes/${encodeURIComponent(slug)}/queue/remove`, { conceptId: item.conceptId, status }, queue.items.filter((other) => other !== item));
+    save(`/api/subjects/${encodeURIComponent(slug)}/queue/remove`, { conceptId: item.conceptId, status }, queue.items.filter((other) => other !== item));
 
   if (queue.items.length === 0) {
     return (
       <>
         <Notice title="Your study queue is empty">
-          <p>The study queue holds the concepts that you choose to learn, from all modules of {queue.theme.name}.</p>
+          <p>The study queue holds the concepts that you choose to learn, from all modules of {queue.subject.name}.</p>
         </Notice>
         <AddConcepts slug={slug} notChosen={queue.notChosen} />
       </>
@@ -139,7 +139,7 @@ function QueueEditor({ slug, initial }: { slug: string; initial: QueueView }) {
     <>
       <h1>Study queue</h1>
       <p className="lead">
-        The concepts that you chose to learn, from all modules of {queue.theme.name}. The tutor teaches them one at a time, from the top of
+        The concepts that you chose to learn, from all modules of {queue.subject.name}. The tutor teaches them one at a time, from the top of
         the list.
       </p>
       <p className="queue-facts">
@@ -153,7 +153,7 @@ function QueueEditor({ slug, initial }: { slug: string; initial: QueueView }) {
         {queue.notChosen.concepts > 0 && (
           <span>
             {queue.notChosen.concepts} {queue.notChosen.concepts === 1 ? "concept" : "concepts"} not chosen yet.{" "}
-            <a href={href.theme(slug)}>Choose more</a>
+            <a href={href.subject(slug)}>Choose more</a>
           </span>
         )}
       </p>
@@ -164,14 +164,14 @@ function QueueEditor({ slug, initial }: { slug: string; initial: QueueView }) {
           hint="Prerequisites first, then the module order, then from basic to advanced."
           inUse={!queue.suggestionDiffers}
           busy={busy}
-          onUse={() => save(`/api/themes/${encodeURIComponent(slug)}/queue/suggested`, {})}
+          onUse={() => save(`/api/subjects/${encodeURIComponent(slug)}/queue/suggested`, {})}
         />
         <OrderOption
           name="book order"
           hint="The order of the sections in your books, from the first chapter to the last."
           inUse={!queue.bookOrderDiffers}
           busy={busy}
-          onUse={() => save(`/api/themes/${encodeURIComponent(slug)}/queue/book`, {})}
+          onUse={() => save(`/api/subjects/${encodeURIComponent(slug)}/queue/book`, {})}
         />
       </div>
 

@@ -8,7 +8,7 @@ import { sectionFileName, writeParsedBook } from "./core/write.js";
 import { imageCacheFile, imagesToRead, readImages, type ImageReport } from "./images.js";
 import { readBookSource } from "./parse.js";
 
-// Refresh a book that the theme has already, for example after a change to the parser: parse it again,
+// Refresh a book that the subject has already, for example after a change to the parser: parse it again,
 // read the images that are not in the cache, and write the new section files.
 // The model reads only the images of the chapters with concepts. Ingest reads the images of a chapter when it ingests the chapter.
 // The ids of the sections stay, so the concepts, the progress, the lessons, and the test answers do not change.
@@ -18,7 +18,7 @@ export interface RefreshOptions {
   llm: LlmClient;
   db: Db;
   dataDir: string;
-  themeName: string;
+  subjectName: string;
   // The folder name of the book, or its title.
   bookName: string;
   // Called before the model reads the images, with the number of images to read. Return false to stop.
@@ -27,7 +27,7 @@ export interface RefreshOptions {
 }
 
 export interface RefreshReport {
-  theme: string;
+  subject: string;
   book: string;
   // The chapters with concepts. The model reads only the images of these chapters.
   chapters: number[];
@@ -41,11 +41,11 @@ export interface RefreshReport {
 
 // The result is null if the user stops before the model reads the images.
 export async function refreshBook(options: RefreshOptions): Promise<RefreshReport | null> {
-  const { db, dataDir, themeName, bookName } = options;
+  const { db, dataDir, subjectName, bookName } = options;
   const log = options.log ?? (() => {});
-  const theme = db.prepare("SELECT id, name FROM themes WHERE slug = ?").get(slugify(themeName)) as { id: number; name: string } | undefined;
-  if (!theme) throw new Error(`The theme "${themeName}" does not exist.`);
-  const books = db.prepare("SELECT id, slug, title, file FROM books WHERE theme_id = ? ORDER BY id").all(theme.id) as {
+  const subject = db.prepare("SELECT id, name FROM subjects WHERE slug = ?").get(slugify(subjectName)) as { id: number; name: string } | undefined;
+  if (!subject) throw new Error(`The subject "${subjectName}" does not exist.`);
+  const books = db.prepare("SELECT id, slug, title, file FROM books WHERE subject_id = ? ORDER BY id").all(subject.id) as {
     id: number;
     slug: string;
     title: string;
@@ -53,7 +53,7 @@ export async function refreshBook(options: RefreshOptions): Promise<RefreshRepor
   }[];
   const row = books.find((book) => book.slug === slugify(bookName) || book.title.toLowerCase() === bookName.toLowerCase());
   if (!row) {
-    throw new Error(`The theme "${theme.name}" has no book "${bookName}". Its books: ${books.map((book) => book.slug).join(", ") || "none"}.`);
+    throw new Error(`The subject "${subject.name}" has no book "${bookName}". Its books: ${books.map((book) => book.slug).join(", ") || "none"}.`);
   }
   const bookFile = join(dataDir, row.file);
   if (!existsSync(bookFile)) throw new Error(`The copy of the book is missing: ${bookFile}`);
@@ -122,7 +122,7 @@ export async function refreshBook(options: RefreshOptions): Promise<RefreshRepor
           .pluck()
           .all(...changedIds) as string[]);
   return {
-    theme: theme.name,
+    subject: subject.name,
     book: row.title,
     chapters,
     images,

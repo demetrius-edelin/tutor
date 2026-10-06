@@ -4,7 +4,7 @@ import { normalizeQuote } from "../../llm/references.js";
 import { addModule, findModule, sameName, uniqueSlug, type ConceptMap, type MapSource } from "../map.js";
 import { LEVELS, type ConceptSource, type FoundConcept } from "./types.js";
 
-// Stage 4 of ingest: add the concepts of a chapter to the concept map of the theme.
+// Stage 4 of ingest: add the concepts of a chapter to the concept map of the subject.
 // The model sees only the names of the concepts, not the book text, so the request stays small.
 
 const MergeSchema = z.object({
@@ -21,7 +21,7 @@ const MergeSchema = z.object({
   ),
 });
 
-const MERGE_SYSTEM = `You keep the concept map of a theme of study. The map puts the concepts into modules. A module is a group of 5 to 20 related concepts, for example "Indexes" or "Window functions".
+const MERGE_SYSTEM = `You keep the concept map of a subject of study. The map puts the concepts into modules. A module is a group of 5 to 20 related concepts, for example "Indexes" or "Window functions".
 You add the new concepts of a chapter to the map.`;
 
 function mapListing(map: ConceptMap): string {

@@ -44,7 +44,7 @@ const READY: Status[] = ["known", "mastered"];
 
 interface ConceptRow {
   id: number;
-  theme_id: number;
+  subject_id: number;
   slug: string;
   name: string;
   objective: string;
@@ -53,8 +53,8 @@ interface ConceptRow {
   status: Status;
   starred: number;
   queue_pos: number | null;
-  theme_slug: string;
-  theme_name: string;
+  subject_slug: string;
+  subject_name: string;
   module_id: number;
   module_position: number;
   module_name: string;
@@ -63,9 +63,9 @@ interface ConceptRow {
 function conceptRow(db: Db, conceptId: number): ConceptRow {
   const row = db
     .prepare(
-      `SELECT c.id, c.theme_id, c.slug, c.name, c.objective, c.kind, c.level, c.status, c.starred, c.queue_pos,
-         t.slug AS theme_slug, t.name AS theme_name, m.id AS module_id, m.position AS module_position, m.name AS module_name
-       FROM concepts c JOIN themes t ON t.id = c.theme_id JOIN modules m ON m.id = c.module_id WHERE c.id = ?`,
+      `SELECT c.id, c.subject_id, c.slug, c.name, c.objective, c.kind, c.level, c.status, c.starred, c.queue_pos,
+         sub.slug AS subject_slug, sub.name AS subject_name, m.id AS module_id, m.position AS module_position, m.name AS module_name
+       FROM concepts c JOIN subjects sub ON sub.id = c.subject_id JOIN modules m ON m.id = c.module_id WHERE c.id = ?`,
     )
     .get(conceptId) as ConceptRow | undefined;
   if (!row) throw new TutorError(`The concept ${conceptId} does not exist.`, 404);
@@ -175,7 +175,7 @@ export function lessonView(db: Db, conceptId: number): LessonView {
       level: concept.level,
       status: concept.status,
       starred: concept.starred === 1,
-      theme: { slug: concept.theme_slug, name: concept.theme_name },
+      subject: { slug: concept.subject_slug, name: concept.subject_name },
       module: { id: concept.module_id, position: concept.module_position, name: concept.module_name },
     },
     lesson: lesson
@@ -273,7 +273,7 @@ export function startTest(db: Db, conceptId: number, again = false): { sessionId
   if (open !== null) return { sessionId: open, needsQuestions: false };
   const last = again ? lastTest(db, conceptId) : null;
   return db.transaction(() => {
-    const sessionId = createSession(db, concept.theme_id, concept.module_id, [conceptId], "test");
+    const sessionId = createSession(db, concept.subject_id, concept.module_id, [conceptId], "test");
     if (last === null) return { sessionId, needsQuestions: true };
     copyQuestions(db, last, sessionId);
     return { sessionId, needsQuestions: false };
@@ -288,12 +288,12 @@ export function skipTest(db: Db, conceptId: number): LessonView {
   return lessonView(db, conceptId);
 }
 
-// The first concept in the study queue of the theme, without the concept of the lesson.
+// The first concept in the study queue of the subject, without the concept of the lesson.
 function nextInQueue(db: Db, concept: ConceptRow): LessonView["next"] {
   return (
     (db
-      .prepare("SELECT id AS conceptId, name FROM concepts WHERE theme_id = ? AND status IN ('queued', 'learning') AND id <> ? ORDER BY queue_pos, id LIMIT 1")
-      .get(concept.theme_id, concept.id) as LessonView["next"] | undefined) ?? null
+      .prepare("SELECT id AS conceptId, name FROM concepts WHERE subject_id = ? AND status IN ('queued', 'learning') AND id <> ? ORDER BY queue_pos, id LIMIT 1")
+      .get(concept.subject_id, concept.id) as LessonView["next"] | undefined) ?? null
   );
 }
 
@@ -321,13 +321,13 @@ export function testPrerequisites(db: Db, conceptId: number): number {
   if (prerequisites.length === 0) throw new TutorError("This concept has no prerequisites.", 409);
   return db.transaction(() => {
     for (const id of prerequisites) db.prepare("UPDATE concepts SET status = 'to_test', queue_pos = NULL WHERE id = ?").run(id);
-    return createSession(db, concept.theme_id, null, prerequisites, "diagnose");
+    return createSession(db, concept.subject_id, null, prerequisites, "diagnose");
   })();
 }
 
-// The concept in the lesson has the status "learning". Only one concept of a theme can have it.
+// The concept in the lesson has the status "learning". Only one concept of a subject can have it.
 function markLearning(db: Db, concept: ConceptRow): void {
-  db.prepare("UPDATE concepts SET status = 'queued' WHERE theme_id = ? AND status = 'learning' AND id <> ?").run(concept.theme_id, concept.id);
+  db.prepare("UPDATE concepts SET status = 'queued' WHERE subject_id = ? AND status = 'learning' AND id <> ?").run(concept.subject_id, concept.id);
   if (concept.queue_pos === null) enqueue(db, concept.id);
   db.prepare("UPDATE concepts SET status = 'learning' WHERE id = ?").run(concept.id);
 }
@@ -418,9 +418,9 @@ export function moveToTop(db: Db, conceptId: number): void {
   db.transaction(() => {
     if (concept.queue_pos === null) enqueue(db, conceptId);
     const ids = db
-      .prepare("SELECT id FROM concepts WHERE theme_id = ? AND status IN ('queued', 'learning') ORDER BY queue_pos, id")
+      .prepare("SELECT id FROM concepts WHERE subject_id = ? AND status IN ('queued', 'learning') ORDER BY queue_pos, id")
       .pluck()
-      .all(concept.theme_id) as number[];
+      .all(concept.subject_id) as number[];
     const order = [conceptId, ...ids.filter((id) => id !== conceptId)];
     const update = db.prepare("UPDATE concepts SET queue_pos = ? WHERE id = ?");
     order.forEach((id, i) => update.run(i + 1, id));
@@ -437,7 +437,7 @@ export function starConcept(db: Db, conceptId: number, starred: unknown): { star
 
 // Test one concept, for example a prerequisite: a diagnosis session with this concept only.
 export function testConcept(db: Db, conceptId: number): number {
-  const { theme_slug: themeSlug } = conceptRow(db, conceptId);
-  const result = applyMarks(db, themeSlug, { [conceptId]: "test" });
+  const { subject_slug: subjectSlug } = conceptRow(db, conceptId);
+  const result = applyMarks(db, subjectSlug, { [conceptId]: "test" });
   return result.sessionId!;
 }

@@ -15,7 +15,7 @@ export interface IngestOptions {
   llm: LlmClient;
   db: Db;
   dataDir: string;
-  themeName: string;
+  subjectName: string;
   bookFile: string;
   book: ParsedBook;
   // Run only these chapters.
@@ -24,7 +24,7 @@ export interface IngestOptions {
   preview?: boolean;
   // Remove the cached chapter results first.
   fresh?: boolean;
-  // Replace the book if the theme has it already.
+  // Replace the book if the subject has it already.
   replace?: boolean;
   log?: (line: string) => void;
 }
@@ -44,7 +44,7 @@ export interface ChapterReport {
 }
 
 export interface IngestReport {
-  theme: string;
+  subject: string;
   book: string;
   preview: boolean;
   parseWarnings: ParseWarning[];
@@ -55,17 +55,17 @@ export interface IngestReport {
   reportFile: string;
 }
 
-export function themeDir(dataDir: string, themeName: string): string {
-  return join(dataDir, "themes", slugify(themeName));
+export function subjectDir(dataDir: string, subjectName: string): string {
+  return join(dataDir, "subjects", slugify(subjectName));
 }
 
-export function bookDir(dataDir: string, themeName: string, book: Pick<ParsedBook, "title">): string {
-  return join(themeDir(dataDir, themeName), "books", slugify(book.title));
+export function bookDir(dataDir: string, subjectName: string, book: Pick<ParsedBook, "title">): string {
+  return join(subjectDir(dataDir, subjectName), "books", slugify(book.title));
 }
 
 // The chapters with a valid cached result. They need no model request.
-export function cachedChapters(dataDir: string, themeName: string, book: ParsedBook): Set<number> {
-  const workDir = join(bookDir(dataDir, themeName, book), "work");
+export function cachedChapters(dataDir: string, subjectName: string, book: ParsedBook): Set<number> {
+  const workDir = join(bookDir(dataDir, subjectName, book), "work");
   const cached = new Set<number>();
   for (const chapter of book.chapters) {
     const file = join(workDir, `chapter-${String(chapter.number).padStart(2, "0")}.json`);
@@ -93,11 +93,11 @@ export function chapterInput(chapter: ParsedBook["chapters"][number]): ChapterIn
 }
 
 // Remove the concepts that have no source and no progress, and the modules with no concept.
-function removeOrphans(db: Db, themeId: number): void {
+function removeOrphans(db: Db, subjectId: number): void {
   db.prepare(
-    "DELETE FROM concepts WHERE theme_id = ? AND status = 'new' AND id NOT IN (SELECT concept_id FROM concept_sources)",
-  ).run(themeId);
-  db.prepare("DELETE FROM modules WHERE theme_id = ? AND id NOT IN (SELECT module_id FROM concepts)").run(themeId);
+    "DELETE FROM concepts WHERE subject_id = ? AND status = 'new' AND id NOT IN (SELECT concept_id FROM concept_sources)",
+  ).run(subjectId);
+  db.prepare("DELETE FROM modules WHERE subject_id = ? AND id NOT IN (SELECT module_id FROM concepts)").run(subjectId);
 }
 
 // Check the quotes of a cached chapter again, with the current quote check. This needs no model request.
@@ -115,22 +115,22 @@ function recheckQuotes(digest: ChapterDigest, chapter: ChapterInput): ChapterDig
 }
 
 export async function ingestBook(options: IngestOptions): Promise<IngestReport> {
-  const { llm, db, dataDir, themeName, book } = options;
+  const { llm, db, dataDir, subjectName, book } = options;
   const log = options.log ?? (() => {});
   const preview = options.preview === true;
-  const themeSlug = slugify(themeName);
+  const subjectSlug = slugify(subjectName);
   const bookSlug = slugify(book.title);
 
-  const theme = db.prepare("SELECT id FROM themes WHERE slug = ?").get(themeSlug) as { id: number } | undefined;
-  const existing = theme
-    ? (db.prepare("SELECT id FROM books WHERE theme_id = ? AND slug = ?").get(theme.id, bookSlug) as { id: number } | undefined)
+  const subject = db.prepare("SELECT id FROM subjects WHERE slug = ?").get(subjectSlug) as { id: number } | undefined;
+  const existing = subject
+    ? (db.prepare("SELECT id FROM books WHERE subject_id = ? AND slug = ?").get(subject.id, bookSlug) as { id: number } | undefined)
     : undefined;
   if (existing && !preview && !options.replace) {
-    throw new Error(`The theme "${themeName}" has the book "${book.title}" already. To ingest it again, add --replace.`);
+    throw new Error(`The subject "${subjectName}" has the book "${book.title}" already. To ingest it again, add --replace.`);
   }
 
   // Keep a copy of the book file, the section files, and the parse report.
-  const dir = bookDir(dataDir, themeName, book);
+  const dir = bookDir(dataDir, subjectName, book);
   mkdirSync(dir, { recursive: true });
   const bookCopy = join(dir, basename(options.bookFile));
   if (!existsSync(bookCopy)) copyFileSync(options.bookFile, bookCopy);
@@ -163,7 +163,7 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
   }
 
   // Stage 4: merge the chapters into the concept map, in the order of the book.
-  const map: ConceptMap = theme ? loadMap(db, theme.id) : emptyMap();
+  const map: ConceptMap = subject ? loadMap(db, subject.id) : emptyMap();
   if (existing) {
     // The replaced book must not keep its old sources in the map.
     for (const concept of map.concepts) concept.sources = concept.sources.filter((source) => !source.key.startsWith(`${bookSlug}#`));
@@ -193,14 +193,14 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
   // Save the book, its sections, and the map in one transaction. A preview saves nothing.
   if (!preview) {
     db.transaction(() => {
-      const themeId =
-        theme?.id ?? Number(db.prepare("INSERT INTO themes (slug, name) VALUES (?, ?)").run(themeSlug, themeName).lastInsertRowid);
+      const subjectId =
+        subject?.id ?? Number(db.prepare("INSERT INTO subjects (slug, name) VALUES (?, ?)").run(subjectSlug, subjectName).lastInsertRowid);
       // Removing the book also removes its sections and the sources that point to them.
       if (existing) db.prepare("DELETE FROM books WHERE id = ?").run(existing.id);
       const bookId = Number(
         db
-          .prepare("INSERT INTO books (theme_id, slug, title, file, status) VALUES (?, ?, ?, ?, 'ready')")
-          .run(themeId, bookSlug, book.title, relative(dataDir, bookCopy)).lastInsertRowid,
+          .prepare("INSERT INTO books (subject_id, slug, title, file, status) VALUES (?, ?, ?, ?, 'ready')")
+          .run(subjectId, bookSlug, book.title, relative(dataDir, bookCopy)).lastInsertRowid,
       );
       const insertSection = db.prepare(
         "INSERT INTO sections (book_id, chapter, number, chapter_title, title, page, path, words) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -213,8 +213,8 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
           sectionRows.set(`${bookSlug}#${section.id}`, Number(row.lastInsertRowid));
         }
       }
-      saveMap(db, themeId, map, sectionRows);
-      removeOrphans(db, themeId);
+      saveMap(db, subjectId, map, sectionRows);
+      removeOrphans(db, subjectId);
     })();
   }
 
@@ -235,11 +235,11 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
       ...(stats.get(digest.chapter) ?? { added: 0, joined: 0 }),
     };
   });
-  const conceptMapFile = preview ? join(dir, "concept-map.preview.md") : join(themeDir(dataDir, themeName), "concept-map.md");
-  writeFileSync(conceptMapFile, mapToMarkdown(preview ? `${themeName} (preview of ${book.title})` : themeName, map));
+  const conceptMapFile = preview ? join(dir, "concept-map.preview.md") : join(subjectDir(dataDir, subjectName), "concept-map.md");
+  writeFileSync(conceptMapFile, mapToMarkdown(preview ? `${subjectName} (preview of ${book.title})` : subjectName, map));
   const reportFile = join(dir, preview ? "ingest-report.preview.json" : "ingest-report.json");
   const report: IngestReport = {
-    theme: themeName,
+    subject: subjectName,
     book: book.title,
     preview,
     parseWarnings: book.warnings,

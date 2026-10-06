@@ -23,7 +23,7 @@ beforeEach(async () => {
   const bookFile = join(dataDir, "fixture.epub");
   writeFileSync(bookFile, data);
   db = openDb(":memory:");
-  await ingestBook({ llm: new FakeLlm(), db, dataDir, themeName: "Git", bookFile, book });
+  await ingestBook({ llm: new FakeLlm(), db, dataDir, subjectName: "Git", bookFile, book });
   llm = new FakeLlm();
   app = buildServer({ db, dataDir, llm });
   conceptIds = db.prepare("SELECT id FROM concepts ORDER BY id").pluck().all() as number[];
@@ -64,7 +64,7 @@ describe("lessons", () => {
     expect(llm.calls.at(-1)!.textRequest!.messages[0]!.content).toContain("Teach it again from a different angle");
   });
 
-  it("keeps one learning concept for each theme", async () => {
+  it("keeps one learning concept for each subject", async () => {
     await post(`/api/concepts/${conceptIds[1]}/lesson`);
     await post(`/api/concepts/${conceptIds[2]}/lesson`);
     expect(statusOf(conceptIds[1]!)).toBe("queued");
@@ -73,7 +73,7 @@ describe("lessons", () => {
 
   it("tells the model about the wrong answers of the diagnosis", async () => {
     const id = conceptIds[0]!;
-    const { body } = await post<{ sessionId: number }>(`/api/themes/git/selection`, { marks: { [id]: "test" } });
+    const { body } = await post<{ sessionId: number }>(`/api/subjects/git/selection`, { marks: { [id]: "test" } });
     await app.idle();
     const session = await get<SessionView>(`/api/sessions/${body.sessionId}`);
     await post(`/api/questions/${session.questions[1]!.id}/answer`, { answer: "No idea." });
@@ -106,7 +106,7 @@ describe("lessons", () => {
     const [prerequisite, concept] = [conceptIds[0]!, conceptIds[1]!];
     db.prepare("DELETE FROM concept_prereqs").run();
     db.prepare("INSERT INTO concept_prereqs (concept_id, prereq_id) VALUES (?, ?)").run(concept, prerequisite);
-    await post(`/api/themes/git/selection`, { marks: { [concept]: "learn" } });
+    await post(`/api/subjects/git/selection`, { marks: { [concept]: "learn" } });
     const view = await get<LessonView>(`/api/concepts/${concept}/lesson`);
     expect(view.missingPrerequisites).toEqual([expect.objectContaining({ conceptId: prerequisite, status: "new", position: null })]);
     expect(view.warning).toContain("which you do not know yet");
@@ -135,7 +135,7 @@ describe("lessons", () => {
   it("stars a concept: the lesson page and the concept map show the star, and the status stays", async () => {
     const id = conceptIds[1]!;
     const starredOnMap = async () =>
-      (await get<ConceptMapView>("/api/themes/git/map")).modules.flatMap((module) => module.concepts).find((concept) => concept.id === id)!.starred;
+      (await get<ConceptMapView>("/api/subjects/git/map")).modules.flatMap((module) => module.concepts).find((concept) => concept.id === id)!.starred;
     expect(await starredOnMap()).toBe(false);
 
     expect((await post(`/api/concepts/${id}/star`, { starred: true })).body).toEqual({ starred: true });

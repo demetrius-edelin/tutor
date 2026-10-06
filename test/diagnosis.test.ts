@@ -25,7 +25,7 @@ beforeEach(async () => {
   const bookFile = join(dataDir, "fixture.epub");
   writeFileSync(bookFile, data);
   db = openDb(":memory:");
-  await ingestBook({ llm: new FakeLlm(), db, dataDir, themeName: "Git", bookFile, book });
+  await ingestBook({ llm: new FakeLlm(), db, dataDir, subjectName: "Git", bookFile, book });
   llm = new FakeLlm();
   app = buildServer({ db, dataDir, llm });
   moduleId = db.prepare("SELECT id FROM modules LIMIT 1").pluck().get() as number;
@@ -42,7 +42,7 @@ const statusOf = (id: number) => db.prepare("SELECT status FROM concepts WHERE i
 describe("selection", () => {
   it("puts Learn concepts into the queue in order, skips Skip concepts, and tests Test concepts", async () => {
     const [a, b, c, d] = conceptIds;
-    const { body } = await post<{ sessionId: number; queued: number; skipped: number }>(`/api/themes/git/selection`, {
+    const { body } = await post<{ sessionId: number; queued: number; skipped: number }>(`/api/subjects/git/selection`, {
       marks: { [a!]: "learn", [b!]: "skip", [c!]: "test", [d!]: "learn" },
     });
     expect(body).toMatchObject({ queued: 2, skipped: 1 });
@@ -62,8 +62,8 @@ describe("selection", () => {
 
   it("changes earlier marks: later sets a concept back to new, and learn keeps the place in the queue", async () => {
     const [a, b, c] = conceptIds;
-    await post(`/api/themes/git/selection`, { marks: { [a!]: "learn", [b!]: "learn", [c!]: "skip" } });
-    const { body } = await post<{ sessionId: number | null }>(`/api/themes/git/selection`, {
+    await post(`/api/subjects/git/selection`, { marks: { [a!]: "learn", [b!]: "learn", [c!]: "skip" } });
+    const { body } = await post<{ sessionId: number | null }>(`/api/subjects/git/selection`, {
       marks: { [a!]: "later", [b!]: "learn", [c!]: "learn" },
     });
     expect(body.sessionId).toBeNull();
@@ -74,11 +74,11 @@ describe("selection", () => {
   });
 
   it("needs no session without Test marks, and needs a model for Test marks", async () => {
-    const { body } = await post<{ sessionId: number | null }>(`/api/themes/git/selection`, { marks: { [conceptIds[0]!]: "skip" } });
+    const { body } = await post<{ sessionId: number | null }>(`/api/subjects/git/selection`, { marks: { [conceptIds[0]!]: "skip" } });
     expect(body.sessionId).toBeNull();
 
     const noModel = buildServer({ db, dataDir: "data", llm: null, llmError: "No provider is selected." });
-    const response = await noModel.inject({ method: "POST", url: `/api/themes/git/selection`, payload: { marks: { [conceptIds[1]!]: "test" } } });
+    const response = await noModel.inject({ method: "POST", url: `/api/subjects/git/selection`, payload: { marks: { [conceptIds[1]!]: "test" } } });
     expect(response.statusCode).toBe(503);
     expect(response.json()).toEqual({ error: "No provider is selected." });
     expect(statusOf(conceptIds[1]!)).toBe("new");
@@ -86,27 +86,27 @@ describe("selection", () => {
 
   it("tests concepts from more modules in one session, without a module", async () => {
     const [a, b] = conceptIds;
-    const themeId = db.prepare("SELECT theme_id FROM modules WHERE id = ?").pluck().get(moduleId);
-    const other = db.prepare("INSERT INTO modules (theme_id, position, name) VALUES (?, 2, 'Other')").run(themeId).lastInsertRowid;
+    const subjectId = db.prepare("SELECT subject_id FROM modules WHERE id = ?").pluck().get(moduleId);
+    const other = db.prepare("INSERT INTO modules (subject_id, position, name) VALUES (?, 2, 'Other')").run(subjectId).lastInsertRowid;
     db.prepare("UPDATE concepts SET module_id = ? WHERE id = ?").run(other, b);
 
-    const both = await post<{ sessionId: number }>(`/api/themes/git/selection`, { marks: { [a!]: "test", [b!]: "test" } });
+    const both = await post<{ sessionId: number }>(`/api/subjects/git/selection`, { marks: { [a!]: "test", [b!]: "test" } });
     expect((await get<SessionView>(`/api/sessions/${both.body.sessionId}`)).module).toBeNull();
-    const one = await post<{ sessionId: number }>(`/api/themes/git/selection`, { marks: { [a!]: "test" } });
+    const one = await post<{ sessionId: number }>(`/api/subjects/git/selection`, { marks: { [a!]: "test" } });
     expect((await get<SessionView>(`/api/sessions/${one.body.sessionId}`)).module).toMatchObject({ id: moduleId });
     await app.idle();
   });
 
-  it("rejects a concept of another theme, and an unknown theme", async () => {
-    expect((await post(`/api/themes/git/selection`, { marks: { 99999: "test" } })).status).toBe(400);
-    expect((await post(`/api/themes/other/selection`, { marks: { [conceptIds[0]!]: "skip" } })).status).toBe(404);
+  it("rejects a concept of another subject, and an unknown subject", async () => {
+    expect((await post(`/api/subjects/git/selection`, { marks: { 99999: "test" } })).status).toBe(400);
+    expect((await post(`/api/subjects/other/selection`, { marks: { [conceptIds[0]!]: "skip" } })).status).toBe(404);
   });
 });
 
 describe("diagnosis", () => {
   async function startSession(ids: number[]): Promise<SessionView> {
     const marks = Object.fromEntries(ids.map((id) => [id, "test"]));
-    const { body } = await post<{ sessionId: number }>(`/api/themes/git/selection`, { marks });
+    const { body } = await post<{ sessionId: number }>(`/api/subjects/git/selection`, { marks });
     await app.idle();
     return get<SessionView>(`/api/sessions/${body.sessionId}`);
   }
@@ -170,7 +170,7 @@ describe("diagnosis", () => {
 
   it("reports an error of the model, and can start again", async () => {
     const failing = buildServer({ db, dataDir, llm: new FakeLlm({ questions: () => { throw new Error("The model is not available."); } }) });
-    const response = await failing.inject({ method: "POST", url: `/api/themes/git/selection`, payload: { marks: { [conceptIds[0]!]: "test" } } });
+    const response = await failing.inject({ method: "POST", url: `/api/subjects/git/selection`, payload: { marks: { [conceptIds[0]!]: "test" } } });
     const sessionId = response.json<{ sessionId: number }>().sessionId;
     await failing.idle();
     const failed = (await failing.inject({ method: "GET", url: `/api/sessions/${sessionId}` })).json<SessionView>();

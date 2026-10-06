@@ -11,10 +11,10 @@ const LEVEL: Record<ConceptView["level"], string> = { basic: "Basic", intermedia
 const KIND: Record<ConceptView["kind"], string> = { knowledge: "knowledge", skill: "skill" };
 
 export function ConceptMap({ slug, focus, focusModule }: { slug: string; focus: string | null; focusModule: number | null }) {
-  const map = useApi<ConceptMapView>(`/api/themes/${encodeURIComponent(slug)}/map`);
-  const name = map.state === "ready" ? map.data.theme.name : slug;
+  const map = useApi<ConceptMapView>(`/api/subjects/${encodeURIComponent(slug)}/map`);
+  const name = map.state === "ready" ? map.data.subject.name : slug;
   return (
-    <Layout theme={{ slug, name }} tab="map">
+    <Layout subject={{ slug, name }} tab="map">
       {map.state === "loading" && <p className="quiet">Loading the concept map.</p>}
       {map.state === "error" && <Notice title="The concept map did not load">{<p>{map.message}</p>}</Notice>}
       {map.state === "ready" && <MapView map={map.data} focus={focus} focusModule={focusModule} />}
@@ -36,9 +36,9 @@ function readShowGoals(): boolean {
 // A concept with a lesson has its own actions on the lesson page, so it has no checkbox.
 const selectable = (concept: ConceptView) => concept.status !== "learning" && concept.status !== "mastered";
 
-// Send marks for concepts from any module of the theme.
-const sendMarks = (themeSlug: string, ids: number[], mark: Mark) =>
-  postJson<SelectionResult>(`/api/themes/${encodeURIComponent(themeSlug)}/selection`, {
+// Send marks for concepts from any module of the subject.
+const sendMarks = (subjectSlug: string, ids: number[], mark: Mark) =>
+  postJson<SelectionResult>(`/api/subjects/${encodeURIComponent(subjectSlug)}/selection`, {
     marks: Object.fromEntries(ids.map((id) => [id, mark])),
   });
 
@@ -124,7 +124,7 @@ function MapView({ map: loaded, focus, focusModule }: { map: ConceptMapView; foc
     <>
       <h1>Concept map</h1>
       <p className="lead">
-        {map.modules.length} modules and {total} concepts from the books of {map.theme.name}. Open a concept to see its sources. Use
+        {map.modules.length} modules and {total} concepts from the books of {map.subject.name}. Open a concept to see its sources. Use
         the buttons next to a concept to learn it, test it, or skip it. To do this for many concepts in one step, select their
         boxes. The color of a row shows its status: yellow to learn, green known, and gray skipped.
       </p>
@@ -171,7 +171,7 @@ function MapView({ map: loaded, focus, focusModule }: { map: ConceptMapView; foc
                 <ConceptRow
                   key={concept.slug}
                   concept={concept}
-                  themeSlug={map.theme.slug}
+                  subjectSlug={map.subject.slug}
                   open={open.has(concept.slug)}
                   selected={selected.has(concept.id)}
                   showGoal={showGoals}
@@ -189,7 +189,7 @@ function MapView({ map: loaded, focus, focusModule }: { map: ConceptMapView; foc
 
       {selected.size > 0 && (
         <SelectionBar
-          themeSlug={map.theme.slug}
+          subjectSlug={map.subject.slug}
           ids={[...selected]}
           onDone={(ids, status) => {
             updateConcepts(ids, { status });
@@ -205,7 +205,7 @@ function MapView({ map: loaded, focus, focusModule }: { map: ConceptMapView; foc
 }
 
 // The bar at the bottom of the page acts on all selected concepts, from all modules.
-function SelectionBar(props: { themeSlug: string; ids: number[]; onDone: (ids: number[], status: Status) => void; onClear: () => void }) {
+function SelectionBar(props: { subjectSlug: string; ids: number[]; onDone: (ids: number[], status: Status) => void; onClear: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const count = props.ids.length;
@@ -214,7 +214,7 @@ function SelectionBar(props: { themeSlug: string; ids: number[]; onDone: (ids: n
     setBusy(true);
     setError(null);
     try {
-      const result = await sendMarks(props.themeSlug, props.ids, mark);
+      const result = await sendMarks(props.subjectSlug, props.ids, mark);
       if (result.sessionId !== null) {
         window.location.hash = href.session(result.sessionId);
         return;
@@ -258,7 +258,7 @@ function SelectionBar(props: { themeSlug: string; ids: number[]; onDone: (ids: n
 
 function ConceptRow(props: {
   concept: ConceptView;
-  themeSlug: string;
+  subjectSlug: string;
   open: boolean;
   selected: boolean;
   onToggle: () => void;
@@ -270,7 +270,7 @@ function ConceptRow(props: {
 }) {
   const { concept, open } = props;
   const detailsId = `details-${concept.slug}`;
-  const actions = useConceptActions(concept, props.themeSlug, props.onStatus);
+  const actions = useConceptActions(concept, props.subjectSlug, props.onStatus);
   return (
     <li className={`concept status-${concept.status}${props.selected ? " selected" : ""}`} id={`concept-${concept.slug}`}>
       <div className="margin">
@@ -318,7 +318,7 @@ function ConceptRow(props: {
                 {concept.prerequisites.map((prerequisite, i) => (
                   <span key={prerequisite.slug}>
                     {i > 0 && ", "}
-                    <a href={href.map(props.themeSlug, prerequisite.slug)}>{prerequisite.name}</a>
+                    <a href={href.map(props.subjectSlug, prerequisite.slug)}>{prerequisite.name}</a>
                   </span>
                 ))}
               </p>
@@ -347,7 +347,7 @@ function ConceptRow(props: {
 }
 
 // The actions on one concept. The buttons of the concept stay disabled while an action runs.
-function useConceptActions(concept: ConceptView, themeSlug: string, onStatus: (status: Status) => void) {
+function useConceptActions(concept: ConceptView, subjectSlug: string, onStatus: (status: Status) => void) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -375,7 +375,7 @@ function useConceptActions(concept: ConceptView, themeSlug: string, onStatus: (s
   // "later" sets a skipped concept back to not chosen.
   const mark = (value: "learn" | "skip" | "later", status: Status) =>
     run(async () => {
-      await sendMarks(themeSlug, [concept.id], value);
+      await sendMarks(subjectSlug, [concept.id], value);
       onStatus(status);
       return null;
     });

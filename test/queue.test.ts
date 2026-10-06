@@ -8,11 +8,11 @@ let db: Db;
 let app: TutorServer;
 const ids: Record<string, number> = {};
 
-// A theme with two modules. "joins" in module 2 is a prerequisite of "subqueries" in module 1.
+// A subject with two modules. "joins" in module 2 is a prerequisite of "subqueries" in module 1.
 function concept(slug: string, module: number, level: string, status: string, position: number | null) {
   ids[slug] = Number(
     db
-      .prepare("INSERT INTO concepts (theme_id, module_id, slug, name, objective, kind, level, status, queue_pos) VALUES (1, ?, ?, ?, 'o', 'knowledge', ?, ?, ?)")
+      .prepare("INSERT INTO concepts (subject_id, module_id, slug, name, objective, kind, level, status, queue_pos) VALUES (1, ?, ?, ?, 'o', 'knowledge', ?, ?, ?)")
       .run(module, slug, slug.replace(/-/g, " "), level, status, position).lastInsertRowid,
   );
 }
@@ -21,8 +21,8 @@ const prereq = (concept: string, needs: string) =>
 
 beforeEach(() => {
   db = openDb(":memory:");
-  db.prepare("INSERT INTO themes (slug, name) VALUES ('sql', 'SQL')").run();
-  db.prepare("INSERT INTO modules (theme_id, position, name) VALUES (1, 1, 'Queries'), (1, 2, 'Joins')").run();
+  db.prepare("INSERT INTO subjects (slug, name) VALUES ('sql', 'SQL')").run();
+  db.prepare("INSERT INTO modules (subject_id, position, name) VALUES (1, 1, 'Queries'), (1, 2, 'Joins')").run();
   concept("advanced-filter", 1, "advanced", "queued", 1);
   concept("subqueries", 1, "intermediate", "queued", 2);
   concept("joins", 2, "basic", "queued", 3);
@@ -36,7 +36,7 @@ beforeEach(() => {
   app = buildServer({ db, dataDir: "data" });
 });
 
-const get = async () => (await app.inject({ method: "GET", url: "/api/themes/sql/queue" })).json<QueueView>();
+const get = async () => (await app.inject({ method: "GET", url: "/api/subjects/sql/queue" })).json<QueueView>();
 const post = async <T>(url: string, body: unknown = {}) => {
   const response = await app.inject({ method: "POST", url, payload: body as object });
   return { status: response.statusCode, body: response.json<T>() };
@@ -69,7 +69,7 @@ describe("study queue", () => {
   });
 
   it("applies the suggested order: prerequisites first, then modules, then levels", async () => {
-    const { body } = await post<QueueView>("/api/themes/sql/queue/suggested");
+    const { body } = await post<QueueView>("/api/subjects/sql/queue/suggested");
     expect(names(body)).toEqual(["select-basics", "having", "advanced-filter", "joins", "subqueries"]);
     expect(body.items.map((item) => item.position)).toEqual([1, 2, 3, 4, 5]);
     expect(body.items.find((item) => item.slug === "subqueries")!.warning).toBeNull();
@@ -77,7 +77,7 @@ describe("study queue", () => {
   });
 
   it("applies the book order: the first source section first, and a concept with no source at the end", async () => {
-    db.prepare("INSERT INTO books (theme_id, slug, title, file) VALUES (1, 'b1', 'First Book', 'b1.epub'), (1, 'b2', 'Second Book', 'b2.epub')").run();
+    db.prepare("INSERT INTO books (subject_id, slug, title, file) VALUES (1, 'b1', 'First Book', 'b1.epub'), (1, 'b2', 'Second Book', 'b2.epub')").run();
     const section = (book: number, chapter: number, number: number) =>
       Number(
         db
@@ -95,26 +95,26 @@ describe("study queue", () => {
     source("select-basics", later);
     expect((await get()).bookOrderDiffers).toBe(true);
 
-    const { body } = await post<QueueView>("/api/themes/sql/queue/book");
+    const { body } = await post<QueueView>("/api/subjects/sql/queue/book");
     expect(names(body)).toEqual(["subqueries", "having", "joins", "select-basics", "advanced-filter"]);
     expect(body.bookOrderDiffers).toBe(false);
   });
 
   it("sets an order of the learner, and rejects an order that does not match the queue", async () => {
     const order = [ids["having"]!, ids["joins"]!, ids["subqueries"]!, ids["select-basics"]!, ids["advanced-filter"]!];
-    expect(names((await post<QueueView>("/api/themes/sql/queue/order", { conceptIds: order })).body)).toEqual([
+    expect(names((await post<QueueView>("/api/subjects/sql/queue/order", { conceptIds: order })).body)).toEqual([
       "having",
       "joins",
       "subqueries",
       "select-basics",
       "advanced-filter",
     ]);
-    expect((await post("/api/themes/sql/queue/order", { conceptIds: order.slice(1) })).status).toBe(409);
+    expect((await post("/api/subjects/sql/queue/order", { conceptIds: order.slice(1) })).status).toBe(409);
   });
 
   it("skips a concept or keeps it for later, and closes the gap in the order", async () => {
-    await post("/api/themes/sql/queue/remove", { conceptId: ids["subqueries"], status: "skipped" });
-    const { body } = await post<QueueView>("/api/themes/sql/queue/remove", { conceptId: ids["joins"], status: "new" });
+    await post("/api/subjects/sql/queue/remove", { conceptId: ids["subqueries"], status: "skipped" });
+    const { body } = await post<QueueView>("/api/subjects/sql/queue/remove", { conceptId: ids["joins"], status: "new" });
     expect(names(body)).toEqual(["advanced-filter", "select-basics", "having"]);
     expect(body.items.map((item) => item.position)).toEqual([1, 2, 3]);
     const status = (slug: string) => db.prepare("SELECT status FROM concepts WHERE id = ?").pluck().get(ids[slug]);
@@ -131,7 +131,7 @@ describe("study queue", () => {
     expect(order.sort()).toEqual([1, 2]);
   });
 
-  it("answers 404 for a theme that does not exist", async () => {
-    expect((await app.inject({ method: "GET", url: "/api/themes/none/queue" })).statusCode).toBe(404);
+  it("answers 404 for a subject that does not exist", async () => {
+    expect((await app.inject({ method: "GET", url: "/api/subjects/none/queue" })).statusCode).toBe(404);
   });
 });

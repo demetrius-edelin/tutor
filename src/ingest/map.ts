@@ -2,7 +2,7 @@ import type { Db } from "../db/index.js";
 import { slugify } from "./core/text.js";
 import type { Kind, Level } from "./stages/types.js";
 
-// The concept map of a theme, in memory. Ingest loads it from the database, adds the
+// The concept map of a subject, in memory. Ingest loads it from the database, adds the
 // concepts of a book, and saves the changes.
 
 export interface MapSource {
@@ -87,28 +87,28 @@ export function sourceDisplay(bookTitle: string, sectionId: string, sectionTitle
   return `${bookTitle}, ${sectionId} ${sectionTitle}${page ? `, p. ${page}` : ""}`;
 }
 
-export function loadMap(db: Db, themeId: number): ConceptMap {
+export function loadMap(db: Db, subjectId: number): ConceptMap {
   const modules = db
-    .prepare("SELECT id, name, position FROM modules WHERE theme_id = ? ORDER BY position")
-    .all(themeId) as { id: number; name: string; position: number }[];
+    .prepare("SELECT id, name, position FROM modules WHERE subject_id = ? ORDER BY position")
+    .all(subjectId) as { id: number; name: string; position: number }[];
   const concepts = db
     .prepare(
       `SELECT c.id, c.slug, c.name, c.objective, c.kind, c.level, m.name AS module
-       FROM concepts c JOIN modules m ON m.id = c.module_id WHERE c.theme_id = ? ORDER BY m.position, c.id`,
+       FROM concepts c JOIN modules m ON m.id = c.module_id WHERE c.subject_id = ? ORDER BY m.position, c.id`,
     )
-    .all(themeId) as ConceptRow[];
+    .all(subjectId) as ConceptRow[];
   const sources = db
     .prepare(
       `SELECT cs.concept_id, cs.quote, b.slug AS book_slug, b.title AS book_title, s.chapter, s.number, s.title, s.page
        FROM concept_sources cs JOIN sections s ON s.id = cs.section_id JOIN books b ON b.id = s.book_id
-       WHERE b.theme_id = ? ORDER BY s.chapter, s.number`,
+       WHERE b.subject_id = ? ORDER BY s.chapter, s.number`,
     )
-    .all(themeId) as SourceRow[];
+    .all(subjectId) as SourceRow[];
   const prereqs = db
     .prepare(
-      `SELECT p.concept_id, c.slug FROM concept_prereqs p JOIN concepts c ON c.id = p.prereq_id WHERE c.theme_id = ?`,
+      `SELECT p.concept_id, c.slug FROM concept_prereqs p JOIN concepts c ON c.id = p.prereq_id WHERE c.subject_id = ?`,
     )
-    .all(themeId) as { concept_id: number; slug: string }[];
+    .all(subjectId) as { concept_id: number; slug: string }[];
 
   return {
     modules: modules.map((row) => ({ name: row.name, position: row.position, rowId: row.id })),
@@ -138,23 +138,23 @@ export function loadMap(db: Db, themeId: number): ConceptMap {
 
 // Save the new modules, the new concepts, and the new sources and prerequisites.
 // sectionRows gives the database id of each section key.
-export function saveMap(db: Db, themeId: number, map: ConceptMap, sectionRows: Map<string, number>): void {
-  const insertModule = db.prepare("INSERT INTO modules (theme_id, position, name) VALUES (?, ?, ?)");
+export function saveMap(db: Db, subjectId: number, map: ConceptMap, sectionRows: Map<string, number>): void {
+  const insertModule = db.prepare("INSERT INTO modules (subject_id, position, name) VALUES (?, ?, ?)");
   const insertConcept = db.prepare(
-    "INSERT INTO concepts (theme_id, module_id, slug, name, objective, kind, level) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO concepts (subject_id, module_id, slug, name, objective, kind, level) VALUES (?, ?, ?, ?, ?, ?, ?)",
   );
   const insertSource = db.prepare("INSERT OR IGNORE INTO concept_sources (concept_id, section_id, quote) VALUES (?, ?, ?)");
   const insertPrereq = db.prepare("INSERT OR IGNORE INTO concept_prereqs (concept_id, prereq_id) VALUES (?, ?)");
 
   for (const module of map.modules) {
-    if (module.rowId === null) module.rowId = Number(insertModule.run(themeId, module.position, module.name).lastInsertRowid);
+    if (module.rowId === null) module.rowId = Number(insertModule.run(subjectId, module.position, module.name).lastInsertRowid);
   }
   for (const concept of map.concepts) {
     if (concept.rowId !== null) continue;
     const module = findModule(map, concept.module);
     if (!module?.rowId) throw new Error(`The module "${concept.module}" of the concept "${concept.name}" does not exist.`);
     concept.rowId = Number(
-      insertConcept.run(themeId, module.rowId, concept.slug, concept.name, concept.objective, concept.kind, concept.level)
+      insertConcept.run(subjectId, module.rowId, concept.slug, concept.name, concept.objective, concept.kind, concept.level)
         .lastInsertRowid,
     );
   }

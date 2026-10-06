@@ -5,7 +5,7 @@ export type Status = (typeof STATUSES)[number];
 
 export type StatusCounts = Record<Status, number>;
 
-export interface ThemeSummary {
+export interface SubjectSummary {
   slug: string;
   name: string;
   books: number;
@@ -27,14 +27,14 @@ export interface BookSummary {
   concepts: number;
 }
 
-export interface ThemeDetail extends ThemeSummary {
+export interface SubjectDetail extends SubjectSummary {
   bookList: BookSummary[];
   moduleList: ModuleSummary[];
   // The first concept of the study queue, or null if the queue is empty.
   nextToLearn: { conceptId: number; name: string; objective: string; status: Status; module: { position: number; name: string } } | null;
 }
 
-// A module of a theme, with the number of its concepts in each status.
+// A module of a subject, with the number of its concepts in each status.
 export interface ModuleSummary {
   id: number;
   position: number;
@@ -75,7 +75,7 @@ export interface ModuleView {
 }
 
 export interface ConceptMapView {
-  theme: { slug: string; name: string };
+  subject: { slug: string; name: string };
   modules: ModuleView[];
 }
 
@@ -140,7 +140,7 @@ export interface ConceptResult {
 
 export interface SessionView {
   id: number;
-  theme: { slug: string; name: string };
+  subject: { slug: string; name: string };
   module: { id: number; position: number; name: string } | null;
   kind: "diagnose" | "test";
   status: "preparing" | "ready" | "finished" | "failed";
@@ -194,13 +194,13 @@ export interface QueueItem {
 }
 
 export interface QueueView {
-  theme: { slug: string; name: string };
+  subject: { slug: string; name: string };
   items: QueueItem[];
   // True if the suggested order of the tutor is different from the current order.
   suggestionDiffers: boolean;
   // True if the order of the sections in the books is different from the current order.
   bookOrderDiffers: boolean;
-  // The concepts of the theme that the learner did not choose yet, and the number of their modules.
+  // The concepts of the subject that the learner did not choose yet, and the number of their modules.
   notChosen: { concepts: number; modules: number };
 }
 
@@ -236,7 +236,7 @@ export interface LessonView {
     level: "basic" | "intermediate" | "advanced";
     status: Status;
     starred: boolean;
-    theme: { slug: string; name: string };
+    subject: { slug: string; name: string };
     module: { id: number; position: number; name: string };
   };
   // The latest lesson about the concept, or null if the tutor did not teach it yet.

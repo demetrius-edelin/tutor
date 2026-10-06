@@ -192,7 +192,7 @@ describe("refreshBook", () => {
     const bookFile = join(dataDir, "image-book.epub");
     writeFileSync(bookFile, data);
     db = openDb(":memory:");
-    await ingestBook({ llm: new FakeLlm(), db, dataDir, themeName: "SQL", bookFile, book: await parseEpub(data) });
+    await ingestBook({ llm: new FakeLlm(), db, dataDir, subjectName: "SQL", bookFile, book: await parseEpub(data) });
     // Progress: a lesson about the concept of the first section.
     const conceptId = db.prepare("SELECT id FROM concepts WHERE name = 'First Query'").pluck().get();
     db.prepare("INSERT INTO lessons (concept_id, round, text) VALUES (?, 1, 'An old lesson.')").run(conceptId);
@@ -204,7 +204,7 @@ describe("refreshBook", () => {
     expect(fileOf("First Query")).toContain("[Image: A black screen with white text]");
 
     const llm = new FakeLlm();
-    const report = (await refreshBook({ llm, db, dataDir, themeName: "SQL", bookName: "Image Book" }))!;
+    const report = (await refreshBook({ llm, db, dataDir, subjectName: "SQL", bookName: "Image Book" }))!;
     expect(report.chapters).toEqual([1]);
     expect(report.images).toMatchObject({ total: 2, read: 2, warning: null });
     // The code of the second image cannot go into its table cell, so only the first section changes.
@@ -220,7 +220,7 @@ describe("refreshBook", () => {
 
     // A second run reads no image and changes no section.
     const again = new FakeLlm();
-    const second = (await refreshBook({ llm: again, db, dataDir, themeName: "sql", bookName: "image-book" }))!;
+    const second = (await refreshBook({ llm: again, db, dataDir, subjectName: "sql", bookName: "image-book" }))!;
     expect(again.count("image")).toBe(0);
     expect(second.changedSections).toEqual([]);
   });
@@ -228,7 +228,7 @@ describe("refreshBook", () => {
   it("reads only the images of the chapters with concepts", async () => {
     db.prepare("DELETE FROM concept_sources").run();
     const llm = new FakeLlm();
-    const report = (await refreshBook({ llm, db, dataDir, themeName: "SQL", bookName: "Image Book" }))!;
+    const report = (await refreshBook({ llm, db, dataDir, subjectName: "SQL", bookName: "Image Book" }))!;
     expect(report.chapters).toEqual([]);
     expect(report.images).toMatchObject({ total: 0, read: 0 });
     expect(llm.count("image")).toBe(0);
@@ -242,7 +242,7 @@ describe("refreshBook", () => {
       llm,
       db,
       dataDir,
-      themeName: "SQL",
+      subjectName: "SQL",
       bookName: "Image Book",
       confirm: async (images) => {
         asked.push(images);
@@ -257,10 +257,10 @@ describe("refreshBook", () => {
 
   it("changes nothing if a section does not match its row in the database", async () => {
     const first = sectionRows()[0]!.id;
-    db.prepare("UPDATE sections SET path = 'themes/sql/books/image-book/sections/other.md' WHERE id = ?").run(first);
+    db.prepare("UPDATE sections SET path = 'subjects/sql/books/image-book/sections/other.md' WHERE id = ?").run(first);
     const before = sectionRows();
     const files = before.map((row) => existsSync(join(dataDir, (row as unknown as { path: string }).path)));
-    await expect(refreshBook({ llm: new FakeLlm(), db, dataDir, themeName: "SQL", bookName: "Image Book" })).rejects.toThrow(
+    await expect(refreshBook({ llm: new FakeLlm(), db, dataDir, subjectName: "SQL", bookName: "Image Book" })).rejects.toThrow(
       /does not match the database, so the command did not change the sections\.\n- Section 1\.\d has the file/,
     );
     expect(sectionRows()).toEqual(before);
@@ -268,12 +268,12 @@ describe("refreshBook", () => {
     expect(fileOf("Results")).not.toContain("tutor read");
   });
 
-  it("names the books of the theme if the book is not there", async () => {
-    await expect(refreshBook({ llm: new FakeLlm(), db, dataDir, themeName: "SQL", bookName: "Other" })).rejects.toThrow(
-      'The theme "SQL" has no book "Other". Its books: image-book.',
+  it("names the books of the subject if the book is not there", async () => {
+    await expect(refreshBook({ llm: new FakeLlm(), db, dataDir, subjectName: "SQL", bookName: "Other" })).rejects.toThrow(
+      'The subject "SQL" has no book "Other". Its books: image-book.',
     );
-    await expect(refreshBook({ llm: new FakeLlm(), db, dataDir, themeName: "Git", bookName: "Other" })).rejects.toThrow(
-      'The theme "Git" does not exist.',
+    await expect(refreshBook({ llm: new FakeLlm(), db, dataDir, subjectName: "Git", bookName: "Other" })).rejects.toThrow(
+      'The subject "Git" does not exist.',
     );
   });
 });

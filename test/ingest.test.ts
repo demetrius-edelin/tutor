@@ -159,7 +159,7 @@ describe("ingestBook", () => {
 
   it("previews some chapters and does not change the database", async () => {
     const llm = new FakeLlm();
-    const report = await ingestBook({ llm, db, dataDir, themeName: "Git", bookFile, book, chapters: [1], preview: true });
+    const report = await ingestBook({ llm, db, dataDir, subjectName: "Git", bookFile, book, chapters: [1], preview: true });
     expect(report.preview).toBe(true);
     expect(report.chapters.map((chapter) => chapter.number)).toEqual([1]);
     expect(db.prepare("SELECT COUNT(*) FROM concepts").pluck().get()).toBe(0);
@@ -168,39 +168,39 @@ describe("ingestBook", () => {
 
   it("saves the book, the sections, and the concept map", async () => {
     const llm = new FakeLlm();
-    const report = await ingestBook({ llm, db, dataDir, themeName: "Git", bookFile, book });
+    const report = await ingestBook({ llm, db, dataDir, subjectName: "Git", bookFile, book });
     const count = (table: string) => db.prepare(`SELECT COUNT(*) FROM ${table}`).pluck().get();
     const sections = book.chapters.reduce((total, chapter) => total + chapter.sections.length, 0);
-    expect(count("themes")).toBe(1);
+    expect(count("subjects")).toBe(1);
     expect(db.prepare("SELECT status FROM books").pluck().get()).toBe("ready");
     expect(count("sections")).toBe(sections);
     expect(count("concepts")).toBe(report.concepts);
     expect(count("concept_sources")).toBe(sections);
     expect(count("concept_prereqs")).toBeGreaterThan(0);
     expect(report.concepts).toBe(sections);
-    expect(existsSync(join(dataDir, "themes", "git", "concept-map.md"))).toBe(true);
-    expect(existsSync(join(dataDir, "themes", "git", "books", "fixture-book", "fixture.epub"))).toBe(true);
+    expect(existsSync(join(dataDir, "subjects", "git", "concept-map.md"))).toBe(true);
+    expect(existsSync(join(dataDir, "subjects", "git", "books", "fixture-book", "fixture.epub"))).toBe(true);
     // Chapter 1 came from the cache of the preview: only the other chapters needed extract requests.
     expect(llm.calls.some((call) => call.request.sources?.some((source) => source.id.startsWith("1.")))).toBe(false);
   });
 
   it("saves some chapters, and keeps their concepts in a later full run", async () => {
     const otherDb = openDb(":memory:");
-    await ingestBook({ llm: new FakeLlm(), db: otherDb, dataDir, themeName: "Partial", bookFile, book, chapters: [1] });
+    await ingestBook({ llm: new FakeLlm(), db: otherDb, dataDir, subjectName: "Partial", bookFile, book, chapters: [1] });
     const firstIds = otherDb.prepare("SELECT id FROM concepts ORDER BY id").pluck().all();
     expect(firstIds.length).toBe(book.chapters[0]!.sections.length);
     expect(otherDb.prepare("SELECT COUNT(*) FROM sections").pluck().get()).toBe(
       book.chapters.reduce((total, chapter) => total + chapter.sections.length, 0),
     );
 
-    await ingestBook({ llm: new FakeLlm(), db: otherDb, dataDir, themeName: "Partial", bookFile, book, replace: true });
+    await ingestBook({ llm: new FakeLlm(), db: otherDb, dataDir, subjectName: "Partial", bookFile, book, replace: true });
     const ids = otherDb.prepare("SELECT id FROM concepts ORDER BY id").pluck().all();
     expect(ids.slice(0, firstIds.length)).toEqual(firstIds);
     expect(ids.length).toBeGreaterThan(firstIds.length);
   });
 
-  it("needs --replace for a book that the theme has already", async () => {
-    await expect(ingestBook({ llm: new FakeLlm(), db, dataDir, themeName: "Git", bookFile, book })).rejects.toThrow(/--replace/);
+  it("needs --replace for a book that the subject has already", async () => {
+    await expect(ingestBook({ llm: new FakeLlm(), db, dataDir, subjectName: "Git", bookFile, book })).rejects.toThrow(/--replace/);
   });
 
   it("replaces a book with the cached chapter results, and keeps the concepts that it finds again", async () => {
@@ -215,7 +215,7 @@ describe("ingestBook", () => {
         }),
       }),
     });
-    await ingestBook({ llm, db, dataDir, themeName: "Git", bookFile, book, replace: true });
+    await ingestBook({ llm, db, dataDir, subjectName: "Git", bookFile, book, replace: true });
     expect(llm.count("extract")).toBe(0);
     expect(llm.count("review")).toBe(0);
     const after = db.prepare("SELECT id, slug FROM concepts ORDER BY id").all();

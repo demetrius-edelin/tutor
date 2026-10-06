@@ -9,14 +9,14 @@ import { readBookSource } from "../ingest/parse.js";
 import { requestsFor } from "../ingest/stages/digest.js";
 import { createClient, LlmError } from "../llm/index.js";
 
-const USAGE = `Usage: npm run ingest -- <theme> <book.epub | book.pdf> [options]
+const USAGE = `Usage: npm run ingest -- <subject> <book.epub | book.pdf> [options]
 
 Options:
   --chapters <list>  Ingest only these chapters, for example 1-3 or 2,5.
   --preview          Do not change the database. Write the concept map to a preview file.
   --yes              Start without the question.
   --fresh            Ignore the cached chapter results.
-  --replace          Replace the book if the theme has it already.`;
+  --replace          Replace the book if the subject has it already.`;
 
 function parseChapters(value: string): number[] {
   const numbers = new Set<number>();
@@ -30,7 +30,7 @@ function parseChapters(value: string): number[] {
 
 function printReport(report: IngestReport): void {
   const n = (value: number) => value.toLocaleString("en-US");
-  console.log(`\n${report.preview ? "Preview" : "Ingest"} of "${report.book}" in the theme "${report.theme}"\n`);
+  console.log(`\n${report.preview ? "Preview" : "Ingest"} of "${report.book}" in the subject "${report.subject}"\n`);
   console.log("  #  Sections  Concepts  Added  Joined  Empty  Minor  Quote warnings  Title");
   for (const chapter of report.chapters) {
     console.log(
@@ -54,8 +54,8 @@ async function main(): Promise<void> {
   };
   const chaptersValue = valueOf("--chapters");
   const positional = args.filter((arg, i) => !arg.startsWith("--") && args[i - 1] !== "--chapters");
-  const [themeName, bookFile] = positional;
-  if (!themeName || !bookFile) {
+  const [subjectName, bookFile] = positional;
+  if (!subjectName || !bookFile) {
     console.error(USAGE);
     process.exit(1);
   }
@@ -64,14 +64,14 @@ async function main(): Promise<void> {
   const config = modelConfig();
   // The sections get the image texts from the cache now. The model reads the other images after the question.
   const source = await readBookSource(readFileSync(bookFile), bookFile);
-  const cacheFile = imageCacheFile(bookDir("data", themeName, source));
+  const cacheFile = imageCacheFile(bookDir("data", subjectName, source));
   let book = buildBook(source, { imageText: cachedImageText(cacheFile) });
   const chapters = chaptersValue ? parseChapters(chaptersValue) : undefined;
   const selected = book.chapters.filter((chapter) => !chapters || chapters.includes(chapter.number));
   if (selected.length === 0) throw new Error("No chapter matches the --chapters list.");
 
   // Cached chapters need no extract and review requests. Each chapter needs one merge request.
-  const cached = flag("--fresh") ? new Set<number>() : cachedChapters("data", themeName, book);
+  const cached = flag("--fresh") ? new Set<number>() : cachedChapters("data", subjectName, book);
   const images = imagesToRead(book, cacheFile, chapters).length;
   const requests =
     selected.filter((chapter) => !cached.has(chapter.number)).reduce((total, chapter) => total + requestsFor(chapterInput(chapter)), 0) +
@@ -79,7 +79,7 @@ async function main(): Promise<void> {
     images;
   const words = selected.reduce((total, chapter) => total + chapter.words, 0);
   console.log(`\nBook: ${book.title}`);
-  console.log(`Theme: ${themeName}`);
+  console.log(`Subject: ${subjectName}`);
   console.log(`Model: ${config.provider} ${config.model}${config.reasoning ? `, reasoning ${config.reasoning}` : ""}`);
   const mode = flag("--preview") ? " (preview, the database does not change)" : " (saved to the database)";
   console.log(`Chapters: ${selected.length} of ${book.chapters.length}${mode}`);
@@ -111,7 +111,7 @@ async function main(): Promise<void> {
       llm,
       db,
       dataDir: "data",
-      themeName,
+      subjectName,
       bookFile,
       book,
       ...(chapters ? { chapters } : {}),

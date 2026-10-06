@@ -30,7 +30,7 @@ import {
 } from "../tutor/lesson.js";
 import { applyBookOrder, applySuggestedOrder, queueView, removeFromQueue, reorderQueue } from "../tutor/queue.js";
 import type { AfterTestAction, Choice, Mark } from "./api-types.js";
-import { conceptMap, listThemes, section, themeDetail } from "./queries.js";
+import { conceptMap, listSubjects, section, subjectDetail } from "./queries.js";
 
 export interface ServerOptions {
   db: Db;
@@ -70,16 +70,16 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError }: Serve
     return reply.code(500).send({ error: message });
   });
 
-  app.get("/api/themes", async () => listThemes(db));
+  app.get("/api/subjects", async () => listSubjects(db));
 
-  app.get<{ Params: { slug: string } }>("/api/themes/:slug", async (request, reply) => {
-    const theme = themeDetail(db, request.params.slug);
-    return theme ?? reply.code(404).send({ error: `The theme "${request.params.slug}" does not exist.` });
+  app.get<{ Params: { slug: string } }>("/api/subjects/:slug", async (request, reply) => {
+    const subject = subjectDetail(db, request.params.slug);
+    return subject ?? reply.code(404).send({ error: `The subject "${request.params.slug}" does not exist.` });
   });
 
-  app.get<{ Params: { slug: string } }>("/api/themes/:slug/map", async (request, reply) => {
+  app.get<{ Params: { slug: string } }>("/api/subjects/:slug/map", async (request, reply) => {
     const map = conceptMap(db, request.params.slug);
-    return map ?? reply.code(404).send({ error: `The theme "${request.params.slug}" does not exist.` });
+    return map ?? reply.code(404).send({ error: `The subject "${request.params.slug}" does not exist.` });
   });
 
   app.get<{ Params: { id: string } }>("/api/sections/:id", async (request, reply) => {
@@ -89,8 +89,8 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError }: Serve
 
   // Diagnosis
 
-  // The marks of the learner for concepts from any module of the theme.
-  app.post<{ Params: { slug: string }; Body: { marks: Record<string, Mark> } }>("/api/themes/:slug/selection", async (request) => {
+  // The marks of the learner for concepts from any module of the subject.
+  app.post<{ Params: { slug: string }; Body: { marks: Record<string, Mark> } }>("/api/subjects/:slug/selection", async (request) => {
     const marks = request.body?.marks ?? {};
     if (Object.values(marks).includes("test")) requireModel();
     const result = applyMarks(db, request.params.slug, marks);
@@ -130,18 +130,18 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError }: Serve
 
   // Study queue
 
-  app.get<{ Params: { slug: string } }>("/api/themes/:slug/queue", async (request) => queueView(db, request.params.slug));
+  app.get<{ Params: { slug: string } }>("/api/subjects/:slug/queue", async (request) => queueView(db, request.params.slug));
 
-  app.post<{ Params: { slug: string }; Body: { conceptIds: number[] } }>("/api/themes/:slug/queue/order", async (request) =>
+  app.post<{ Params: { slug: string }; Body: { conceptIds: number[] } }>("/api/subjects/:slug/queue/order", async (request) =>
     reorderQueue(db, request.params.slug, (request.body?.conceptIds ?? []).map(Number)),
   );
 
-  app.post<{ Params: { slug: string } }>("/api/themes/:slug/queue/suggested", async (request) => applySuggestedOrder(db, request.params.slug));
+  app.post<{ Params: { slug: string } }>("/api/subjects/:slug/queue/suggested", async (request) => applySuggestedOrder(db, request.params.slug));
 
   // Put the queue in the order of the sections in the books.
-  app.post<{ Params: { slug: string } }>("/api/themes/:slug/queue/book", async (request) => applyBookOrder(db, request.params.slug));
+  app.post<{ Params: { slug: string } }>("/api/subjects/:slug/queue/book", async (request) => applyBookOrder(db, request.params.slug));
 
-  app.post<{ Params: { slug: string }; Body: { conceptId: number; status: "skipped" | "new" } }>("/api/themes/:slug/queue/remove", async (request) =>
+  app.post<{ Params: { slug: string }; Body: { conceptId: number; status: "skipped" | "new" } }>("/api/subjects/:slug/queue/remove", async (request) =>
     removeFromQueue(db, request.params.slug, Number(request.body?.conceptId), request.body?.status),
   );
 

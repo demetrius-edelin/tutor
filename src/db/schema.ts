@@ -181,6 +181,22 @@ DROP TABLE exercises;
 ALTER TABLE themes DROP COLUMN runners;
 `;
 
-export const MIGRATIONS = [V1, V2, V3, V4, V5, V6, V7];
+// Version 8: a theme is now a subject. The data folder "themes" becomes "subjects" (see openDb),
+// so the stored paths change too. SQLite updates the foreign keys and the UNIQUE constraints.
+const V8 = `
+ALTER TABLE themes RENAME TO subjects;
+ALTER TABLE books RENAME COLUMN theme_id TO subject_id;
+ALTER TABLE modules RENAME COLUMN theme_id TO subject_id;
+ALTER TABLE concepts RENAME COLUMN theme_id TO subject_id;
+ALTER TABLE sessions RENAME COLUMN theme_id TO subject_id;
+UPDATE books SET file = 'subjects/' || substr(file, 8) WHERE file LIKE 'themes/%';
+UPDATE sections SET path = 'subjects/' || substr(path, 8) WHERE path LIKE 'themes/%';
+UPDATE lessons SET refs = replace(refs, '"path":"themes/', '"path":"subjects/');
+UPDATE lesson_messages SET refs = replace(refs, '"path":"themes/', '"path":"subjects/');
+`;
+
+export const MIGRATIONS = [V1, V2, V3, V4, V5, V6, V7, V8];
+// The version that renames the "themes" data folder to "subjects".
+export const SUBJECTS_VERSION = 8;
 export const SCHEMA_VERSION = MIGRATIONS.length;
 

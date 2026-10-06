@@ -1,4 +1,4 @@
-import type { ModuleSummary, StatusCounts, ThemeDetail } from "../../server/api-types";
+import type { ModuleSummary, StatusCounts, SubjectDetail } from "../../server/api-types";
 import { useApi } from "../api";
 import { Layout, Notice } from "../components/Layout";
 import { knownShare, ProgressBar, ProgressLegend } from "../components/Progress";
@@ -10,31 +10,31 @@ const plural = (count: number, word: string) => `${n(count)} ${word}${count === 
 // A concept to test or a failed concept also needs a choice: the concept map counts it as not chosen.
 const notChosen = (progress: StatusCounts) => progress.new + progress.to_test + progress.failed;
 
-export function Theme({ slug }: { slug: string }) {
-  const theme = useApi<ThemeDetail>(`/api/themes/${encodeURIComponent(slug)}`);
-  const name = theme.state === "ready" ? theme.data.name : slug;
+export function Subject({ slug }: { slug: string }) {
+  const subject = useApi<SubjectDetail>(`/api/subjects/${encodeURIComponent(slug)}`);
+  const name = subject.state === "ready" ? subject.data.name : slug;
   return (
-    <Layout theme={{ slug, name }} tab="theme">
-      {theme.state === "loading" && <p className="quiet">Loading the theme.</p>}
-      {theme.state === "error" && <Notice title="The theme did not load">{<p>{theme.message}</p>}</Notice>}
-      {theme.state === "ready" && <ThemeView theme={theme.data} />}
+    <Layout subject={{ slug, name }} tab="subject">
+      {subject.state === "loading" && <p className="quiet">Loading the subject.</p>}
+      {subject.state === "error" && <Notice title="The subject did not load">{<p>{subject.message}</p>}</Notice>}
+      {subject.state === "ready" && <SubjectView subject={subject.data} />}
     </Layout>
   );
 }
 
-function ThemeView({ theme }: { theme: ThemeDetail }) {
-  const { done, total } = knownShare(theme.progress);
+function SubjectView({ subject }: { subject: SubjectDetail }) {
+  const { done, total } = knownShare(subject.progress);
   return (
     <>
-      <h1>{theme.name}</h1>
+      <h1>{subject.name}</h1>
       <p className="lead">
         You know {n(done)} of {plural(total, "concept")}.
-        {theme.progress.skipped > 0 &&
-          ` The ${plural(theme.progress.skipped, "skipped concept")} ${theme.progress.skipped === 1 ? "does" : "do"} not count.`} The concepts come from{" "}
-        {plural(theme.books, "book")}, in {plural(theme.modules, "module")}.
+        {subject.progress.skipped > 0 &&
+          ` The ${plural(subject.progress.skipped, "skipped concept")} ${subject.progress.skipped === 1 ? "does" : "do"} not count.`} The concepts come from{" "}
+        {plural(subject.books, "book")}, in {plural(subject.modules, "module")}.
       </p>
-      <ProgressBar progress={theme.progress} />
-      <ProgressLegend progress={theme.progress} />
+      <ProgressBar progress={subject.progress} />
+      <ProgressLegend progress={subject.progress} />
 
       <ol className="steps" aria-label="How the tutor works">
         <li>
@@ -57,17 +57,17 @@ function ThemeView({ theme }: { theme: ThemeDetail }) {
         </li>
       </ol>
 
-      <NextCard theme={theme} />
+      <NextCard subject={subject} />
 
       <section aria-labelledby="modules-heading">
         <h2 id="modules-heading">Choose what to learn</h2>
         <p className="section-intro">
           The concepts are in modules. You can choose concepts from any module, in any order. To find one concept, use the{" "}
-          <a href={href.map(theme.slug)}>concept map</a>.
+          <a href={href.map(subject.slug)}>concept map</a>.
         </p>
         <ol className="module-list">
-          {theme.moduleList.map((module) => (
-            <ModuleRow key={module.id} slug={theme.slug} module={module} />
+          {subject.moduleList.map((module) => (
+            <ModuleRow key={module.id} slug={subject.slug} module={module} />
           ))}
         </ol>
       </section>
@@ -75,7 +75,7 @@ function ThemeView({ theme }: { theme: ThemeDetail }) {
       <section aria-labelledby="books-heading">
         <h2 id="books-heading">Books</h2>
         <ol className="contents">
-          {theme.bookList.map((book) => (
+          {subject.bookList.map((book) => (
             <li key={book.slug}>
               <div className="contents-entry">
                 <span className="contents-title">{book.title}</span>
@@ -96,9 +96,9 @@ function ThemeView({ theme }: { theme: ThemeDetail }) {
 }
 
 // The first concept of the study queue, with the button that opens its lesson.
-function NextCard({ theme }: { theme: ThemeDetail }) {
-  const next = theme.nextToLearn;
-  const toLearn = theme.progress.queued + theme.progress.learning;
+function NextCard({ subject }: { subject: SubjectDetail }) {
+  const next = subject.nextToLearn;
+  const toLearn = subject.progress.queued + subject.progress.learning;
   return (
     <section className="next-card" aria-labelledby="next-heading">
       <h2 id="next-heading" className="eyebrow">
@@ -115,7 +115,7 @@ function NextCard({ theme }: { theme: ThemeDetail }) {
             <a className="button" href={href.lesson(next.conceptId)}>
               {next.status === "learning" ? "Continue the lesson" : "Start the lesson"}
             </a>
-            <a className="text-link" href={href.queue(theme.slug)}>
+            <a className="text-link" href={href.queue(subject.slug)}>
               Open the study queue ({plural(toLearn, "concept")})
             </a>
           </p>

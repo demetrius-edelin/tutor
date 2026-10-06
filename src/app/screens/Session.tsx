@@ -31,7 +31,7 @@ export function Session({ id }: { id: number }) {
 
   // A test after a lesson belongs to the study queue. A diagnosis starts on the concept map, so it belongs to the map.
   return (
-    <Layout theme={session?.theme} tab={session?.kind === "test" ? "queue" : "map"}>
+    <Layout subject={session?.subject} tab={session?.kind === "test" ? "queue" : "map"}>
       {session?.kind === "test" && session.concept && (
         <p className="back-link">
           <a href={href.lesson(session.concept.id)}>Back to the lesson: {session.concept.name}</a>
@@ -394,7 +394,7 @@ function ResultsView({ session }: { session: SessionView }) {
         }),
       );
       await postJson(`/api/sessions/${session.id}/choices`, { choices: pending });
-      window.location.hash = href.map(session.theme.slug);
+      window.location.hash = href.map(session.subject.slug);
     } catch (problem) {
       setError((problem as Error).message);
       setSending(false);
@@ -500,7 +500,7 @@ function TestResults({ session }: { session: SessionView }) {
   const after = (action: AfterTestAction) =>
     run(action, async () => {
       await postJson(`/api/concepts/${concept.id}/after-test`, { action });
-      return href.queue(session.theme.slug);
+      return href.queue(session.subject.slug);
     });
   const testPrerequisites = () =>
     run("prerequisites", async () => {
@@ -545,7 +545,7 @@ function TestResults({ session }: { session: SessionView }) {
           ) : (
             <span>Your study queue is empty.</span>
           )}
-          <a className="text-link" href={outcome.next ? href.queue(session.theme.slug) : href.map(session.theme.slug)}>
+          <a className="text-link" href={outcome.next ? href.queue(session.subject.slug) : href.map(session.subject.slug)}>
             {outcome.next ? "Open the study queue" : "Open the concept map"}
           </a>
         </p>

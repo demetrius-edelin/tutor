@@ -10,11 +10,11 @@ import {
   type SectionView,
   type Status,
   type StatusCounts,
-  type ThemeDetail,
-  type ThemeSummary,
+  type SubjectDetail,
+  type SubjectSummary,
 } from "./api-types.js";
 
-interface ThemeRow {
+interface SubjectRow {
   id: number;
   slug: string;
   name: string;
@@ -22,9 +22,9 @@ interface ThemeRow {
 
 const noProgress = () => Object.fromEntries(STATUSES.map((status) => [status, 0])) as StatusCounts;
 
-function progress(db: Db, themeId: number): StatusCounts {
+function progress(db: Db, subjectId: number): StatusCounts {
   const counts = noProgress();
-  const rows = db.prepare("SELECT status, COUNT(*) AS n FROM concepts WHERE theme_id = ? GROUP BY status").all(themeId) as {
+  const rows = db.prepare("SELECT status, COUNT(*) AS n FROM concepts WHERE subject_id = ? GROUP BY status").all(subjectId) as {
     status: Status;
     n: number;
   }[];
@@ -32,30 +32,30 @@ function progress(db: Db, themeId: number): StatusCounts {
   return counts;
 }
 
-function summary(db: Db, theme: ThemeRow): ThemeSummary {
-  const count = (sql: string) => db.prepare(sql).pluck().get(theme.id) as number;
+function summary(db: Db, subject: SubjectRow): SubjectSummary {
+  const count = (sql: string) => db.prepare(sql).pluck().get(subject.id) as number;
   return {
-    slug: theme.slug,
-    name: theme.name,
-    books: count("SELECT COUNT(*) FROM books WHERE theme_id = ?"),
-    modules: count("SELECT COUNT(*) FROM modules WHERE theme_id = ?"),
-    concepts: count("SELECT COUNT(*) FROM concepts WHERE theme_id = ?"),
-    progress: progress(db, theme.id),
+    slug: subject.slug,
+    name: subject.name,
+    books: count("SELECT COUNT(*) FROM books WHERE subject_id = ?"),
+    modules: count("SELECT COUNT(*) FROM modules WHERE subject_id = ?"),
+    concepts: count("SELECT COUNT(*) FROM concepts WHERE subject_id = ?"),
+    progress: progress(db, subject.id),
   };
 }
 
-export function listThemes(db: Db): ThemeSummary[] {
-  const themes = db.prepare("SELECT id, slug, name FROM themes ORDER BY name").all() as ThemeRow[];
-  return themes.map((theme) => summary(db, theme));
+export function listSubjects(db: Db): SubjectSummary[] {
+  const subjects = db.prepare("SELECT id, slug, name FROM subjects ORDER BY name").all() as SubjectRow[];
+  return subjects.map((subject) => summary(db, subject));
 }
 
-function findTheme(db: Db, slug: string): ThemeRow | undefined {
-  return db.prepare("SELECT id, slug, name FROM themes WHERE slug = ?").get(slug) as ThemeRow | undefined;
+function findSubject(db: Db, slug: string): SubjectRow | undefined {
+  return db.prepare("SELECT id, slug, name FROM subjects WHERE slug = ?").get(slug) as SubjectRow | undefined;
 }
 
-export function themeDetail(db: Db, slug: string): ThemeDetail | undefined {
-  const theme = findTheme(db, slug);
-  if (!theme) return undefined;
+export function subjectDetail(db: Db, slug: string): SubjectDetail | undefined {
+  const subject = findSubject(db, slug);
+  if (!subject) return undefined;
   const books = db
     .prepare(
       `SELECT b.slug, b.title, b.file,
@@ -64,22 +64,22 @@ export function themeDetail(db: Db, slug: string): ThemeDetail | undefined {
          (SELECT COUNT(*) FROM sections s WHERE s.book_id = b.id) AS sections,
          (SELECT COALESCE(SUM(s.words), 0) FROM sections s WHERE s.book_id = b.id) AS words,
          (SELECT COUNT(DISTINCT cs.concept_id) FROM concept_sources cs JOIN sections s ON s.id = cs.section_id WHERE s.book_id = b.id) AS concepts
-       FROM books b WHERE b.theme_id = ? ORDER BY b.created_at, b.id`,
+       FROM books b WHERE b.subject_id = ? ORDER BY b.created_at, b.id`,
     )
-    .all(theme.id) as (Omit<BookSummary, "format"> & { file: string })[];
+    .all(subject.id) as (Omit<BookSummary, "format"> & { file: string })[];
   const next = db
     .prepare(
       `SELECT c.id AS conceptId, c.name, c.objective, c.status, m.position AS modulePosition, m.name AS moduleName
        FROM concepts c JOIN modules m ON m.id = c.module_id
-       WHERE c.theme_id = ? AND c.status IN ('queued', 'learning') ORDER BY c.queue_pos, c.id LIMIT 1`,
+       WHERE c.subject_id = ? AND c.status IN ('queued', 'learning') ORDER BY c.queue_pos, c.id LIMIT 1`,
     )
-    .get(theme.id) as
+    .get(subject.id) as
     | { conceptId: number; name: string; objective: string; status: Status; modulePosition: number; moduleName: string }
     | undefined;
   return {
-    ...summary(db, theme),
+    ...summary(db, subject),
     bookList: books.map(({ file, ...book }) => ({ ...book, format: extname(file).toLowerCase() === ".pdf" ? "pdf" : "epub" })),
-    moduleList: moduleList(db, theme.id),
+    moduleList: moduleList(db, subject.id),
     nextToLearn: next
       ? {
           conceptId: next.conceptId,
@@ -92,15 +92,15 @@ export function themeDetail(db: Db, slug: string): ThemeDetail | undefined {
   };
 }
 
-function moduleList(db: Db, themeId: number): ModuleSummary[] {
-  const modules = db.prepare("SELECT id, position, name FROM modules WHERE theme_id = ? ORDER BY position").all(themeId) as {
+function moduleList(db: Db, subjectId: number): ModuleSummary[] {
+  const modules = db.prepare("SELECT id, position, name FROM modules WHERE subject_id = ? ORDER BY position").all(subjectId) as {
     id: number;
     position: number;
     name: string;
   }[];
   const rows = db
-    .prepare("SELECT module_id, status, COUNT(*) AS n FROM concepts WHERE theme_id = ? GROUP BY module_id, status")
-    .all(themeId) as { module_id: number; status: Status; n: number }[];
+    .prepare("SELECT module_id, status, COUNT(*) AS n FROM concepts WHERE subject_id = ? GROUP BY module_id, status")
+    .all(subjectId) as { module_id: number; status: Status; n: number }[];
   return modules.map((module) => {
     const counts = noProgress();
     for (const row of rows) if (row.module_id === module.id) counts[row.status] = row.n;
@@ -109,34 +109,34 @@ function moduleList(db: Db, themeId: number): ModuleSummary[] {
 }
 
 export function conceptMap(db: Db, slug: string): ConceptMapView | undefined {
-  const theme = findTheme(db, slug);
-  if (!theme) return undefined;
-  const modules = db.prepare("SELECT id, position, name FROM modules WHERE theme_id = ? ORDER BY position").all(theme.id) as {
+  const subject = findSubject(db, slug);
+  if (!subject) return undefined;
+  const modules = db.prepare("SELECT id, position, name FROM modules WHERE subject_id = ? ORDER BY position").all(subject.id) as {
     id: number;
     position: number;
     name: string;
   }[];
   const concepts = db
     .prepare(
-      "SELECT id, module_id, slug, name, objective, kind, level, status, starred FROM concepts WHERE theme_id = ? ORDER BY id",
+      "SELECT id, module_id, slug, name, objective, kind, level, status, starred FROM concepts WHERE subject_id = ? ORDER BY id",
     )
-    .all(theme.id) as (Omit<ConceptView, "prerequisites" | "sources" | "starred"> & { module_id: number; starred: number })[];
+    .all(subject.id) as (Omit<ConceptView, "prerequisites" | "sources" | "starred"> & { module_id: number; starred: number })[];
   const prerequisites = db
     .prepare(
       `SELECT p.concept_id, c.slug, c.name FROM concept_prereqs p JOIN concepts c ON c.id = p.prereq_id
-       WHERE c.theme_id = ? ORDER BY c.id`,
+       WHERE c.subject_id = ? ORDER BY c.id`,
     )
-    .all(theme.id) as { concept_id: number; slug: string; name: string }[];
+    .all(subject.id) as { concept_id: number; slug: string; name: string }[];
   const sources = db
     .prepare(
       `SELECT cs.concept_id, s.id AS sectionId, s.chapter, s.number, s.title, s.page, cs.quote, b.title AS book
        FROM concept_sources cs JOIN sections s ON s.id = cs.section_id JOIN books b ON b.id = s.book_id
-       WHERE b.theme_id = ? ORDER BY b.id, s.chapter, s.number`,
+       WHERE b.subject_id = ? ORDER BY b.id, s.chapter, s.number`,
     )
-    .all(theme.id) as { concept_id: number; sectionId: number; chapter: number; number: number; title: string; page: string | null; quote: string; book: string }[];
+    .all(subject.id) as { concept_id: number; sectionId: number; chapter: number; number: number; title: string; page: string | null; quote: string; book: string }[];
 
   return {
-    theme: { slug: theme.slug, name: theme.name },
+    subject: { slug: subject.slug, name: subject.name },
     modules: modules.map((module) => ({
       ...module,
       concepts: concepts

@@ -23,7 +23,7 @@ export function Lesson({ conceptId }: { conceptId: number }) {
   }, [conceptId]);
 
   return (
-    <Layout theme={view?.concept.theme} tab="queue">
+    <Layout subject={view?.concept.subject} tab="queue">
       {!view && !error && <p className="quiet">Loading the lesson.</p>}
       {!view && error && <Notice title="The lesson did not load">{<p>{error}</p>}</Notice>}
       {view && !view.lesson && <LessonStart view={view} onStarted={setView} />}
@@ -97,9 +97,9 @@ function LessonStart({ view, onStarted }: { view: LessonView; onStarted: (view: 
   const takeOut = async (status: "new" | "skipped") => {
     setBusy(status);
     setError(null);
-    const slug = view.concept.theme.slug;
+    const slug = view.concept.subject.slug;
     try {
-      const queue = await postJson<QueueView>(`/api/themes/${encodeURIComponent(slug)}/queue/remove`, { conceptId: view.concept.id, status });
+      const queue = await postJson<QueueView>(`/api/subjects/${encodeURIComponent(slug)}/queue/remove`, { conceptId: view.concept.id, status });
       const next = queue.items[0];
       window.location.hash = next ? href.lesson(next.conceptId) : href.queue(slug);
     } catch (problem) {
@@ -359,7 +359,7 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
               "Teach it again"
             )}
           </button>
-          <a className="text-link" href={href.queue(view.concept.theme.slug)}>
+          <a className="text-link" href={href.queue(view.concept.subject.slug)}>
             Back to the study queue
           </a>
         </p>

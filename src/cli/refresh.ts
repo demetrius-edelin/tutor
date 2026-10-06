@@ -4,21 +4,21 @@ import { openDb } from "../db/index.js";
 import { refreshBook } from "../ingest/refresh.js";
 import { createClient, LlmError } from "../llm/index.js";
 
-const USAGE = `Usage: npm run refresh -- <theme> <book> [--yes]
+const USAGE = `Usage: npm run refresh -- <subject> <book> [--yes]
 
-Parse a book of the theme again with the current parser, for example after an update of the tutor. The model reads
+Parse a book of the subject again with the current parser, for example after an update of the tutor. The model reads
 the images of the chapters with concepts that are not in the cache. The command writes only the section files and
 the word counts of the sections. The concepts and your progress do not change.
 
-<book> is the folder name of the book in data/themes/<theme>/books/, or the title of the book.
+<book> is the folder name of the book in data/subjects/<subject>/books/, or the title of the book.
 
 Options:
   --yes  Start without the question.`;
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const [themeName, bookName] = args.filter((arg) => !arg.startsWith("--"));
-  if (!themeName || !bookName) {
+  const [subjectName, bookName] = args.filter((arg) => !arg.startsWith("--"));
+  if (!subjectName || !bookName) {
     console.error(USAGE);
     process.exit(1);
   }
@@ -31,7 +31,7 @@ async function main(): Promise<void> {
       llm: createClient(config),
       db,
       dataDir: "data",
-      themeName,
+      subjectName,
       bookName,
       confirm: async (images) => {
         console.log(`\nModel: ${config.provider} ${config.model}${config.reasoning ? `, reasoning ${config.reasoning}` : ""}`);
@@ -49,7 +49,7 @@ async function main(): Promise<void> {
       return;
     }
     const { images } = report;
-    console.log(`\nRefresh of "${report.book}" in the theme "${report.theme}"\n`);
+    console.log(`\nRefresh of "${report.book}" in the subject "${report.subject}"\n`);
     const chapters = report.chapters.length > 0 ? report.chapters.join(", ") : "none";
     console.log(`Chapters with concepts: ${chapters}. The model reads only the images of these chapters.`);
     console.log(`Images: ${images.total} in these chapters, ${images.cached} from the cache, ${images.read} read now.`);

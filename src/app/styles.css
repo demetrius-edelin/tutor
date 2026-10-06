@@ -204,15 +204,15 @@ p {
   mask: url("/logo.svg") center / contain no-repeat;
 }
 
-/* The tabs of a theme. Each tab has a large area to click. */
-.theme-nav {
+/* The tabs of a subject. Each tab has a large area to click. */
+.subject-nav {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.25rem 1rem;
 }
 
-.theme-name {
+.subject-name {
   padding-left: 1.5rem;
   border-left: 1px solid var(--rule);
   font-weight: 600;
@@ -275,7 +275,7 @@ p {
   line-height: 1.5;
 }
 
-/* Lists of themes and books read as the contents page of a book, with dotted leaders. */
+/* Lists of subjects and books read as the contents page of a book, with dotted leaders. */
 
 .contents {
   max-width: var(--measure);
@@ -1128,7 +1128,7 @@ button.button {
   }
 }
 
-/* Overview of a theme */
+/* Overview of a subject */
 
 .steps {
   display: grid;
@@ -1860,7 +1860,7 @@ button.button {
   .topbar {
     gap: 0.25rem 1rem;
   }
-  .theme-name {
+  .subject-name {
     padding-left: 0;
     border-left: 0;
   }

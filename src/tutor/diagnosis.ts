@@ -35,10 +35,10 @@ export function readSection(dataDir: string, path: string): string {
   return readFileSync(file, "utf8");
 }
 
-// Put a concept at the end of the study queue of its theme.
+// Put a concept at the end of the study queue of its subject.
 export function enqueue(db: Db, conceptId: number): void {
-  const { theme_id: themeId } = db.prepare("SELECT theme_id FROM concepts WHERE id = ?").get(conceptId) as { theme_id: number };
-  const last = db.prepare("SELECT COALESCE(MAX(queue_pos), 0) FROM concepts WHERE theme_id = ?").pluck().get(themeId) as number;
+  const { subject_id: subjectId } = db.prepare("SELECT subject_id FROM concepts WHERE id = ?").get(conceptId) as { subject_id: number };
+  const last = db.prepare("SELECT COALESCE(MAX(queue_pos), 0) FROM concepts WHERE subject_id = ?").pluck().get(subjectId) as number;
   db.prepare("UPDATE concepts SET status = 'queued', queue_pos = ? WHERE id = ?").run(last + 1, conceptId);
 }
 
@@ -47,31 +47,31 @@ function setStatus(db: Db, conceptId: number, status: Status): void {
 }
 
 // A new session with its concepts. The questions come later, from prepareSession.
-export function createSession(db: Db, themeId: number, moduleId: number | null, conceptIds: number[], kind: "diagnose" | "test"): number {
+export function createSession(db: Db, subjectId: number, moduleId: number | null, conceptIds: number[], kind: "diagnose" | "test"): number {
   const sessionId = Number(
     db
-      .prepare("INSERT INTO sessions (theme_id, module_id, kind, status, total) VALUES (?, ?, ?, 'preparing', ?)")
-      .run(themeId, moduleId, kind, conceptIds.length).lastInsertRowid,
+      .prepare("INSERT INTO sessions (subject_id, module_id, kind, status, total) VALUES (?, ?, ?, 'preparing', ?)")
+      .run(subjectId, moduleId, kind, conceptIds.length).lastInsertRowid,
   );
   const insert = db.prepare("INSERT INTO session_concepts (session_id, concept_id) VALUES (?, ?)");
   for (const id of conceptIds) insert.run(sessionId, id);
   return sessionId;
 }
 
-// Apply the marks of the learner for concepts of one theme, from any module. A concept without a mark
+// Apply the marks of the learner for concepts of one subject, from any module. A concept without a mark
 // does not change. A mark can also change an earlier mark, for example "learn" to "test".
 // The concepts with the mark "test" get a new diagnosis session. The function returns the session id, or null.
-export function applyMarks(db: Db, themeSlug: string, marks: Record<string, Mark>): { sessionId: number | null; queued: number; skipped: number } {
-  const themeId = db.prepare("SELECT id FROM themes WHERE slug = ?").pluck().get(themeSlug) as number | undefined;
-  if (themeId === undefined) throw new TutorError(`The theme "${themeSlug}" does not exist.`, 404);
+export function applyMarks(db: Db, subjectSlug: string, marks: Record<string, Mark>): { sessionId: number | null; queued: number; skipped: number } {
+  const subjectId = db.prepare("SELECT id FROM subjects WHERE slug = ?").pluck().get(subjectSlug) as number | undefined;
+  if (subjectId === undefined) throw new TutorError(`The subject "${subjectSlug}" does not exist.`, 404);
   const moduleOf = new Map(
-    (db.prepare("SELECT id, module_id FROM concepts WHERE theme_id = ?").all(themeId) as { id: number; module_id: number }[]).map(
+    (db.prepare("SELECT id, module_id FROM concepts WHERE subject_id = ?").all(subjectId) as { id: number; module_id: number }[]).map(
       (row) => [row.id, row.module_id],
     ),
   );
   const entries = Object.entries(marks).map(([id, mark]) => [Number(id), mark] as const);
   for (const [id, mark] of entries) {
-    if (!moduleOf.has(id)) throw new TutorError(`The concept ${id} is not in the theme "${themeSlug}".`);
+    if (!moduleOf.has(id)) throw new TutorError(`The concept ${id} is not in the subject "${subjectSlug}".`);
     if (!["test", "learn", "skip", "later"].includes(mark)) throw new TutorError(`"${mark}" is not a valid mark.`);
   }
 
@@ -99,7 +99,7 @@ export function applyMarks(db: Db, themeSlug: string, marks: Record<string, Mark
     // A diagnosis of concepts from one module belongs to that module. A diagnosis of concepts from more modules has no module.
     const modules = new Set(toTest.map((id) => moduleOf.get(id)!));
     const moduleId = modules.size === 1 ? [...modules][0]! : null;
-    return { sessionId: createSession(db, themeId, moduleId, toTest, "diagnose"), queued, skipped };
+    return { sessionId: createSession(db, subjectId, moduleId, toTest, "diagnose"), queued, skipped };
   })();
 }
 
@@ -244,9 +244,9 @@ function latestAttempts(db: Db, questionIds: number[]): Map<number, AttemptRow> 
 export function sessionView(db: Db, sessionId: number): SessionView {
   const session = db
     .prepare(
-      `SELECT ss.id, ss.kind, ss.status, ss.error, ss.prepared, ss.total, t.slug AS theme_slug, t.name AS theme_name,
+      `SELECT ss.id, ss.kind, ss.status, ss.error, ss.prepared, ss.total, sub.slug AS subject_slug, sub.name AS subject_name,
          m.id AS module_id, m.position AS module_position, m.name AS module_name
-       FROM sessions ss JOIN themes t ON t.id = ss.theme_id LEFT JOIN modules m ON m.id = ss.module_id WHERE ss.id = ?`,
+       FROM sessions ss JOIN subjects sub ON sub.id = ss.subject_id LEFT JOIN modules m ON m.id = ss.module_id WHERE ss.id = ?`,
     )
     .get(sessionId) as
     | {
@@ -256,8 +256,8 @@ export function sessionView(db: Db, sessionId: number): SessionView {
         error: string | null;
         prepared: number;
         total: number;
-        theme_slug: string;
-        theme_name: string;
+        subject_slug: string;
+        subject_name: string;
         module_id: number | null;
         module_position: number | null;
         module_name: string | null;
@@ -269,7 +269,7 @@ export function sessionView(db: Db, sessionId: number): SessionView {
   const attempts = latestAttempts(db, questions.map((question) => question.id));
   return {
     id: session.id,
-    theme: { slug: session.theme_slug, name: session.theme_name },
+    subject: { slug: session.subject_slug, name: session.subject_name },
     module:
       session.module_id === null ? null : { id: session.module_id, position: session.module_position!, name: session.module_name! },
     kind: session.kind,
@@ -321,13 +321,13 @@ function testScore(db: Db, sessionId: number): { correct: number; total: number;
 function testOutcome(db: Db, sessionId: number): TestOutcome {
   const concept = sessionConcept(db, sessionId)!;
   const { passed, correct, total } = testScore(db, sessionId);
-  const themeId = db.prepare("SELECT theme_id FROM concepts WHERE id = ?").pluck().get(concept.id) as number;
+  const subjectId = db.prepare("SELECT subject_id FROM concepts WHERE id = ?").pluck().get(concept.id) as number;
   const next = passed
     ? ((db
         .prepare(
-          "SELECT id AS conceptId, name FROM concepts WHERE theme_id = ? AND status IN ('queued', 'learning') AND id <> ? ORDER BY queue_pos, id LIMIT 1",
+          "SELECT id AS conceptId, name FROM concepts WHERE subject_id = ? AND status IN ('queued', 'learning') AND id <> ? ORDER BY queue_pos, id LIMIT 1",
         )
-        .get(themeId, concept.id) as TestOutcome["next"] | undefined) ?? null)
+        .get(subjectId, concept.id) as TestOutcome["next"] | undefined) ?? null)
     : null;
   return {
     passed,

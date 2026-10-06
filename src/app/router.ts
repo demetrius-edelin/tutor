@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-// A small hash router: "#/", "#/themes/sql", "#/themes/sql/map?concept=b-tree-index", "#/themes/sql/map?module=3".
+// A small hash router: "#/", "#/subjects/sql", "#/subjects/sql/map?concept=b-tree-index", "#/subjects/sql/map?module=3".
 
 // The status filters of the review board. "all" is the default, so the address does not show it.
 export const BOARD_SHOWS = ["all", "learned", "learning", "queued", "not-chosen", "skipped"] as const;
@@ -15,7 +15,7 @@ export interface BoardFilters {
 
 export type Route =
   | { name: "home" }
-  | { name: "theme"; slug: string }
+  | { name: "subject"; slug: string }
   | { name: "map"; slug: string; concept: string | null; module: number | null }
   | { name: "queue"; slug: string }
   | ({ name: "board"; slug: string } & BoardFilters)
@@ -27,14 +27,14 @@ export function parseHash(hash: string): Route {
   const [path = "", query = ""] = hash.replace(/^#/, "").split("?");
   const parts = path.split("/").filter(Boolean).map(decodeURIComponent);
   if (parts.length === 0) return { name: "home" };
-  if (parts[0] === "themes" && parts[1] && parts.length === 2) return { name: "theme", slug: parts[1] };
-  if (parts[0] === "themes" && parts[1] && parts[2] === "map" && parts.length === 3) {
+  if (parts[0] === "subjects" && parts[1] && parts.length === 2) return { name: "subject", slug: parts[1] };
+  if (parts[0] === "subjects" && parts[1] && parts[2] === "map" && parts.length === 3) {
     const params = new URLSearchParams(query);
     const module = Number(params.get("module"));
     return { name: "map", slug: parts[1], concept: params.get("concept"), module: Number.isInteger(module) && module > 0 ? module : null };
   }
-  if (parts[0] === "themes" && parts[1] && parts[2] === "queue" && parts.length === 3) return { name: "queue", slug: parts[1] };
-  if (parts[0] === "themes" && parts[1] && parts[2] === "board" && parts.length === 3) {
+  if (parts[0] === "subjects" && parts[1] && parts[2] === "queue" && parts.length === 3) return { name: "queue", slug: parts[1] };
+  if (parts[0] === "subjects" && parts[1] && parts[2] === "board" && parts.length === 3) {
     const params = new URLSearchParams(query);
     const show = params.get("show");
     return {
@@ -52,12 +52,12 @@ export function parseHash(hash: string): Route {
 
 export const href = {
   home: () => "#/",
-  theme: (slug: string) => `#/themes/${encodeURIComponent(slug)}`,
+  subject: (slug: string) => `#/subjects/${encodeURIComponent(slug)}`,
   map: (slug: string, concept?: string) =>
-    `#/themes/${encodeURIComponent(slug)}/map${concept ? `?concept=${encodeURIComponent(concept)}` : ""}`,
+    `#/subjects/${encodeURIComponent(slug)}/map${concept ? `?concept=${encodeURIComponent(concept)}` : ""}`,
   // The concept map, with the page at the start of one module.
-  mapModule: (slug: string, moduleId: number) => `#/themes/${encodeURIComponent(slug)}/map?module=${moduleId}`,
-  queue: (slug: string) => `#/themes/${encodeURIComponent(slug)}/queue`,
+  mapModule: (slug: string, moduleId: number) => `#/subjects/${encodeURIComponent(slug)}/map?module=${moduleId}`,
+  queue: (slug: string) => `#/subjects/${encodeURIComponent(slug)}/queue`,
   board: (slug: string, filters: Partial<BoardFilters> = {}) => {
     const params = new URLSearchParams();
     if (filters.show && filters.show !== "all") params.set("show", filters.show);
@@ -65,7 +65,7 @@ export const href = {
     // The search text stays as the user types it, with its spaces.
     if (filters.find) params.set("find", filters.find);
     const query = params.toString();
-    return `#/themes/${encodeURIComponent(slug)}/board${query ? `?${query}` : ""}`;
+    return `#/subjects/${encodeURIComponent(slug)}/board${query ? `?${query}` : ""}`;
   },
   session: (id: number) => `#/sessions/${id}`,
   lesson: (conceptId: number) => `#/lessons/${conceptId}`,

@@ -4,7 +4,7 @@ This guide explains each step and each command of the tutor. For an overview, se
 
 - [Step 1: Set up the tutor](#step-1-set-up-the-tutor)
 - [Step 2: Check the model and the book (optional)](#step-2-check-the-model-and-the-book-optional)
-- [Step 3: Add a book to a theme](#step-3-add-a-book-to-a-theme)
+- [Step 3: Add a book to a subject](#step-3-add-a-book-to-a-subject)
 - [Step 4: Study in the browser](#step-4-study-in-the-browser)
 - [Update a book after a tutor update](#update-a-book-after-a-tutor-update)
 
@@ -108,17 +108,17 @@ The command also writes files to `data/parse/<book>/`. Open them in a text edito
 
 No other command reads these files. To write them to a different folder, add `--out <folder>`.
 
-## Step 3: Add a book to a theme
+## Step 3: Add a book to a subject
 
-A theme is an area of study, for example "SQL". The `ingest` command puts a book into a theme. If the theme does not exist, the command makes it.
+A subject is an area of study, for example "SQL". The `ingest` command puts a book into a subject. If the subject does not exist, the command makes it.
 
 ### What ingest does
 
 1. It parses the book with the same parser as `npm run parse`.
 2. It keeps a copy of the book file, and writes one Markdown file for each section.
 3. The model reads each image of the book one time. Code becomes a code block, a table becomes a Markdown table, and other images get a short description.
-4. The model finds the concepts in each chapter. Then it adds them to the concept map of the theme, in modules.
-5. It saves the theme, the book, the sections, and the concepts to the database. A preview skips this part.
+4. The model finds the concepts in each chapter. Then it adds them to the concept map of the subject, in modules.
+5. It saves the subject, the book, the sections, and the concepts to the database. A preview skips this part.
 
 The command shows the number of model requests and asks before it starts. The requests cost money.
 
@@ -132,7 +132,7 @@ You can ingest the full book at one time, or a book one part at a time.
    npm run ingest -- SQL /path/to/book.pdf --chapters 2 --preview
    ```
 
-2. Read the concept map of the preview in `data/themes/<theme>/books/<book>/concept-map.preview.md`. If the concepts look correct, continue.
+2. Read the concept map of the preview in `data/subjects/<subject>/books/<book>/concept-map.preview.md`. If the concepts look correct, continue.
 
 3. Ingest the chapters that you want to study now:
 
@@ -146,11 +146,11 @@ You can ingest the full book at one time, or a book one part at a time.
    npm run ingest -- SQL /path/to/book.pdf
    ```
 
-   The app shows the concepts of the chapters that you ingested. The chapters of the preview come from the cache, so you do not pay for them again. The concept map of the theme goes to `data/themes/<theme>/concept-map.md`.
+   The app shows the concepts of the chapters that you ingested. The chapters of the preview come from the cache, so you do not pay for them again. The concept map of the subject goes to `data/subjects/<subject>/concept-map.md`.
 
 ### Add more chapters later
 
-After a run with `--chapters`, the theme has the book. A new run of the same book then needs `--replace`.
+After a run with `--chapters`, the subject has the book. A new run of the same book then needs `--replace`.
 
 - To add all the other chapters, ingest the full book with `--replace`.
 - To add only some chapters, use `--chapters` with `--replace`. Put the chapters that you saved before into the list too.
@@ -161,7 +161,7 @@ The chapters that you saved before come from the cache, so you do not pay for th
 
 ### The files of a book
 
-Ingest writes these files to `data/themes/<theme>/books/<book>/`:
+Ingest writes these files to `data/subjects/<subject>/books/<book>/`:
 
 - The copy of the book file.
 - `sections/`: one Markdown file for each section. The lessons read the book text from these files.
@@ -175,7 +175,7 @@ Ingest writes these files to `data/themes/<theme>/books/<book>/`:
 - `--preview`: do not change the database. The command writes the concept map and the report as preview files. Use it with `--chapters` to check the concepts of some chapters before you save them.
 - `--yes`: start without the question.
 - `--fresh`: ignore the cached chapter results. The cached image texts stay.
-- `--replace`: ingest again a book that is already in the theme. The book gets new sections, so the references of your old lessons break. To update the text of a book and keep your progress, use `npm run refresh`.
+- `--replace`: ingest again a book that is already in the subject. The book gets new sections, so the references of your old lessons break. To update the text of a book and keep your progress, use `npm run refresh`.
 
 For now, you add books from the terminal only.
 
@@ -203,7 +203,7 @@ You need this command only after an update of the tutor that changes the parser.
 npm run refresh -- SQL my-sql-book
 ```
 
-The second value is the folder name of the book in `data/themes/<theme>/books/`, or the title of the book.
+The second value is the folder name of the book in `data/subjects/<subject>/books/`, or the title of the book.
 
 The model reads the images that are not in the cache, but only in the chapters with concepts. Before it starts, the command shows the number of these images and asks you. The images of the other chapters keep their placeholders. When you ingest one of these chapters later, the `ingest` command reads its images.
 

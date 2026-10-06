@@ -24,7 +24,7 @@ beforeEach(async () => {
   const bookFile = join(dataDir, "fixture.epub");
   writeFileSync(bookFile, data);
   db = openDb(":memory:");
-  await ingestBook({ llm: new FakeLlm(), db, dataDir, themeName: "Git", bookFile, book });
+  await ingestBook({ llm: new FakeLlm(), db, dataDir, subjectName: "Git", bookFile, book });
   llm = new FakeLlm();
   app = buildServer({ db, dataDir, llm });
   conceptIds = db.prepare("SELECT id FROM concepts ORDER BY id").pluck().all() as number[];

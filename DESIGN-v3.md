@@ -4,7 +4,7 @@ Status: draft 3, revision 11. Date: 2026-10-04. This file replaces `DESIGN.md` (
 
 ## Purpose
 
-The tutor helps one user learn from books that the user owns. The user groups the books into themes of study. For each theme, the tutor finds the concepts that the user does not know. Then it teaches those concepts one at a time and tests each one.
+The tutor helps one user learn from books that the user owns. The user groups the books into subjects of study. For each subject, the tutor finds the concepts that the user does not know. Then it teaches those concepts one at a time and tests each one.
 
 The tutor is a learning tool. It is not a job-search tool.
 
@@ -12,7 +12,7 @@ The tutor uses one large language model (LLM) from Anthropic, OpenAI, or OpenRou
 
 ## Decisions
 
-- Themes are neutral. The tutor has no built-in themes and no code for a specific subject. The user creates a theme with a name and adds books to it. The books define the content of the theme.
+- Subjects are neutral. The tutor has no built-in subjects and no code for a specific subject. The user creates a subject with a name and adds books to it. The books define the content of the subject.
 - Books are EPUB files or tagged PDF files.
 - Until phase 4, the tutor runs on the laptop of the user. In phase 4, each user can also run it on a server. The tutor has no Telegram bot and no other messaging.
 - The tutor is free and open source. Each user hosts their own copy. The project offers no public hosted version. See "Self-hosted release (phase 4)".
@@ -54,21 +54,21 @@ The loop has these steps:
 6. Test: the user clicks "Test me". The tutor asks new questions about the concept.
 7. Next: if the user passes, the concept becomes `mastered`, and the tutor goes to the next concept in the queue. If the user fails, the user selects the next action.
 
-The theme is complete after two conditions are true. The queue is empty, and the user marked each concept of the theme.
+The subject is complete after two conditions are true. The queue is empty, and the user marked each concept of the subject.
 
-## Themes
+## Subjects
 
-A theme is a separate area of study. It has its own books, concept map, study queue, and progress.
+A subject is a separate area of study. It has its own books, concept map, study queue, and progress.
 
-To create a theme, the user types a name on the home screen. Then the user adds EPUB files to the theme. Each new book adds concepts to the concept map of the theme.
+To create a subject, the user types a name on the home screen. Then the user adds EPUB files to the subject. Each new book adds concepts to the concept map of the subject.
 
-The user works in one theme at a time. Each theme keeps its progress.
+The user works in one subject at a time. Each subject keeps its progress.
 
 For a concept that two books cover, the lesson uses both books.
 
 ## Concept map
 
-Each theme has one concept map. The map has modules, and each module has concepts. A module is a group of related concepts, for example "Indexes" in a database book.
+Each subject has one concept map. The map has modules, and each module has concepts. A module is a group of related concepts, for example "Indexes" in a database book.
 
 Each concept has these properties:
 
@@ -92,7 +92,7 @@ Ingest is the most important step. If ingest misses a concept, the user never se
 
 Ingest keeps a doubtful concept. The user can skip a concept with one click, but the user cannot see a concept that ingest missed.
 
-Until phase 3, the user starts ingest from the command line. In phase 3, the user adds a book on the theme screen. See "Ingest in the app (phase 3)".
+Until phase 3, the user starts ingest from the command line. In phase 3, the user adds a book on the subject screen. See "Ingest in the app (phase 3)".
 
 Ingest has four stages: parse, extract, review, and merge. Between the parse and the extract stage, the model reads the images. At the end, ingest writes an ingest report.
 
@@ -191,7 +191,7 @@ This second look at each chapter finds the concepts that the first look missed.
 
 ### Stage 4: Merge
 
-The merge step adds the concepts of the book to the concept map of the theme:
+The merge step adds the concepts of the book to the concept map of the subject:
 
 - If a new concept and an existing concept are the same idea, the merge step joins them. The existing concept gets one more source.
 - It adds each other new concept to the correct module, or it makes a new module.
@@ -203,7 +203,7 @@ In the merge step, the model gets only the names and objectives of the concepts,
 
 ### Ingest report
 
-After ingest, the tutor writes a report for the book. In phase 3, the theme screen shows it:
+After ingest, the tutor writes a report for the book. In phase 3, the subject screen shows it:
 
 - The parse warnings: lost text, empty sections, and files outside of chapters.
 - The number of sections and concepts in each chapter.
@@ -224,7 +224,7 @@ A reference gives the book, the chapter title, and the section title. If the EPU
 
 ### Refresh a book
 
-A change to the parser, for example a fix for code blocks or the image texts, changes the text of the sections. `npm run refresh -- <theme> <book>` gives an ingested book the new parse:
+A change to the parser, for example a fix for code blocks or the image texts, changes the text of the sections. `npm run refresh -- <subject> <book>` gives an ingested book the new parse:
 
 1. Parse the book again with the current parser.
 2. Read the images that are not in the cache, but only in the chapters with concepts. A book can have concepts from some chapters only, after `ingest --chapters <list>`. Ingest reads the images of the other chapters when it ingests them.
@@ -260,7 +260,7 @@ If the selection is not empty, a bar at the bottom of the page shows these butto
 - "Add to the queue": the selected concepts go to the end of the study queue.
 - "Skip": the selected concepts become `skipped`.
 
-The buttons send marks to the server. One request can mark concepts from all modules of the theme. The marks have these effects:
+The buttons send marks to the server. One request can mark concepts from all modules of the subject. The marks have these effects:
 
 - Test: the tutor tests the concept in a diagnosis. All concepts with the mark "Test" in one request go into one diagnosis.
 - Learn: the concept goes into the study queue directly, without a test. A concept in the queue keeps its place.
@@ -286,7 +286,7 @@ The "Done" button sends the choices. Each "Learn" concept goes to the end of the
 
 ## Study queue
 
-The study queue is an ordered list of the concepts that the user wants to learn. Each theme has one queue. The tutor always teaches the first concept in the queue.
+The study queue is an ordered list of the concepts that the user wants to learn. Each subject has one queue. The tutor always teaches the first concept in the queue.
 
 The tutor suggests an order with these rules:
 
@@ -312,7 +312,7 @@ The tutor does not block the order of the user. But it shows a warning on a conc
 The model gets these inputs:
 
 - The concept and its objective.
-- The text of all source sections for the concept, from all books of the theme.
+- The text of all source sections for the concept, from all books of the subject.
 - The wrong answers of the user in the diagnosis, for a concept that the user tested. The lesson can then address the specific mistakes.
 
 The model writes the lesson in one call. The lesson contains these parts:
@@ -327,7 +327,7 @@ The length of the lesson follows the concept. A simple concept gets about 150 to
 
 After the lesson, the user can ask questions in a chat box below the lesson. The model answers with the same sources in the prompt. Then the user clicks "Test me".
 
-If the lesson was not clear, the user clicks "Teach it again". Then the model writes a new lesson round, from a different angle and with different examples. A concept in a lesson has the status `learning`. Only one concept of a theme has this status.
+If the lesson was not clear, the user clicks "Teach it again". Then the model writes a new lesson round, from a different angle and with different examples. A concept in a lesson has the status `learning`. Only one concept of a subject has this status.
 
 Each reference contains the exact quote from a source section. The tutor checks each quote against the text of the section. Thus, each reference points to text that is in the book. Each provider makes references in a different way. See "Model".
 
@@ -399,16 +399,16 @@ The review board shows what the user learned, at a glance. The user decides what
 
 The board has three uses:
 
-- See the status of each concept of a theme on one or two screens.
+- See the status of each concept of a subject on one or two screens.
 - Find a concept that the user forgot. Open its lesson, read it again, and test it again with "Test me again".
 - Keep a list of the most important concepts of the books, with stars.
 
 ### The board
 
-The board is a tab of each theme, after "Study queue". The tab label is "Review board".
+The board is a tab of each subject, after "Study queue". The tab label is "Review board".
 
 - A summary line at the top gives the number of concepts in each status group and the number of starred concepts.
-- The concepts are in their modules, in the order of the concept map. Each module heading shows how many of its concepts are `known` or `mastered`. Skipped concepts do not count, as in the progress of the theme.
+- The concepts are in their modules, in the order of the concept map. Each module heading shows how many of its concepts are `known` or `mastered`. Skipped concepts do not count, as in the progress of the subject.
 - Each concept has one short line: the status mark, the name, and the star button. The line has no goal, no sources, and no level.
 - A click on the name opens the lesson page of the concept.
 
@@ -449,13 +449,13 @@ Now, ingest runs only from the command line. Phase 3 moves ingest into the app, 
 
 The `npm run ingest` command stays. The app and the command use the same ingest code.
 
-### Create a theme
+### Create a subject
 
-The home screen has a field to create a theme. The user types a name, and the tutor creates an empty theme. Then the theme screen opens, with the "Add book" button.
+The home screen has a field to create a subject. The user types a name, and the tutor creates an empty subject. Then the subject screen opens, with the "Add book" button.
 
 ### Add a book
 
-The theme screen has the "Add book" button. The flow has these steps:
+The subject screen has the "Add book" button. The flow has these steps:
 
 1. The user selects an EPUB file or a tagged PDF file.
 2. The browser sends the file to the server. The server keeps the file in `data/uploads/` and parses it. The parse uses no model, so it costs nothing.
@@ -477,22 +477,22 @@ The command can also save some chapters to the database: `--chapters` without `-
 
 Before each run, the app shows the number of model requests, as the command does. If ingest reads the images of the book (milestone 13 in `PLAN.md`), the number includes the images.
 
-A theme can get a second book in phase 3, because the merge step exists already. Phase 5 tests the merge on real books and makes it better.
+A subject can get a second book in phase 3, because the merge step exists already. Phase 5 tests the merge on real books and makes it better.
 
 ### Progress
 
 Ingest of a full book takes a long time. Thus, ingest runs in the background, in the server process, as the preparation of a diagnosis does. The tutor has no job queue.
 
 - The new table `ingests` keeps each run, with its status and its progress. See "Data model".
-- The theme screen shows the run in progress: the current step, for example "Chapter 4 of 12: review", and the "Stop" button. The app asks the server for the progress every few seconds.
+- The subject screen shows the run in progress: the current step, for example "Chapter 4 of 12: review", and the "Stop" button. The app asks the server for the progress every few seconds.
 - "Stop" ends the run after the current chapter. The finished chapters stay in the cache. Thus, the next run does not pay for them again.
-- Only one ingest runs at a time. Two runs on one theme can overwrite the merge result of each other.
+- Only one ingest runs at a time. Two runs on one subject can overwrite the merge result of each other.
 - If the server stops during a run, the run becomes `failed` at the next start. A new run continues from the cache.
 - A full run saves the book, its sections, and the concept map in one transaction at the end, as now. Thus, a run that fails or stops does not change the concept map.
 
 ### Ingest report in the app
 
-After a run, the theme screen shows the ingest report of the book. The section "Ingest report" gives the content. The app reads the report from the `ingest-report.json` file of the book.
+After a run, the subject screen shows the ingest report of the book. The section "Ingest report" gives the content. The app reads the report from the `ingest-report.json` file of the book.
 
 The two actions of the report work in this way:
 
@@ -633,9 +633,9 @@ Some requests wait for the model, for example a new lesson. A book upload can al
 
 ## Screens
 
-- Home: the list of themes, with the progress of each theme. A field to create a new theme (phase 3).
-- Theme: the books of the theme and the progress. In phase 3: the "Add book" button, the ingest progress, and the ingest report of each book. Until then, ingest runs from the command line. The "Next to learn" card opens the lesson of the first concept in the queue.
-- Map: the modules and concepts, with the status, the star, and the sources of each concept. Mark one concept with its buttons, or select many concepts and mark them in one step. Undo a skip here. A module on the theme screen opens the map at that module.
+- Home: the list of subjects, with the progress of each subject. A field to create a new subject (phase 3).
+- Subject: the books of the subject and the progress. In phase 3: the "Add book" button, the ingest progress, and the ingest report of each book. Until then, ingest runs from the command line. The "Next to learn" card opens the lesson of the first concept in the queue.
+- Map: the modules and concepts, with the status, the star, and the sources of each concept. Mark one concept with its buttons, or select many concepts and mark them in one step. Undo a skip here. A module on the subject screen opens the map at that module.
 - Diagnosis: the questions one at a time. Then the results, with the "Learn" and "Skip" choices.
 - Queue: the study queue, with drag and drop and the queue buttons.
 - Review board: one short line for each concept, with the status filters, the star filter, and the search. See "Review board".
@@ -648,31 +648,31 @@ Some requests wait for the model, for example a new lesson. A book upload can al
  Browser (React app)
         │  HTTP on localhost, or HTTPS with a login on a server (phase 4)
         ▼
- [Server] ──► [Ingest] ──► data/themes/<theme>/sections/ (Markdown)
+ [Server] ──► [Ingest] ──► data/subjects/<subject>/sections/ (Markdown)
     │
     ├──► [Tutor loop]: select, diagnose, queue, teach, test, board
     │         │
     │         ├──► [Grader]
     │         └──► [Model client] ──► Anthropic, OpenAI, or OpenRouter
     │
-    └──► SQLite: themes, books, concept map, progress
+    └──► SQLite: subjects, books, concept map, progress
 ```
 
 ## Data model (SQLite)
 
 ```sql
-themes           (id, slug, name, created_at)
-books            (id, theme_id, title, file, status, created_at)
+subjects           (id, slug, name, created_at)
+books            (id, subject_id, title, file, status, created_at)
 sections         (id, book_id, chapter, number, chapter_title, title, page, path, words)
-modules          (id, theme_id, position, name)
-concepts         (id, theme_id, module_id, slug, name, objective, kind, level, status, queue_pos, starred)
+modules          (id, subject_id, position, name)
+concepts         (id, subject_id, module_id, slug, name, objective, kind, level, status, queue_pos, starred)
 concept_sources  (concept_id, section_id, quote)
 concept_prereqs  (concept_id, prereq_id)
 questions        (id, concept_id, purpose, kind, text, choices, answer, key_points, section_id)
 attempts         (id, question_id, answer, score, feedback, disputed, created_at)
 lessons          (id, concept_id, round, text, refs, created_at)
 lesson_messages  (id, lesson_id, role, text, created_at)
-ingests          (id, theme_id, file, title, mode, chapters, status, done, total, step, error, created_at)
+ingests          (id, subject_id, file, title, mode, chapters, status, done, total, step, error, created_at)
 ```
 
 - `books.status`: `ingesting`, `ready`, or `failed`. The tutor saves a book only at the end of a full run, so a saved book is `ready`.
@@ -785,7 +785,7 @@ These numbers are rough estimates for one large model (Claude Opus 5.5) from the
 
 - Ingest of one book of 300 pages, with the review stage: about $2 to $5, one time.
 - One concept loop, with the lesson, the questions, the test, and the grades: about $0.10 to $0.40.
-- A theme with 100 concepts in the study queue: about $10 to $40.
+- A subject with 100 concepts in the study queue: about $10 to $40.
 
 ## Where it runs
 
@@ -800,8 +800,8 @@ A Telegram client on the phone is an option for later. It needs a server, as in 
 ```
 data/                 (not in git)
   tutor.db            SQLite database
-  themes/<theme>/
-    concept-map.md    the concept map of the theme, for people to read
+  subjects/<subject>/
+    concept-map.md    the concept map of the subject, for people to read
     books/<book>/
       <book file>     a copy of the EPUB or PDF file
       sections/       section text in Markdown
@@ -835,16 +835,16 @@ Do not commit `data/`. It contains the text of books that the user bought, and t
 
 Each phase ends with a tool that the user can learn with.
 
-1. Phase 1: the app, with themes and one book for each theme. Add EPUB ingest with the parse checks, the review stage, and the ingest report. Add the concept map, select and diagnose, the study queue, lessons with references, and tests with multiple-choice and short answers. Add the model client and the `.env` file.
+1. Phase 1: the app, with subjects and one book for each subject. Add EPUB ingest with the parse checks, the review stage, and the ingest report. Add the concept map, select and diagnose, the study queue, lessons with references, and tests with multiple-choice and short answers. Add the model client and the `.env` file.
 2. Phase 2: the review board and the stars. The user sees what they learned, tests a concept again, and keeps a list of the key concepts.
-3. Phase 3: ingest in the app. The user creates a theme, adds a book, follows the progress, and reads the ingest report in the app. See "Ingest in the app (phase 3)".
+3. Phase 3: ingest in the app. The user creates a subject, adds a book, follows the progress, and reads the ingest report in the app. See "Ingest in the app (phase 3)".
 4. Phase 4: the self-hosted release. Each user runs their own copy on a laptop, a home server, a rented server, or a platform, with a password and HTTPS. See "Self-hosted release (phase 4)".
-5. Phase 5: more books for each theme. Test the merge step on real books and make it better.
+5. Phase 5: more books for each subject. Test the merge step on real books and make it better.
 6. Later: the ingest test, a Telegram client, and untagged PDF files.
 
 ## Risks
 
-1. The merge step can join two different ideas, or keep two copies of one idea. Test the merge on two books of one theme early in phase 5. The map screen shows the sources of each concept, so bad merges are easy to see.
+1. The merge step can join two different ideas, or keep two copies of one idea. Test the merge on two books of one subject early in phase 5. The map screen shows the sources of each concept, so bad merges are easy to see.
 2. A guess can pass a multiple-choice question. Thus, each diagnosis and each test includes a short answer or an apply question.
 3. The model can teach content that is not in the books. The checked references and the "not from the books" mark make this content visible.
 4. Two books can split one idea into concepts of different sizes. The size rule in "Concept map" tells the model the correct size.

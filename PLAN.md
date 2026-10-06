@@ -17,7 +17,7 @@ Status: draft 2. Date: 2026-10-03. The design is in `DESIGN-v3.md`. This file gi
 - Milestone 2b: done. The parser reads tagged PDF files. A PDF book of the user parses with no lost text.
 - Milestone 3: done. `npm run llm:check` passes with a model of the user.
 - Milestone 4: done. A preview of one chapter of a book of the user gave a good concept map. The full book can come later with `--replace`.
-- Milestone 5: done, with a smaller scope. The app has the home screen, the theme screen, and the map screen. Ingest stays a command for now. "Add book" and the ingest progress in the app come later.
+- Milestone 5: done, with a smaller scope. The app has the home screen, the subject screen, and the map screen. Ingest stays a command for now. "Add book" and the ingest progress in the app come later.
 - Milestone 6: done. The app has the select screen, the diagnosis with grades and disputes, and the results with the choices. The database has schema migrations now.
 - Milestone 7: done. The study queue has a suggested order, drag and drop, move buttons, prerequisite warnings, and Later and Skip.
 - Milestone 8: done. Lessons with checked references, the chat box, Teach it again, Start now in the queue, and the prerequisite actions.
@@ -33,8 +33,8 @@ Status: draft 2. Date: 2026-10-03. The design is in `DESIGN-v3.md`. This file gi
 1. Setup: the TypeScript project, Vitest, the `.env` loader, and the SQLite schema. Exit test: `npm test` and `npm run typecheck` pass.
 2. Parse (ingest stage 1): EPUB or tagged PDF to Markdown sections, the checklist, and the parse warnings. Command: `npm run parse -- <book.epub | book.pdf>`. Exit test: a real EPUB parses, and the parse report shows no lost text.
 3. Model client: `LlmClient`, `AnthropicClient`, and `OpenAiClient`. Exit test: a script gets a JSON answer and a text answer with references from the selected provider.
-4. Extract, review, and merge (ingest stages 2 to 4), and the ingest report. For the first book, the merge step builds the concept map from an empty map. Command: `npm run ingest -- <theme> <book.epub>`. The command also writes the concept map to a Markdown file. Exit test: the user reads the concept map of one real book and finds no large gaps.
-5. App shell: the server, the React app, the home screen, the theme screen, and the map screen. "Add book", the ingest progress, and the ingest report in the app come later.
+4. Extract, review, and merge (ingest stages 2 to 4), and the ingest report. For the first book, the merge step builds the concept map from an empty map. Command: `npm run ingest -- <subject> <book.epub>`. The command also writes the concept map to a Markdown file. Exit test: the user reads the concept map of one real book and finds no large gaps.
+5. App shell: the server, the React app, the home screen, the subject screen, and the map screen. "Add book", the ingest progress, and the ingest report in the app come later.
 6. Select, diagnose, and choose.
 7. The study queue.
 8. Teach: lessons with references, and the chat box.
@@ -54,7 +54,7 @@ Phase 2 adds the review board and the stars. See "Review board" in `DESIGN-v3.md
     - Add the star button to the lesson header and to the concept rows of the concept map.
     - Exit test: star a concept on the lesson page, then load the concept map again. The concept has its star. The database of the user opens with no error.
 11. Review board.
-    - Add the route `#/themes/<slug>/board` and the "Review board" tab after "Study queue".
+    - Add the route `#/subjects/<slug>/board` and the "Review board" tab after "Study queue".
     - Show one line for each concept, in its module: the status mark, the name, and the star button. The name opens the lesson page.
     - Add the summary line, the status filters with their counts, the "Starred" toggle, and the search box. The address keeps the filters.
     - Use the concept map request for the data.
@@ -76,7 +76,7 @@ After milestone 12, phase 2 is complete.
     - During ingest, the model reads each image one time. Code becomes a code block. A table becomes a Markdown table. Any other image gets a description of one sentence. A cache in the `work` folder of the book keeps the results, so each image costs one model call only one time.
     - The model client can send an image to Anthropic and to OpenAI. If the model in `.env` does not accept images, ingest keeps the placeholder and shows a warning. `npm run llm:check` also tests image input.
     - The parse report shows a warning for each image with no useful alt text. Alt text such as "A black screen with white text" is not useful.
-    - Add `npm run refresh -- <theme> <book>`. The command parses the book again and reads its images. It writes only the section files and the word counts of the sections. Concepts, statuses, the queue, stars, lessons, and test answers do not change. If a section does not match its row in the database, the command stops and changes nothing.
+    - Add `npm run refresh -- <subject> <book>`. The command parses the book again and reads its images. It writes only the section files and the word counts of the sections. Concepts, statuses, the queue, stars, lessons, and test answers do not change. If a section does not match its row in the database, the command stops and changes nothing.
     - Do not use `npm run ingest -- --replace` for an existing book. It removes the book row, so the IDs of all sections change. Then the references of the old lessons and the sections of the questions break.
     - Old lessons do not change. For a concept with an image in its sections, use "Teach it again" to get a lesson with the content of the image.
     - Exit test: run `refresh` on a book with code images. A section with a code image contains the code as a code block. The progress in the app is the same as before.

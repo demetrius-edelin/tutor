@@ -6,15 +6,15 @@ import { Home } from "./screens/Home";
 import { Lesson } from "./screens/Lesson";
 import { Queue } from "./screens/Queue";
 import { Session } from "./screens/Session";
-import { Theme } from "./screens/Theme";
+import { Subject } from "./screens/Subject";
 
 export function App() {
   const route = useRoute();
   switch (route.name) {
     case "home":
       return <Home />;
-    case "theme":
-      return <Theme slug={route.slug} />;
+    case "subject":
+      return <Subject slug={route.slug} />;
     case "map":
       return <ConceptMap key={route.slug} slug={route.slug} focus={route.concept} focusModule={route.module} />;
     case "queue":
@@ -30,7 +30,7 @@ export function App() {
         <Layout>
           <Notice title="This page does not exist">
             <p>
-              <a href={href.home()}>Go to the themes</a>
+              <a href={href.home()}>Go to the subjects</a>
             </p>
           </Notice>
         </Layout>

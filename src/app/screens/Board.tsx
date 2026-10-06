@@ -21,10 +21,10 @@ const SHOWS: { value: BoardShow; label: string; statuses: Status[] | null }[] = 
 const LEARNED: Status[] = ["known", "mastered"];
 
 export function Board({ slug, filters }: { slug: string; filters: BoardFilters }) {
-  const map = useApi<ConceptMapView>(`/api/themes/${encodeURIComponent(slug)}/map`);
-  const name = map.state === "ready" ? map.data.theme.name : slug;
+  const map = useApi<ConceptMapView>(`/api/subjects/${encodeURIComponent(slug)}/map`);
+  const name = map.state === "ready" ? map.data.subject.name : slug;
   return (
-    <Layout theme={{ slug, name }} tab="board">
+    <Layout subject={{ slug, name }} tab="board">
       {map.state === "loading" && <p className="quiet">Loading the review board.</p>}
       {map.state === "error" && <Notice title="The review board did not load">{<p>{map.message}</p>}</Notice>}
       {map.state === "ready" && <BoardView map={map.data} filters={filters} />}
@@ -50,7 +50,7 @@ const matchesName = (concept: ConceptView, find: string) => {
 function BoardView({ map: loaded, filters }: { map: ConceptMapView; filters: BoardFilters }) {
   const [map, setMap] = useState(loaded);
   const concepts = map.modules.flatMap((module) => module.concepts);
-  const setFilters = (change: Partial<BoardFilters>) => replaceHash(href.board(map.theme.slug, { ...filters, ...change }));
+  const setFilters = (change: Partial<BoardFilters>) => replaceHash(href.board(map.subject.slug, { ...filters, ...change }));
 
   const setStarred = (id: number, starred: boolean) =>
     setMap((current) => ({
@@ -85,7 +85,7 @@ function BoardView({ map: loaded, filters }: { map: ConceptMapView; filters: Boa
     <>
       <h1>Review board</h1>
       <p className="lead">
-        The concepts of {map.theme.name}, at a glance. Star the important concepts, then filter the board to see your list of them.
+        The concepts of {map.subject.name}, at a glance. Star the important concepts, then filter the board to see your list of them.
       </p>
       <p className="queue-facts">
         {facts.map((fact) => (
