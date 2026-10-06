@@ -30,7 +30,7 @@ Length:
 - Do not add content to reach a length. Stop when the concept is clear.
 Rules:
 ${SOURCE_RULES}
-- The learner is an experienced software developer. Do not explain basic programming.`;
+- Expect the background knowledge that the sources expect from their reader. Do not explain the basics that the sources do not explain.`;
 
 export const CHAT_SYSTEM = `You are a tutor. The learner read your lesson and asks a question about it.
 Answer in 1 to 3 short paragraphs. Use an example if it helps.

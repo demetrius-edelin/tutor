@@ -15,7 +15,7 @@ type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 // The options for the OpenAI SDK. OpenRouter uses the same API at a different URL.
 export function openAiOptions(config: ModelConfig): ConstructorParameters<typeof OpenAI>[0] {
   if (config.provider === "openrouter") {
-    return { apiKey: config.apiKey, baseURL: OPENROUTER_URL, defaultHeaders: { "X-Title": "Engineering Skills Tutor" } };
+    return { apiKey: config.apiKey, baseURL: OPENROUTER_URL, defaultHeaders: { "X-Title": "Tutor" } };
   }
   return { apiKey: config.apiKey };
 }

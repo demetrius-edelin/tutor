@@ -1,4 +1,4 @@
-# Engineering Skills Tutor: Design
+# Tutor: Design
 
 Status: draft 3, revision 11. Date: 2026-10-04. This file replaces `DESIGN.md` (draft 2).
 
@@ -342,7 +342,7 @@ The answers in the chat use the same rules.
 
 ## Test
 
-A test has 1 to 3 new questions on the concept. The model selects the questions that fit the concept:
+A test has 1 to 5 new questions on the concept. The model selects the questions that fit the concept:
 
 - A simple concept gets one question.
 - A concept with more than one part gets one question for each part. Two questions do not test the same thing.
@@ -357,7 +357,7 @@ Each test has at least one apply or explain question, because a guess can pass a
 
 The user types each answer. Thus, each question asks one thing, and a short answer is enough. The grader checks the understanding, not the completeness of the answer. A typo or a missing explanation does not lower the score.
 
-The limit of 3 questions is the constant `MAX_TEST_QUESTIONS` in `src/tutor/questions.ts`. Most concepts come from one section and have an objective of one sentence. Thus, 3 questions cover them.
+The limit of 5 questions is the constant `MAX_TEST_QUESTIONS` in `src/tutor/questions.ts`. The model selects the number of questions from the complexity of the concept.
 
 The model writes the questions from the sections of the concept. The prompt includes the questions that the user saw before, so that each test has new questions. If the user leaves a test before the end, "Test me" opens the same test again.
 

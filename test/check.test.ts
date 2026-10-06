@@ -7,6 +7,7 @@ import { ingestBook } from "../src/ingest/ingest.js";
 import { parseEpub } from "../src/ingest/parse.js";
 import type { LessonView, SessionView } from "../src/server/api-types.js";
 import { buildServer, type TutorServer } from "../src/server/app.js";
+import { MAX_TEST_QUESTIONS } from "../src/tutor/questions.js";
 import { buildEpub, mainFixture } from "./fixtures/epub.js";
 import { defaultTestQuestions, FakeLlm } from "./fakes/llm.js";
 
@@ -139,10 +140,10 @@ describe("the test after a lesson", () => {
     expect((await answer(session, [true])).outcome).toMatchObject({ passed: true, correct: 1, total: 1 });
   });
 
-  it("keeps at most 3 questions", async () => {
+  it("keeps at most MAX_TEST_QUESTIONS questions", async () => {
     llm = new FakeLlm({ test: (_, sources) => ({ questions: [...defaultTestQuestions(sources[0]!.id), ...defaultTestQuestions(sources[0]!.id)] }) });
     app = buildServer({ db, dataDir, llm });
-    expect((await startTest(conceptIds[1]!)).questions.length).toBe(3);
+    expect((await startTest(conceptIds[1]!)).questions.length).toBe(MAX_TEST_QUESTIONS);
   });
 
   it("does not use a test with only recall questions, because a guess can pass it", async () => {
