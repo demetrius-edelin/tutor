@@ -190,6 +190,10 @@ test/           tests, a fake model client, and a builder for test EPUB files
 data/           your books, the results, and the database (not in git)
 ```
 
+## AI assistance
+
+I built Tutor with Claude Code. All the product and design decisions are mine, and I tested each milestone with my own books and models. Claude wrote the code and most of the documentation.
+
 ## Contributing
 
 Pull requests are welcome. For a large change, open an issue first, so that we can agree on the approach.
