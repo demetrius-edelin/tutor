@@ -143,32 +143,80 @@ export async function writeQuestions(llm: LlmClient, concepts: QuestionConcept[]
   return concepts.flatMap((concept) => result.get(concept.id) ?? []);
 }
 
-// Test questions after a lesson: a recall question, an explain question, and an apply question.
+// Test questions after a lesson. The model selects the questions that fit the concept:
+// one question for a simple concept, and one question for each part of a larger concept.
+
+// The most questions in one test. The learner types each answer, so a test stays short.
+export const MAX_TEST_QUESTIONS = 5;
 
 const TestQuestionsSchema = z.object({
-  recall: z.object({
-    question: z.string(),
-    options: z.array(z.string()),
-    correctIndex: z.number().int(),
-    explanation: z.string(),
-    sectionId: z.string(),
-  }),
-  explain: z.object({ question: z.string(), keyPoints: z.array(z.string()), modelAnswer: z.string(), sectionId: z.string() }),
-  apply: z.object({ question: z.string(), keyPoints: z.array(z.string()), modelAnswer: z.string(), sectionId: z.string() }),
+  questions: z.array(
+    z.object({
+      kind: z.enum(["recall", "explain", "apply"]),
+      question: z.string(),
+      // Only for a recall question.
+      options: z.array(z.string()).nullable(),
+      correctIndex: z.number().int().nullable(),
+      explanation: z.string().nullable(),
+      // Only for an explain or an apply question.
+      keyPoints: z.array(z.string()).nullable(),
+      modelAnswer: z.string().nullable(),
+      sectionId: z.string(),
+    }),
+  ),
 });
 
+type TestItem = z.infer<typeof TestQuestionsSchema>["questions"][number];
+
 export const TEST_QUESTIONS_SYSTEM = `You write test questions. The learner had a lesson about one concept. The test checks if the learner understands it now.
-Write three questions:
-- recall: a multiple-choice question with 4 options and exactly one correct option. The wrong options must look correct to a learner who did not understand the lesson. Do not use "all of the above" or "none of the above". The explanation tells in one or two sentences why the correct option is correct.
-- explain: the learner explains one idea of the concept in one or two sentences.
-- apply: the learner uses the concept in a concrete case, for example writes a query, predicts a result, finds an error, or chooses a solution. The answer is the query, the result, the error, or the choice.
+Select the questions that fit the concept, at most ${MAX_TEST_QUESTIONS}. To pass, the learner must answer each question correctly. The learner types each answer. Thus, use as few questions as the concept needs:
+- A simple concept needs one question.
+- A concept with more than one part can get one question for each part. Two questions must not test the same thing.
+The kinds of questions:
+- apply: the learner uses the concept in a concrete case, for example writes a query, predicts a result, finds an error, or chooses a solution. The answer is the query, the result, the error, or the choice. Use an apply question when the learner can use the concept in a case.
+- explain: the learner explains one idea of the concept in one or two sentences. Use it for an idea that a case cannot test.
+- recall: a multiple-choice question with 4 options and exactly one correct option. Use it only when the skill is to recognize something, for example a term or a rule. The wrong options must look correct to a learner who did not understand the lesson. Do not use "all of the above" or "none of the above". explanation: one or two sentences that tell why the correct option is correct.
 Rules:
+- At least one question is an apply or an explain question, because a guess can pass a recall question.
+- For a comparison of two things, ask the learner to choose one of them for a concrete case.
 - Base the questions on the sources. Do not ask about the book, the author, the chapter, page numbers, or exact words.
 ${SHORT_ANSWER_RULES}
+- A recall question has options, correctIndex, and explanation, and its keyPoints and modelAnswer are null. An apply or an explain question has keyPoints and modelAnswer, and its options, correctIndex, and explanation are null.
 - sectionId: the id of the source that the question uses.
 - Do not repeat a question that the learner saw before. Test other parts of the concept, or the same part in a new way.`;
 
-// Write the three test questions for one concept. The function asks one more time if the answer is not usable.
+// One question of the model as a test question, or null if the question is not usable.
+function testQuestion(conceptId: number, item: TestItem, sectionId: number | null): WrittenQuestion | null {
+  const text = item.question.trim();
+  if (text === "") return null;
+  if (item.kind === "recall") {
+    // Find the correct option by its text, because the removal of a double option changes the positions.
+    const right = item.options?.[item.correctIndex ?? -1]?.trim();
+    const options = [...new Set((item.options ?? []).map((option) => option.trim()).filter(Boolean))];
+    if (!right || options.length < 2) return null;
+    const shuffled = shuffle(options, options.indexOf(right));
+    return {
+      conceptId,
+      kind: "choice",
+      text,
+      choices: shuffled.options,
+      answer: String(shuffled.correct),
+      keyPoints: [(item.explanation ?? "").trim()],
+      sectionId,
+    };
+  }
+  return {
+    conceptId,
+    kind: item.kind === "explain" ? "short" : "apply",
+    text,
+    choices: null,
+    answer: (item.modelAnswer ?? "").trim(),
+    keyPoints: (item.keyPoints ?? []).map((point) => point.trim()).filter(Boolean),
+    sectionId,
+  };
+}
+
+// Write the test questions for one concept. The function asks one more time if the answer is not usable.
 export async function writeTestQuestions(llm: LlmClient, concept: QuestionConcept, seen: string[]): Promise<WrittenQuestion[]> {
   const sources = concept.sources.slice(0, 3).map((section) => ({ id: String(section.sectionId), title: section.title, text: section.markdown }));
   const sectionOf = (id: string) => {
@@ -184,38 +232,12 @@ export async function writeTestQuestions(llm: LlmClient, concept: QuestionConcep
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     const answer = await llm.object({ system: TEST_QUESTIONS_SYSTEM, sources, prompt, schema: TestQuestionsSchema });
-    const options = [...new Set(answer.recall.options.map((option) => option.trim()).filter(Boolean))];
-    const usable =
-      answer.recall.question.trim() !== "" &&
-      options.length >= 2 &&
-      answer.recall.correctIndex >= 0 &&
-      answer.recall.correctIndex < options.length &&
-      answer.explain.question.trim() !== "" &&
-      answer.apply.question.trim() !== "";
-    if (!usable) continue;
-    const shuffled = shuffle(options, answer.recall.correctIndex);
-    const open = (kind: "short" | "apply", item: z.infer<typeof TestQuestionsSchema>["explain"]): WrittenQuestion => ({
-      conceptId: concept.id,
-      kind,
-      text: item.question.trim(),
-      choices: null,
-      answer: item.modelAnswer.trim(),
-      keyPoints: item.keyPoints.map((point) => point.trim()).filter(Boolean),
-      sectionId: sectionOf(item.sectionId),
-    });
-    return [
-      {
-        conceptId: concept.id,
-        kind: "choice",
-        text: answer.recall.question.trim(),
-        choices: shuffled.options,
-        answer: String(shuffled.correct),
-        keyPoints: [answer.recall.explanation.trim()],
-        sectionId: sectionOf(answer.recall.sectionId),
-      },
-      open("short", answer.explain),
-      open("apply", answer.apply),
-    ];
+    const questions = answer.questions
+      .map((item) => testQuestion(concept.id, item, sectionOf(item.sectionId)))
+      .filter((question): question is WrittenQuestion => question !== null)
+      .slice(0, MAX_TEST_QUESTIONS);
+    // A guess can pass a recall question. Thus, a test needs an open question.
+    if (questions.some((question) => question.kind !== "choice")) return questions;
   }
   return [];
 }

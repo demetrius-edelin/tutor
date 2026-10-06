@@ -264,7 +264,7 @@ function copyQuestions(db: Db, fromSessionId: number, toSessionId: number): void
 
 // Start the test after a lesson. An unfinished test is used again.
 // With again, the test uses the questions of the last finished test, for example to test a mastered concept again.
-// If the concept has no finished test, or again is false, the model must write 3 new questions: needsQuestions is true.
+// If the concept has no finished test, or again is false, the model must write new questions: needsQuestions is true.
 export function startTest(db: Db, conceptId: number, again = false): { sessionId: number; needsQuestions: boolean } {
   const concept = conceptRow(db, conceptId);
   const lessons = db.prepare("SELECT COUNT(*) FROM lessons WHERE concept_id = ?").pluck().get(conceptId) as number;

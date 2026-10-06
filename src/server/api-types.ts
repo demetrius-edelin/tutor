@@ -268,7 +268,6 @@ export interface TestOutcome {
   passed: boolean;
   correct: number;
   total: number;
-  applyCorrect: boolean;
   // The finished tests of the concept that the learner failed, this test included.
   failedTests: number;
   hasPrerequisites: boolean;

@@ -8,17 +8,18 @@ import { parseEpub } from "../src/ingest/parse.js";
 import type { LessonView, SessionView } from "../src/server/api-types.js";
 import { buildServer, type TutorServer } from "../src/server/app.js";
 import { buildEpub, mainFixture } from "./fixtures/epub.js";
-import { FakeLlm } from "./fakes/llm.js";
+import { defaultTestQuestions, FakeLlm } from "./fakes/llm.js";
 
 let db: Db;
 let app: TutorServer;
 let llm: FakeLlm;
 let conceptIds: number[];
+let dataDir: string;
 
 beforeEach(async () => {
   const data = await buildEpub(mainFixture());
   const book = await parseEpub(data);
-  const dataDir = mkdtempSync(join(tmpdir(), "tutor-check-"));
+  dataDir = mkdtempSync(join(tmpdir(), "tutor-check-"));
   const bookFile = join(dataDir, "fixture.epub");
   writeFileSync(bookFile, data);
   db = openDb(":memory:");
@@ -44,12 +45,13 @@ async function startTest(conceptId: number): Promise<SessionView> {
   return get<SessionView>(`/api/sessions/${body.sessionId}`);
 }
 
-// Answer the three questions: right or wrong for each.
-async function answer(session: SessionView, right: [boolean, boolean, boolean]): Promise<SessionView> {
-  const [recall, explain, apply] = session.questions;
-  await post(`/api/questions/${recall!.id}/answer`, { answer: right[0] ? correctIndex(recall!.id) : String((Number(correctIndex(recall!.id)) + 1) % 4) });
-  await post(`/api/questions/${explain!.id}/answer`, { answer: right[1] ? "It has the point." : "No idea." });
-  await post(`/api/questions/${apply!.id}/answer`, { answer: right[2] ? "I use the point." : "No idea." });
+// Answer the questions in their order: right or wrong for each.
+async function answer(session: SessionView, right: boolean[]): Promise<SessionView> {
+  for (const [i, question] of session.questions.entries()) {
+    const wrongOption = String((Number(correctIndex(question.id)) + 1) % 4);
+    const text = question.kind === "choice" ? (right[i] ? correctIndex(question.id) : wrongOption) : right[i] ? "It has the point." : "No idea.";
+    await post(`/api/questions/${question.id}/answer`, { answer: text });
+  }
   return (await post<SessionView>(`/api/sessions/${session.id}/finish`)).body;
 }
 
@@ -112,21 +114,43 @@ describe("the test after a lesson", () => {
     expect(llm.count("test")).toBe(1);
   });
 
-  it("passes with 2 correct answers that include the apply question, and offers the next concept", async () => {
+  it("passes with a correct answer to each question, and offers the next concept", async () => {
     await post(`/api/concepts/${conceptIds[2]}/top`);
     await post(`/api/concepts/${conceptIds[3]}/top`);
-    const finished = await answer(await startTest(conceptIds[1]!), [false, true, true]);
-    expect(finished.outcome).toMatchObject({ passed: true, correct: 2, total: 3, applyCorrect: true, failedTests: 0 });
+    const finished = await answer(await startTest(conceptIds[1]!), [true, true, true]);
+    expect(finished.outcome).toMatchObject({ passed: true, correct: 3, total: 3, failedTests: 0 });
     expect(finished.outcome!.next).toMatchObject({ conceptId: conceptIds[3] });
     expect(statusOf(conceptIds[1]!)).toBe("mastered");
     expect(db.prepare("SELECT queue_pos FROM concepts WHERE id = ?").pluck().get(conceptIds[1])).toBeNull();
   });
 
-  it("fails without a correct apply answer, also with 2 correct answers", async () => {
-    const finished = await answer(await startTest(conceptIds[1]!), [true, true, false]);
-    expect(finished.outcome).toMatchObject({ passed: false, correct: 2, applyCorrect: false, failedTests: 1, next: null });
+  it("fails if one answer is not correct", async () => {
+    const finished = await answer(await startTest(conceptIds[1]!), [false, true, true]);
+    expect(finished.outcome).toMatchObject({ passed: false, correct: 2, total: 3, failedTests: 1, next: null });
     expect(statusOf(conceptIds[1]!)).toBe("learning");
     expect((await get<LessonView>(`/api/concepts/${conceptIds[1]}/lesson`)).failedTests).toBe(1);
+  });
+
+  it("asks one question for a simple concept, and passes with one correct answer", async () => {
+    llm = new FakeLlm({ test: (_, sources) => ({ questions: defaultTestQuestions(sources[0]!.id).slice(2) }) });
+    app = buildServer({ db, dataDir, llm });
+    const session = await startTest(conceptIds[1]!);
+    expect(session.questions.map((question) => question.kind)).toEqual(["apply"]);
+    expect((await answer(session, [true])).outcome).toMatchObject({ passed: true, correct: 1, total: 1 });
+  });
+
+  it("keeps at most 3 questions", async () => {
+    llm = new FakeLlm({ test: (_, sources) => ({ questions: [...defaultTestQuestions(sources[0]!.id), ...defaultTestQuestions(sources[0]!.id)] }) });
+    app = buildServer({ db, dataDir, llm });
+    expect((await startTest(conceptIds[1]!)).questions.length).toBe(3);
+  });
+
+  it("does not use a test with only recall questions, because a guess can pass it", async () => {
+    llm = new FakeLlm({ test: (_, sources) => ({ questions: defaultTestQuestions(sources[0]!.id).slice(0, 1) }) });
+    app = buildServer({ db, dataDir, llm });
+    const session = await startTest(conceptIds[1]!);
+    expect(session).toMatchObject({ status: "failed", error: "The model wrote no usable questions." });
+    expect(llm.count("test")).toBe(2);
   });
 
   it("writes new questions for a second test, with the questions that the learner saw", async () => {

@@ -238,7 +238,7 @@ In the app, you open a theme and go through these stages:
 - Choose: for each module, select the concepts to test, to learn, or to skip.
 - Diagnosis: the tutor asks 2 questions about each concept that you selected as Test. To start it, select Test for a concept on a module page and click "Start the test".
 - Study queue: the concepts to learn, in an order that you can change.
-- Lesson and test: the tutor teaches one concept from your books, with references. Then it tests the concept with 3 questions. A pass makes the concept mastered.
+- Lesson and test: the tutor teaches one concept from your books, with references. Then it tests the concept with the questions that fit it: one question for a simple concept, at most 3 for a larger one. To pass, answer each question correctly. A pass makes the concept mastered.
 - Review board: a list of all concepts with their status and their stars.
 
 The diagnosis, the lessons, the questions about a lesson, and the tests use the model in `.env`. The model writes the questions and grades the open answers. If you think that a grade is wrong, use "Dispute the grade". A disputed answer counts as correct.

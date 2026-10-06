@@ -53,7 +53,7 @@ function SessionBody({ session, onChange }: { session: SessionView; onChange: (s
         <h1>{title}</h1>
         <p className="lead" role="status">
           <Spinner />
-          The tutor writes 3 new questions about the concept.
+          The tutor writes new questions about the concept.
         </p>
         <Waiting />
       </>
@@ -153,7 +153,7 @@ function QuestionFlow({ session, title, onChange }: { session: SessionView; titl
       <p className="lead">
         Question {index + 1} of {session.questions.length}.{" "}
         {session.kind === "test"
-          ? "To pass the test, answer 2 questions correctly. The apply question must be one of them."
+          ? "To pass the test, answer each question correctly."
           : "Answer from what you know now. A wrong answer only puts the concept in your study queue."}
       </p>
       <QuestionCard
@@ -194,7 +194,7 @@ const VERDICT: Record<number, string> = { 2: "Correct", 1: "Partly correct", 0: 
 const TEST_LABEL: Record<QuestionView["kind"], string> = {
   choice: "Recall question",
   short: "Explain question",
-  apply: "Apply question. You must answer this question correctly to pass.",
+  apply: "Apply question",
 };
 
 function QuestionCard({
@@ -562,10 +562,7 @@ function TestResults({ session }: { session: SessionView }) {
         <h1>You did not pass the test</h1>
       </div>
       <p className="lead">
-        {score}{" "}
-        {outcome.correct >= 2
-          ? "To pass, the answer to the apply question must be correct."
-          : "To pass, answer 2 questions correctly. The apply question must be one of them."}
+        {score} To pass, answer each question correctly.
       </p>
       {/* A failed test again of a mastered concept does not change its status. */}
       {session.results?.[0]?.status === "mastered" && (

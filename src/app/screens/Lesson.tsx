@@ -315,13 +315,13 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
         {mastered ? (
           <p>
             The concept is mastered. To check that you still know it, test it again.{" "}
-            {view.hasFinishedTest ? "The test uses the questions of your last test." : "The test has 3 new questions."}
+            {view.hasFinishedTest ? "The test uses the questions of your last test." : "The tutor writes new questions."}
           </p>
         ) : (
           <>
             <p>
-              The test has 3 new questions: recall, explain, and apply. To pass, answer 2 questions correctly. The apply question must be one
-              of them.
+              The tutor writes the questions that fit the concept: one question for a simple concept, more for a concept with more parts. To
+              pass, answer each question correctly.
               {view.failedTests > 0 && ` You did not pass the test ${view.failedTests} ${view.failedTests === 1 ? "time" : "times"}.`}
             </p>
             <p>For a simple concept, skip the test. The concept then becomes mastered.</p>

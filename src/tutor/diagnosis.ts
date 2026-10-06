@@ -129,7 +129,7 @@ export function failInterruptedSessions(db: Db): void {
 
 // Write the questions of a session. The function runs in the background. It saves the questions
 // of each group of concepts at once, so that the app can show the progress.
-// A diagnosis gets 2 questions for each concept. A test after a lesson gets 3 new questions.
+// A diagnosis gets 2 questions for each concept. A test after a lesson gets the new questions that fit the concept.
 export async function prepareSession(db: Db, llm: LlmClient, dataDir: string, sessionId: number): Promise<void> {
   try {
     db.prepare("UPDATE sessions SET status = 'preparing', error = NULL WHERE id = ?").run(sessionId);
@@ -305,21 +305,17 @@ function sessionConcept(db: Db, sessionId: number): SessionView["concept"] {
 
 const isCorrect = (attempt: AttemptRow | undefined) => attempt !== undefined && (attempt.score === 2 || attempt.disputed === 1);
 
-// The pass rule of a test: at least 2 correct answers, and one of them is the apply question.
-function testScore(db: Db, sessionId: number): { correct: number; total: number; applyCorrect: boolean } {
-  const questions = db.prepare("SELECT id, kind FROM questions WHERE session_id = ? ORDER BY position").all(sessionId) as { id: number; kind: string }[];
-  const attempts = latestAttempts(db, questions.map((question) => question.id));
-  return {
-    correct: questions.filter((question) => isCorrect(attempts.get(question.id))).length,
-    total: questions.length,
-    applyCorrect: questions.some((question) => question.kind === "apply" && isCorrect(attempts.get(question.id))),
-  };
+// The pass rule of a test: each question has a correct answer.
+function testScore(db: Db, sessionId: number): { correct: number; total: number; passed: boolean } {
+  const questions = db.prepare("SELECT id FROM questions WHERE session_id = ? ORDER BY position").pluck().all(sessionId) as number[];
+  const attempts = latestAttempts(db, questions);
+  const correct = questions.filter((id) => isCorrect(attempts.get(id))).length;
+  return { correct, total: questions.length, passed: questions.length > 0 && correct === questions.length };
 }
 
 function testOutcome(db: Db, sessionId: number): TestOutcome {
   const concept = sessionConcept(db, sessionId)!;
-  const score = testScore(db, sessionId);
-  const passed = score.correct >= 2 && score.applyCorrect;
+  const { passed, correct, total } = testScore(db, sessionId);
   const themeId = db.prepare("SELECT theme_id FROM concepts WHERE id = ?").pluck().get(concept.id) as number;
   const next = passed
     ? ((db
@@ -330,7 +326,8 @@ function testOutcome(db: Db, sessionId: number): TestOutcome {
     : null;
   return {
     passed,
-    ...score,
+    correct,
+    total,
     failedTests: failedTests(db, concept.id),
     hasPrerequisites: (db.prepare("SELECT COUNT(*) FROM concept_prereqs WHERE concept_id = ?").pluck().get(concept.id) as number) > 0,
     next,
@@ -449,8 +446,7 @@ export function finishSession(db: Db, sessionId: number): SessionView {
   // After a fail, the concept stays in its lesson, and the learner chooses the next step.
   if (session.kind === "test") {
     const concept = sessionConcept(db, sessionId)!;
-    const score = testScore(db, sessionId);
-    const passed = score.correct >= 2 && score.applyCorrect;
+    const { passed } = testScore(db, sessionId);
     db.transaction(() => {
       if (passed) setStatus(db, concept.id, "mastered");
       db.prepare("UPDATE session_concepts SET result = ? WHERE session_id = ?").run(passed ? "known" : "failed", sessionId);

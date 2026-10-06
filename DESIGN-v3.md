@@ -327,15 +327,26 @@ The answers in the chat use the same rules.
 
 ## Test
 
-A test has 3 new questions on the concept:
+A test has 1 to 3 new questions on the concept. The model selects the questions that fit the concept:
 
-1. Recall: a multiple-choice question.
-2. Explain: a short answer of 1 to 3 sentences.
-3. Apply: a scenario or a task. The user writes the answer, and the grader scores it.
+- A simple concept gets one question.
+- A concept with more than one part gets one question for each part. Two questions do not test the same thing.
+
+The questions have these kinds:
+
+- Apply: a case or a task, for example write a query, predict a result, find an error, or choose a solution. The user writes the answer, and the grader scores it.
+- Explain: a short answer of one or two sentences, for an idea that a case cannot test.
+- Recall: a multiple-choice question. The model uses it only to test the recognition of something, for example a term or a rule.
+
+Each test has at least one apply or explain question, because a guess can pass a recall question. For a comparison of two things, the question asks the user to choose one of them for a case.
+
+The user types each answer. Thus, each question asks one thing, and a short answer is enough. The grader checks the understanding, not the completeness of the answer. A typo or a missing explanation does not lower the score.
+
+The limit of 3 questions is the constant `MAX_TEST_QUESTIONS` in `src/tutor/questions.ts`. Most concepts come from one section and have an objective of one sentence. Thus, 3 questions cover them.
 
 The model writes the questions from the sections of the concept. The prompt includes the questions that the user saw before, so that each test has new questions. If the user leaves a test before the end, "Test me" opens the same test again.
 
-To pass, the user must answer 2 of the 3 questions correctly. One of the 2 must be the apply question.
+To pass, the user must answer each question correctly.
 
 After an answer, the user can click "Retake the question". The tutor then removes the answers of the question and shows the empty question again. This also works in a diagnosis. After the results, the answers of the session do not change, because the results come from them.
 
@@ -406,8 +417,8 @@ The address of the page keeps the filters. Thus, a link or a bookmark can open t
 
 The lesson page of a `mastered` concept has the "Test me again" button. The user reads the lesson again, then tests the concept again.
 
-- The test uses the 3 questions of the last finished test of the concept again. The options of the recall question come in a new order. The test is ready at once, with no model call to write questions.
-- If the concept has no finished test, for example after "Skip the test", the model writes 3 new questions, as for "Test me".
+- The test uses the questions of the last finished test of the concept again. The options of the recall question come in a new order. The test is ready at once, with no model call to write questions.
+- If the concept has no finished test, for example after "Skip the test", the model writes new questions, as for "Test me".
 - The pass rule is the same as for each test. A pass keeps the concept `mastered`.
 - After a fail, the concept stays `mastered`. The results offer the usual actions. "Teach it again" writes a new lesson now. "Later" puts the concept at the end of the study queue. "Skip" skips the concept.
 

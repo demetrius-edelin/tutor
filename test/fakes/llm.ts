@@ -33,6 +33,25 @@ export interface FakeHandlers {
   text?: (request: TextRequest) => TextResult;
 }
 
+// Default test questions: a recall, an explain, and an apply question.
+export function defaultTestQuestions(sectionId: string) {
+  const open = { options: null, correctIndex: null, explanation: null, sectionId };
+  return [
+    {
+      kind: "recall",
+      question: "Which option is right?",
+      options: ["right", "wrong one", "wrong two", "wrong three"],
+      correctIndex: 0,
+      explanation: "The first option is right.",
+      keyPoints: null,
+      modelAnswer: null,
+      sectionId,
+    },
+    { kind: "explain", question: "Explain the concept.", keyPoints: ["point"], modelAnswer: "The point.", ...open },
+    { kind: "apply", question: "Use the concept in this case.", keyPoints: ["point"], modelAnswer: "The point, used.", ...open },
+  ];
+}
+
 // Default questions: the first option is correct, and a good open answer contains "point".
 export function defaultQuestions(conceptIds: string[], sources: Source[]) {
   return {
@@ -94,11 +113,7 @@ export class FakeLlm implements LlmClient {
       answer = this.handlers.questions?.(ids, sources) ?? defaultQuestions(ids, sources);
     } else if (stage === "test") {
       const sectionId = sources[0]?.id ?? "0";
-      answer = this.handlers.test?.(request.prompt, sources) ?? {
-        recall: { question: "Which option is right?", options: ["right", "wrong one", "wrong two", "wrong three"], correctIndex: 0, explanation: "The first option is right.", sectionId },
-        explain: { question: "Explain the concept.", keyPoints: ["point"], modelAnswer: "The point.", sectionId },
-        apply: { question: "Use the concept in this case.", keyPoints: ["point"], modelAnswer: "The point, used.", sectionId },
-      };
+      answer = this.handlers.test?.(request.prompt, sources) ?? { questions: defaultTestQuestions(sectionId) };
     } else if (stage === "image") {
       answer = this.handlers.image?.(request.images ?? [], this.count("image")) ?? { kind: "code", language: "sql", text: "SELECT 1;" };
     } else if (stage === "grade") {
