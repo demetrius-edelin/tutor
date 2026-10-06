@@ -47,12 +47,18 @@ const QuestionsSchema = z.object({
   ),
 });
 
+// The learner types the answers. A short answer that shows the understanding is enough,
+// so the questions do not ask for more text than the concept needs.
+const SHORT_ANSWER_RULES = `- Each open question asks one thing. Do not add "explain why", "give an example", or "briefly explain" to a task.
+- A choice between two or more solutions needs a reason, but a few words are enough.
+- keyPoints: the 1 or 2 points that show that the learner understands the concept. Do not add a point that the question does not ask for, for example a reason, an example, or a number. modelAnswer: the shortest correct answer.`;
+
 export const QUESTIONS_SYSTEM = `You write diagnosis questions. A diagnosis checks if a learner knows a concept already, before a lesson.
 Rules:
 - Base each question on the sources. Test the understanding of the concept, not the memory of the book. Do not ask about the book, the author, the chapter, page numbers, or exact words.
 - The multiple-choice question has 4 options and exactly one correct option. The wrong options must look correct to a learner who does not know the concept. Do not use "all of the above" or "none of the above". The explanation tells in one or two sentences why the correct option is correct.
-- The open question: for a "knowledge" concept, use kind "short": the learner explains in 1 to 3 sentences. For a "skill" concept, use kind "apply": a small task with a concrete case, for example write a query, predict a result, or choose and give the reason. The learner can answer in a few lines.
-- keyPoints: 2 to 4 points that a correct answer must have. modelAnswer: a short correct answer.
+- The open question: for a "knowledge" concept, use kind "short": the learner explains one idea in one or two sentences. For a "skill" concept, use kind "apply": a small task with a concrete case, for example write a query, predict a result, or choose a solution. The answer is the query, the result, or the choice.
+${SHORT_ANSWER_RULES}
 - sectionId: the id of the source that the question uses.
 - The two questions of a concept must test different things.`;
 
@@ -154,11 +160,11 @@ const TestQuestionsSchema = z.object({
 export const TEST_QUESTIONS_SYSTEM = `You write test questions. The learner had a lesson about one concept. The test checks if the learner understands it now.
 Write three questions:
 - recall: a multiple-choice question with 4 options and exactly one correct option. The wrong options must look correct to a learner who did not understand the lesson. Do not use "all of the above" or "none of the above". The explanation tells in one or two sentences why the correct option is correct.
-- explain: the learner explains an idea of the concept in 1 to 3 sentences.
-- apply: the learner uses the concept in a concrete case, for example writes a query, predicts a result, finds an error, or chooses a solution and gives the reason. The learner can answer in a few lines.
+- explain: the learner explains one idea of the concept in one or two sentences.
+- apply: the learner uses the concept in a concrete case, for example writes a query, predicts a result, finds an error, or chooses a solution. The answer is the query, the result, the error, or the choice.
 Rules:
 - Base the questions on the sources. Do not ask about the book, the author, the chapter, page numbers, or exact words.
-- keyPoints: 2 to 4 points that a correct answer must have. modelAnswer: a short correct answer.
+${SHORT_ANSWER_RULES}
 - sectionId: the id of the source that the question uses.
 - Do not repeat a question that the learner saw before. Test other parts of the concept, or the same part in a new way.`;
 
