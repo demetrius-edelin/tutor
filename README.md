@@ -192,7 +192,7 @@ data/           your books, the results, and the database (not in git)
 
 ## AI assistance
 
-I built Tutor with Claude Code. All the product and design decisions are mine, and I tested each milestone with my own books and models. Claude wrote the code and most of the documentation.
+I built Tutor with Claude Code. All the product and design decisions are mine, and I tested each milestone carefully with real books. Claude wrote the code and most of the documentation.
 
 ## Contributing
 
@@ -213,3 +213,7 @@ Before you send a pull request, do these steps:
 ## License
 
 [MIT](LICENSE)
+
+---
+
+**I am available for hire.** Contact me on [LinkedIn](https://www.linkedin.com/in/demetrius-edelin/).
