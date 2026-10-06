@@ -212,10 +212,114 @@ p {
   gap: 0.25rem 1rem;
 }
 
-.subject-name {
+/* The name of the subject is a button. It opens the menu of all subjects. */
+.subject-switch {
   padding-left: 1.5rem;
   border-left: 1px solid var(--rule);
+}
+
+.subject-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.6rem 0.4rem 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.3rem;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
   font-weight: 600;
+  cursor: pointer;
+  anchor-name: --subject-switch;
+}
+
+.subject-switch button:hover,
+.subject-switch:has(:popover-open) button {
+  border-color: var(--graphite);
+}
+
+.subject-switch .chevron {
+  color: var(--graphite);
+  transition: transform 120ms ease-out;
+}
+
+.subject-switch:has(:popover-open) .chevron {
+  transform: rotate(180deg);
+}
+
+/* A browser without anchor positioning shows the menu in the center of the window. */
+.subject-menu {
+  min-width: 16rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.4rem 0;
+  border: 1px solid var(--rule);
+  border-radius: 0.4rem;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 0.4rem 1.2rem color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+@supports (anchor-name: --subject-switch) {
+  .subject-menu {
+    position-anchor: --subject-switch;
+    position-area: bottom span-right;
+    position-try-fallbacks: flip-inline;
+    inset: auto;
+    margin: 0.35rem 0 0;
+  }
+}
+
+.subject-menu ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subject-menu a {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.5rem 1rem;
+  text-decoration: none;
+}
+
+.subject-menu a:hover {
+  background: color-mix(in srgb, var(--rule) 40%, var(--panel));
+}
+
+/* The focus ring stays inside the menu, because the menu cuts off the content outside its border. */
+.subject-menu a:focus-visible {
+  outline-offset: -2px;
+}
+
+/* The current subject has the red mark of the active tab. */
+.subject-menu a[aria-current] {
+  box-shadow: inset 3px 0 0 var(--margin-red);
+  font-weight: 600;
+}
+
+.subject-menu-figure {
+  color: var(--graphite);
+  font-size: var(--step--1);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.subject-menu .subject-menu-all {
+  margin-top: 0.4rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--rule);
+  color: var(--graphite);
+  font-size: var(--step--1);
+  font-weight: 500;
+}
+
+.subject-menu-note {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  color: var(--graphite);
 }
 
 .tabs {
@@ -1860,7 +1964,7 @@ button.button {
   .topbar {
     gap: 0.25rem 1rem;
   }
-  .subject-name {
+  .subject-switch {
     padding-left: 0;
     border-left: 0;
   }
