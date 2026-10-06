@@ -159,7 +159,7 @@ describe("ingestBook", () => {
 
   it("previews some chapters and does not change the database", async () => {
     const llm = new FakeLlm();
-    const report = await ingestBook({ llm, db, dataDir, themeName: "Git", bookFile, book, chapters: [1] });
+    const report = await ingestBook({ llm, db, dataDir, themeName: "Git", bookFile, book, chapters: [1], preview: true });
     expect(report.preview).toBe(true);
     expect(report.chapters.map((chapter) => chapter.number)).toEqual([1]);
     expect(db.prepare("SELECT COUNT(*) FROM concepts").pluck().get()).toBe(0);
@@ -184,9 +184,9 @@ describe("ingestBook", () => {
     expect(llm.calls.some((call) => call.request.sources?.some((source) => source.id.startsWith("1.")))).toBe(false);
   });
 
-  it("saves some chapters with save, and keeps their concepts in a later full run", async () => {
+  it("saves some chapters, and keeps their concepts in a later full run", async () => {
     const otherDb = openDb(":memory:");
-    await ingestBook({ llm: new FakeLlm(), db: otherDb, dataDir, themeName: "Partial", bookFile, book, chapters: [1], save: true });
+    await ingestBook({ llm: new FakeLlm(), db: otherDb, dataDir, themeName: "Partial", bookFile, book, chapters: [1] });
     const firstIds = otherDb.prepare("SELECT id FROM concepts ORDER BY id").pluck().all();
     expect(firstIds.length).toBe(book.chapters[0]!.sections.length);
     expect(otherDb.prepare("SELECT COUNT(*) FROM sections").pluck().get()).toBe(

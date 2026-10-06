@@ -15,7 +15,7 @@ export function Home() {
       {themes.state === "ready" && themes.data.length === 0 && (
         <Notice title="No themes yet">
           <p>A theme is an area of study with its own books. To make one, add a book from the terminal:</p>
-          <pre className="command">npm run ingest -- SQL /path/to/book.epub --chapters 1 --save</pre>
+          <pre className="command">npm run ingest -- SQL /path/to/book.epub --chapters 1</pre>
           <p>Then open this page again.</p>
         </Notice>
       )}

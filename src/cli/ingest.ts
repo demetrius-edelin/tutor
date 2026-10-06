@@ -12,8 +12,8 @@ import { createClient, LlmError } from "../llm/index.js";
 const USAGE = `Usage: npm run ingest -- <theme> <book.epub | book.pdf> [options]
 
 Options:
-  --chapters <list>  Preview only these chapters, for example 1-3 or 2,5. A preview does not change the database.
-  --save             Save the chapters of --chapters to the database.
+  --chapters <list>  Ingest only these chapters, for example 1-3 or 2,5.
+  --preview          Do not change the database. Write the concept map to a preview file.
   --yes              Start without the question.
   --fresh            Ignore the cached chapter results.
   --replace          Replace the book if the theme has it already.`;
@@ -81,7 +81,7 @@ async function main(): Promise<void> {
   console.log(`\nBook: ${book.title}`);
   console.log(`Theme: ${themeName}`);
   console.log(`Model: ${config.provider} ${config.model}${config.reasoning ? `, reasoning ${config.reasoning}` : ""}`);
-  const mode = !chapters ? "" : flag("--save") ? " (saved to the database)" : " (preview, the database does not change)";
+  const mode = flag("--preview") ? " (preview, the database does not change)" : " (saved to the database)";
   console.log(`Chapters: ${selected.length} of ${book.chapters.length}${mode}`);
   console.log(`Text: ${words.toLocaleString("en-US")} words`);
   if (images > 0) console.log(`Images: ${images} to read with the model`);
@@ -115,7 +115,7 @@ async function main(): Promise<void> {
       bookFile,
       book,
       ...(chapters ? { chapters } : {}),
-      save: flag("--save"),
+      preview: flag("--preview"),
       fresh: flag("--fresh"),
       replace: flag("--replace"),
       log: (line) => console.log(line),

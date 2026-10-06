@@ -18,10 +18,10 @@ export interface IngestOptions {
   themeName: string;
   bookFile: string;
   book: ParsedBook;
-  // Run only these chapters. Without save, the run is a preview that does not change the database.
+  // Run only these chapters.
   chapters?: number[];
-  // Save the result of a run with chapters to the database.
-  save?: boolean;
+  // A preview does not change the database. It writes the concept map and the report as preview files.
+  preview?: boolean;
   // Remove the cached chapter results first.
   fresh?: boolean;
   // Replace the book if the theme has it already.
@@ -117,7 +117,7 @@ function recheckQuotes(digest: ChapterDigest, chapter: ChapterInput): ChapterDig
 export async function ingestBook(options: IngestOptions): Promise<IngestReport> {
   const { llm, db, dataDir, themeName, book } = options;
   const log = options.log ?? (() => {});
-  const preview = options.chapters !== undefined && !options.save;
+  const preview = options.preview === true;
   const themeSlug = slugify(themeName);
   const bookSlug = slugify(book.title);
 

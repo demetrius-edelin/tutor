@@ -227,7 +227,7 @@ A reference gives the book, the chapter title, and the section title. If the EPU
 A change to the parser, for example a fix for code blocks or the image texts, changes the text of the sections. `npm run refresh -- <theme> <book>` gives an ingested book the new parse:
 
 1. Parse the book again with the current parser.
-2. Read the images that are not in the cache, but only in the chapters with concepts. A book can have concepts from some chapters only, after `ingest --chapters <list> --save`. Ingest reads the images of the other chapters when it ingests them.
+2. Read the images that are not in the cache, but only in the chapters with concepts. A book can have concepts from some chapters only, after `ingest --chapters <list>`. Ingest reads the images of the other chapters when it ingests them.
 3. Check that each section of the new parse has its row in the database, with the same file. If one section does not match, stop and change no section.
 4. Write the section files and the word counts of the sections.
 
@@ -447,7 +447,7 @@ The app has two types of run:
 - Preview: the user selects some chapters. Ingest runs on these chapters and does not change the database. The app shows the preview concept map and the preview report.
 - Full run: ingest runs on all chapters and saves the result. The chapters of an earlier preview come from the cache and cost nothing.
 
-The command keeps the options `--save`, `--fresh`, and `--replace`. The app does not offer them.
+The command can also save some chapters to the database: `--chapters` without `--preview`. The command also keeps the options `--fresh` and `--replace`. The app does not offer these runs and options.
 
 Before each run, the app shows the number of model requests, as the command does. If ingest reads the images of the book (milestone 13 in `PLAN.md`), the number includes the images.
 
