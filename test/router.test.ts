@@ -15,6 +15,13 @@ describe("router", () => {
     expect(parseHash("#/themes/sql/board?show=other")).toMatchObject({ show: "all" });
   });
 
+  it("opens the concept map at a concept or at a module", () => {
+    expect(parseHash(href.map("sql", "b-tree-index"))).toEqual({ name: "map", slug: "sql", concept: "b-tree-index", module: null });
+    expect(parseHash(href.mapModule("sql", 3))).toEqual({ name: "map", slug: "sql", concept: null, module: 3 });
+    // A module number that is not valid opens the map at the start.
+    expect(parseHash("#/themes/sql/map?module=x")).toMatchObject({ module: null });
+  });
+
   it("writes the filters into the address, and reads the same filters back", () => {
     const filters = { show: "learned", starred: true, find: "index " } as const;
     const hash = href.board("sql", filters);

@@ -46,7 +46,7 @@ The tutor suggests what to test, what to learn, and in which order. The user mak
 
 The loop has these steps:
 
-1. Select: the tutor shows the concepts of a module. The user marks each concept "Test", "Learn", or "Skip".
+1. Select: on the concept map, the user marks concepts "Test", "Learn", or "Skip". One mark can apply to many concepts from different modules.
 2. Diagnose: the tutor tests the concepts with the mark "Test".
 3. Choose: the tutor shows the results. For each failed concept, the user selects "Learn" or "Skip".
 4. Queue: each "Learn" concept goes into the study queue. The tutor suggests an order, and the user can change it.
@@ -241,18 +241,33 @@ To measure ingest, select one chapter and write a list of its concepts by hand. 
 
 ## Select
 
-The user selects one module at a time. The tutor suggests the next module in the map order, but the user can open any module on the map screen. Thus, the user does not take a long test at the start.
+The user marks concepts on the map screen. The map has one page for all modules. The user marks only the concepts that the user selects. Thus, the user does not take a long test at the start.
 
-The module screen lists the concepts of the module with their objectives. Each concept that has no mark yet has a control with four marks: "Test", "Learn", "Skip", and "Later". The default mark is "Later", so that the user tests only the concepts that the user selects. A "Mark all as" control changes all marks in one step. The "Start the test" button sends the marks.
+Each concept row has these buttons:
 
-The screen also lists the concepts that the user marked already, with their status. The "Change" button lets the user give such a concept a new mark. Thus, the user can correct a wrong mark.
+- "Learn now": the concept goes to the top of the study queue, and its lesson opens.
+- "Add to the queue": the concept goes to the end of the study queue.
+- "Test it": the tutor starts a diagnosis of this concept.
+- "Skip": the concept becomes `skipped`.
 
-The marks have these effects:
+A skipped concept has an "Undo" button next to its status. A concept with a lesson (`learning` or `mastered`) has one button that opens the lesson.
 
-- Test: the tutor tests the concept in the diagnosis.
-- Learn: the concept goes into the study queue directly, without a test.
-- Skip: the concept becomes `skipped`. The user can change this mark later.
-- Later: the concept stays `new`, or goes back to `new`. The user decides later.
+To mark many concepts in one step, the user selects their checkboxes. Each module heading has a "Select all" button. The selection can include concepts from different modules. A concept with a lesson has no checkbox, because its actions are on the lesson page.
+
+If the selection is not empty, a bar at the bottom of the page shows these buttons:
+
+- "Test them": the tutor tests all selected concepts in one diagnosis.
+- "Add to the queue": the selected concepts go to the end of the study queue.
+- "Skip": the selected concepts become `skipped`.
+
+The buttons send marks to the server. One request can mark concepts from all modules of the theme. The marks have these effects:
+
+- Test: the tutor tests the concept in a diagnosis. All concepts with the mark "Test" in one request go into one diagnosis.
+- Learn: the concept goes into the study queue directly, without a test. A concept in the queue keeps its place.
+- Skip: the concept becomes `skipped`.
+- Later: the concept goes back to `new`. The "Undo" button of a skipped concept sends this mark.
+
+A diagnosis of concepts from one module shows the name of the module. A diagnosis of concepts from different modules has no module.
 
 ## Diagnose
 
@@ -620,7 +635,7 @@ Some requests wait for the model, for example a new lesson. A book upload can al
 
 - Home: the list of themes, with the progress of each theme. A field to create a new theme (phase 3).
 - Theme: the books of the theme and the progress. In phase 3: the "Add book" button, the ingest progress, and the ingest report of each book. Until then, ingest runs from the command line. The "Next to learn" card opens the lesson of the first concept in the queue.
-- Map: the modules and concepts, with the status, the star, and the sources of each concept. Open a module here to mark its concepts. Undo a skip here.
+- Map: the modules and concepts, with the status, the star, and the sources of each concept. Mark one concept with its buttons, or select many concepts and mark them in one step. Undo a skip here. A module on the theme screen opens the map at that module.
 - Diagnosis: the questions one at a time. Then the results, with the "Learn" and "Skip" choices.
 - Queue: the study queue, with drag and drop and the queue buttons.
 - Review board: one short line for each concept, with the status filters, the star filter, and the search. See "Review board".

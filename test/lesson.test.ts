@@ -73,8 +73,7 @@ describe("lessons", () => {
 
   it("tells the model about the wrong answers of the diagnosis", async () => {
     const id = conceptIds[0]!;
-    const moduleId = db.prepare("SELECT module_id FROM concepts WHERE id = ?").pluck().get(id);
-    const { body } = await post<{ sessionId: number }>(`/api/modules/${moduleId}/selection`, { marks: { [id]: "test" } });
+    const { body } = await post<{ sessionId: number }>(`/api/themes/git/selection`, { marks: { [id]: "test" } });
     await app.idle();
     const session = await get<SessionView>(`/api/sessions/${body.sessionId}`);
     await post(`/api/questions/${session.questions[1]!.id}/answer`, { answer: "No idea." });
@@ -107,9 +106,7 @@ describe("lessons", () => {
     const [prerequisite, concept] = [conceptIds[0]!, conceptIds[1]!];
     db.prepare("DELETE FROM concept_prereqs").run();
     db.prepare("INSERT INTO concept_prereqs (concept_id, prereq_id) VALUES (?, ?)").run(concept, prerequisite);
-    await post(`/api/modules/${db.prepare("SELECT module_id FROM concepts WHERE id = ?").pluck().get(concept)}/selection`, {
-      marks: { [concept]: "learn" },
-    });
+    await post(`/api/themes/git/selection`, { marks: { [concept]: "learn" } });
     const view = await get<LessonView>(`/api/concepts/${concept}/lesson`);
     expect(view.missingPrerequisites).toEqual([expect.objectContaining({ conceptId: prerequisite, status: "new", position: null })]);
     expect(view.warning).toContain("which you do not know yet");

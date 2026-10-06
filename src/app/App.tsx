@@ -5,7 +5,6 @@ import { ConceptMap } from "./screens/ConceptMap";
 import { Home } from "./screens/Home";
 import { Lesson } from "./screens/Lesson";
 import { Queue } from "./screens/Queue";
-import { Select } from "./screens/Select";
 import { Session } from "./screens/Session";
 import { Theme } from "./screens/Theme";
 
@@ -17,9 +16,7 @@ export function App() {
     case "theme":
       return <Theme slug={route.slug} />;
     case "map":
-      return <ConceptMap key={route.slug} slug={route.slug} focus={route.concept} />;
-    case "select":
-      return <Select key={`${route.slug}-${route.moduleId}`} slug={route.slug} moduleId={route.moduleId} />;
+      return <ConceptMap key={route.slug} slug={route.slug} focus={route.concept} focusModule={route.module} />;
     case "queue":
       return <Queue key={route.slug} slug={route.slug} />;
     case "board":

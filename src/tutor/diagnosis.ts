@@ -15,7 +15,7 @@ import type {
 import { gradeAnswer } from "./grader.js";
 import { questionBatches, writeQuestions, writeTestQuestions, type QuestionConcept, type WrittenQuestion } from "./questions.js";
 
-// The diagnosis: the learner marks the concepts of a module, the tutor tests the concepts
+// The diagnosis: the learner marks concepts on the concept map, the tutor tests the concepts
 // with the mark "test", and the learner chooses what to learn from the results.
 
 export class TutorError extends Error {
@@ -58,18 +58,20 @@ export function createSession(db: Db, themeId: number, moduleId: number | null, 
   return sessionId;
 }
 
-// Apply the marks of the learner for the concepts of one module. A concept without a mark
+// Apply the marks of the learner for concepts of one theme, from any module. A concept without a mark
 // does not change. A mark can also change an earlier mark, for example "learn" to "test".
 // The concepts with the mark "test" get a new diagnosis session. The function returns the session id, or null.
-export function applyMarks(db: Db, moduleId: number, marks: Record<string, Mark>): { sessionId: number | null; queued: number; skipped: number } {
-  const module = db.prepare("SELECT id, theme_id FROM modules WHERE id = ?").get(moduleId) as { id: number; theme_id: number } | undefined;
-  if (!module) throw new TutorError(`The module ${moduleId} does not exist.`, 404);
-  const conceptIds = new Set(
-    db.prepare("SELECT id FROM concepts WHERE module_id = ?").pluck().all(moduleId) as number[],
+export function applyMarks(db: Db, themeSlug: string, marks: Record<string, Mark>): { sessionId: number | null; queued: number; skipped: number } {
+  const themeId = db.prepare("SELECT id FROM themes WHERE slug = ?").pluck().get(themeSlug) as number | undefined;
+  if (themeId === undefined) throw new TutorError(`The theme "${themeSlug}" does not exist.`, 404);
+  const moduleOf = new Map(
+    (db.prepare("SELECT id, module_id FROM concepts WHERE theme_id = ?").all(themeId) as { id: number; module_id: number }[]).map(
+      (row) => [row.id, row.module_id],
+    ),
   );
   const entries = Object.entries(marks).map(([id, mark]) => [Number(id), mark] as const);
   for (const [id, mark] of entries) {
-    if (!conceptIds.has(id)) throw new TutorError(`The concept ${id} is not in the module ${moduleId}.`);
+    if (!moduleOf.has(id)) throw new TutorError(`The concept ${id} is not in the theme "${themeSlug}".`);
     if (!["test", "learn", "skip", "later"].includes(mark)) throw new TutorError(`"${mark}" is not a valid mark.`);
   }
 
@@ -94,7 +96,10 @@ export function applyMarks(db: Db, moduleId: number, marks: Record<string, Mark>
       }
     }
     if (toTest.length === 0) return { sessionId: null, queued, skipped };
-    return { sessionId: createSession(db, module.theme_id, module.id, toTest, "diagnose"), queued, skipped };
+    // A diagnosis of concepts from one module belongs to that module. A diagnosis of concepts from more modules has no module.
+    const modules = new Set(toTest.map((id) => moduleOf.get(id)!));
+    const moduleId = modules.size === 1 ? [...modules][0]! : null;
+    return { sessionId: createSession(db, themeId, moduleId, toTest, "diagnose"), queued, skipped };
   })();
 }
 

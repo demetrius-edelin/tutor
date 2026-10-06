@@ -11,7 +11,7 @@ const TABS: { tab: ThemeTab; label: string; href: (slug: string) => string }[] =
 ];
 
 // A page in a theme shows the tabs of the theme. The tab of the page has a mark.
-// A lesson, a test, or a module page has the mark on the tab that it belongs to.
+// A lesson or a test has the mark on the tab that it belongs to.
 export function Layout({ theme, tab, children }: { theme?: { slug: string; name: string }; tab?: ThemeTab; children: ReactNode }) {
   const route = useRoute();
   return (

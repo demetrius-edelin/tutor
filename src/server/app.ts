@@ -89,10 +89,11 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError }: Serve
 
   // Diagnosis
 
-  app.post<{ Params: { id: string }; Body: { marks: Record<string, Mark> } }>("/api/modules/:id/selection", async (request) => {
+  // The marks of the learner for concepts from any module of the theme.
+  app.post<{ Params: { slug: string }; Body: { marks: Record<string, Mark> } }>("/api/themes/:slug/selection", async (request) => {
     const marks = request.body?.marks ?? {};
     if (Object.values(marks).includes("test")) requireModel();
-    const result = applyMarks(db, Number(request.params.id), marks);
+    const result = applyMarks(db, request.params.slug, marks);
     if (result.sessionId !== null) runInBackground(prepareSession(db, requireModel(), dataDir, result.sessionId));
     return result;
   });

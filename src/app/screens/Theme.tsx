@@ -7,7 +7,7 @@ import { href } from "../router";
 const n = (value: number) => value.toLocaleString("en-US");
 const plural = (count: number, word: string) => `${n(count)} ${word}${count === 1 ? "" : "s"}`;
 
-// A concept to test or a failed concept also needs a choice: the module page shows it as not chosen.
+// A concept to test or a failed concept also needs a choice: the concept map counts it as not chosen.
 const notChosen = (progress: StatusCounts) => progress.new + progress.to_test + progress.failed;
 
 export function Theme({ slug }: { slug: string }) {
@@ -146,7 +146,7 @@ function ModuleRow({ slug, module }: { slug: string; module: ModuleSummary }) {
       <div>
         <div className="module-title-row">
           <span className="module-name">{module.name}</span>
-          <a className={open > 0 ? "button small secondary" : "text-link"} href={href.select(slug, module.id)}>
+          <a className={open > 0 ? "button small secondary" : "text-link"} href={href.mapModule(slug, module.id)}>
             {open > 0 ? "Choose concepts" : "Change the choices"}
           </a>
         </div>

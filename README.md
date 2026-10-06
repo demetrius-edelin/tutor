@@ -235,8 +235,8 @@ The command builds the app and starts the server. The server listens only on you
 
 In the app, you open a theme and go through these stages:
 
-- Choose: for each module, select the concepts to test, to learn, or to skip.
-- Diagnosis: the tutor asks 2 questions about each concept that you selected as Test. To start it, select Test for a concept on a module page and click "Start the test".
+- Choose: on the concept map, test, learn, or skip each concept. To do this for many concepts in one step, select their checkboxes and use the bar at the bottom of the page.
+- Diagnosis: the tutor asks 2 questions about each concept that you selected for a test. To start it, click "Test it" next to a concept, or select concepts and click "Test them".
 - Study queue: the concepts to learn, in an order that you can change.
 - Lesson and test: the tutor teaches one concept from your books, with references. Then it tests the concept with the questions that fit it: one question for a simple concept, at most 3 for a larger one. To pass, answer each question correctly. A pass makes the concept mastered.
 - Review board: a list of all concepts with their status and their stars.

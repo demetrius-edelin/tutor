@@ -226,8 +226,8 @@ function AddConcepts({ slug, notChosen }: { slug: string; notChosen: QueueView["
         {notChosen.concepts > 0
           ? `${notChosen.concepts} ${notChosen.concepts === 1 ? "concept" : "concepts"} in ${notChosen.modules} ${notChosen.modules === 1 ? "module are" : "modules are"} not chosen yet. `
           : "You chose a status for all concepts. "}
-        To add the concepts of a module, use Choose concepts on the <a href={href.theme(slug)}>overview</a>. To add one concept, find it on
-        the <a href={href.map(slug)}>concept map</a> and use Add to the study queue.
+        To add concepts, open the <a href={href.map(slug)}>concept map</a>. Use Add to the queue next to a concept, or select many
+        concepts and add them in one step.
       </p>
     </section>
   );

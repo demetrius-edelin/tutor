@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-// A small hash router: "#/", "#/themes/sql", "#/themes/sql/map?concept=b-tree-index".
+// A small hash router: "#/", "#/themes/sql", "#/themes/sql/map?concept=b-tree-index", "#/themes/sql/map?module=3".
 
 // The status filters of the review board. "all" is the default, so the address does not show it.
 export const BOARD_SHOWS = ["all", "learned", "learning", "queued", "not-chosen", "skipped"] as const;
@@ -16,8 +16,7 @@ export interface BoardFilters {
 export type Route =
   | { name: "home" }
   | { name: "theme"; slug: string }
-  | { name: "map"; slug: string; concept: string | null }
-  | { name: "select"; slug: string; moduleId: number }
+  | { name: "map"; slug: string; concept: string | null; module: number | null }
   | { name: "queue"; slug: string }
   | ({ name: "board"; slug: string } & BoardFilters)
   | { name: "lesson"; conceptId: number }
@@ -30,7 +29,9 @@ export function parseHash(hash: string): Route {
   if (parts.length === 0) return { name: "home" };
   if (parts[0] === "themes" && parts[1] && parts.length === 2) return { name: "theme", slug: parts[1] };
   if (parts[0] === "themes" && parts[1] && parts[2] === "map" && parts.length === 3) {
-    return { name: "map", slug: parts[1], concept: new URLSearchParams(query).get("concept") };
+    const params = new URLSearchParams(query);
+    const module = Number(params.get("module"));
+    return { name: "map", slug: parts[1], concept: params.get("concept"), module: Number.isInteger(module) && module > 0 ? module : null };
   }
   if (parts[0] === "themes" && parts[1] && parts[2] === "queue" && parts.length === 3) return { name: "queue", slug: parts[1] };
   if (parts[0] === "themes" && parts[1] && parts[2] === "board" && parts.length === 3) {
@@ -44,9 +45,6 @@ export function parseHash(hash: string): Route {
       find: params.get("find") ?? "",
     };
   }
-  if (parts[0] === "themes" && parts[1] && parts[2] === "modules" && parts[3] && parts.length === 4) {
-    return { name: "select", slug: parts[1], moduleId: Number(parts[3]) };
-  }
   if (parts[0] === "sessions" && parts[1] && parts.length === 2) return { name: "session", id: Number(parts[1]) };
   if (parts[0] === "lessons" && parts[1] && parts.length === 2) return { name: "lesson", conceptId: Number(parts[1]) };
   return { name: "not-found" };
@@ -57,7 +55,8 @@ export const href = {
   theme: (slug: string) => `#/themes/${encodeURIComponent(slug)}`,
   map: (slug: string, concept?: string) =>
     `#/themes/${encodeURIComponent(slug)}/map${concept ? `?concept=${encodeURIComponent(concept)}` : ""}`,
-  select: (slug: string, moduleId: number) => `#/themes/${encodeURIComponent(slug)}/modules/${moduleId}`,
+  // The concept map, with the page at the start of one module.
+  mapModule: (slug: string, moduleId: number) => `#/themes/${encodeURIComponent(slug)}/map?module=${moduleId}`,
   queue: (slug: string) => `#/themes/${encodeURIComponent(slug)}/queue`,
   board: (slug: string, filters: Partial<BoardFilters> = {}) => {
     const params = new URLSearchParams();

@@ -437,7 +437,7 @@ export function starConcept(db: Db, conceptId: number, starred: unknown): { star
 
 // Test one concept, for example a prerequisite: a diagnosis session with this concept only.
 export function testConcept(db: Db, conceptId: number): number {
-  const { module_id: moduleId } = conceptRow(db, conceptId);
-  const result = applyMarks(db, moduleId, { [conceptId]: "test" });
+  const { theme_slug: themeSlug } = conceptRow(db, conceptId);
+  const result = applyMarks(db, themeSlug, { [conceptId]: "test" });
   return result.sessionId!;
 }
