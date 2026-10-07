@@ -430,6 +430,30 @@ a.contents-entry:hover .contents-title {
   font-size: var(--step--1);
 }
 
+/* The delete action stays quiet next to the note. The confirmation is a panel with a red edge. */
+.contents-note .contents-action {
+  margin-left: 1rem;
+  color: var(--graphite);
+}
+
+.confirm-delete {
+  max-width: var(--measure);
+  margin: 0.75rem 0 0;
+  padding: 0.9rem 1.25rem 1rem;
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--margin-red);
+  border-radius: 0.4rem;
+  background: var(--panel);
+}
+
+.confirm-delete p {
+  margin: 0;
+}
+
+.confirm-delete p + p {
+  margin-top: 0.75rem;
+}
+
 /* Progress */
 
 .progress-bar {
@@ -1367,6 +1391,15 @@ button.button {
 
 .button.secondary:hover {
   background: color-mix(in srgb, var(--rule) 40%, var(--paper));
+}
+
+/* A button that deletes data is red. The mix with the ink keeps the text easy to read in the two color schemes. */
+.button.danger {
+  background: color-mix(in srgb, var(--margin-red) 80%, var(--ink));
+}
+
+.button.danger:hover {
+  background: color-mix(in srgb, var(--margin-red) 65%, var(--ink));
 }
 
 /* Study queue */

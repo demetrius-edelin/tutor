@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
@@ -13,14 +13,20 @@ import { FakeLlm } from "./fakes/llm.js";
 
 let app: FastifyInstance;
 
-beforeAll(async () => {
+// A database and a data folder with the fixture book in each subject.
+async function ingestFixture(subjectNames: string[]) {
   const data = await buildEpub(mainFixture());
   const book = await parseEpub(data);
   const dataDir = mkdtempSync(join(tmpdir(), "tutor-server-"));
   const bookFile = join(dataDir, "fixture.epub");
   writeFileSync(bookFile, data);
   const db = openDb(":memory:");
-  await ingestBook({ llm: new FakeLlm(), db, dataDir, subjectName: "Git", bookFile, book });
+  for (const subjectName of subjectNames) await ingestBook({ llm: new FakeLlm(), db, dataDir, subjectName, bookFile, book });
+  return { db, dataDir };
+}
+
+beforeAll(async () => {
+  const { db, dataDir } = await ingestFixture(["Git"]);
   app = buildServer({ db, dataDir });
 });
 
@@ -79,5 +85,32 @@ describe("API", () => {
     expect((await get("/api/subjects/none")).status).toBe(404);
     expect((await get("/api/subjects/none/map")).status).toBe(404);
     expect((await get("/api/sections/9999")).status).toBe(404);
+  });
+});
+
+describe("Delete a subject", () => {
+  it("deletes the rows and the folder of the subject, and keeps the other subjects", async () => {
+    const { db, dataDir } = await ingestFixture(["Git", "SQL"]);
+    const server = buildServer({ db, dataDir });
+    const gitId = db.prepare("SELECT id FROM subjects WHERE slug = 'git'").pluck().get() as number;
+    const conceptId = db.prepare("SELECT id FROM concepts WHERE subject_id = ? LIMIT 1").pluck().get(gitId) as number;
+    db.prepare("INSERT INTO lessons (concept_id, round, text) VALUES (?, 1, 'A lesson.')").run(conceptId);
+    db.prepare("INSERT INTO sessions (subject_id, kind, status) VALUES (?, 'diagnose', 'finished')").run(gitId);
+    const rows = (table: string) => db.prepare(`SELECT COUNT(*) FROM ${table}`).pluck().get() as number;
+    const before = Object.fromEntries(["books", "sections", "modules", "concepts", "concept_sources"].map((table) => [table, rows(table)]));
+
+    const response = await server.inject({ method: "DELETE", url: "/api/subjects/git" });
+    expect(response.statusCode).toBe(200);
+
+    const list = (await server.inject({ method: "GET", url: "/api/subjects" })).json() as SubjectSummary[];
+    expect(list.map((subject) => subject.slug)).toEqual(["sql"]);
+    // The two subjects have the same book, so each table keeps half of its rows.
+    for (const [table, count] of Object.entries(before)) expect(rows(table)).toBe(count / 2);
+    expect(rows("lessons")).toBe(0);
+    expect(rows("sessions")).toBe(0);
+    expect(existsSync(join(dataDir, "subjects", "git"))).toBe(false);
+    expect(existsSync(join(dataDir, "subjects", "sql"))).toBe(true);
+    expect((await server.inject({ method: "DELETE", url: "/api/subjects/git" })).statusCode).toBe(404);
+    await server.close();
   });
 });

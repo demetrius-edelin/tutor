@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { extname, resolve, sep } from "node:path";
 import type { Db } from "../db/index.js";
 import {
@@ -51,6 +51,20 @@ export function listSubjects(db: Db): SubjectSummary[] {
 
 function findSubject(db: Db, slug: string): SubjectRow | undefined {
   return db.prepare("SELECT id, slug, name FROM subjects WHERE slug = ?").get(slug) as SubjectRow | undefined;
+}
+
+// Delete a subject and all its data. The foreign keys delete the rows of the books, the concepts, and the progress.
+// Then the folder of the subject goes: the book copies, the section files, and the cached model results.
+// Returns false if the subject does not exist.
+export function deleteSubject(db: Db, dataDir: string, slug: string): boolean {
+  const subject = findSubject(db, slug);
+  if (!subject) return false;
+  db.prepare("DELETE FROM subjects WHERE id = ?").run(subject.id);
+  // The slug comes from the database. The folder must stay inside the folder of the subjects.
+  const root = resolve(dataDir, "subjects");
+  const folder = resolve(root, subject.slug);
+  if (folder.startsWith(root + sep)) rmSync(folder, { recursive: true, force: true });
+  return true;
 }
 
 export function subjectDetail(db: Db, slug: string): SubjectDetail | undefined {

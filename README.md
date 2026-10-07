@@ -137,6 +137,7 @@ PORT=8080 npm start
 - **Can I move or delete the book file after ingest?** Yes. Ingest keeps a copy of the book file in the folder of the book.
 - **How do I add a second book to a subject?** Run `npm run ingest` again with the same subject name. The tutor adds the concepts of the new book to the concept map of the subject.
 - **How do I make a new subject?** Run `npm run ingest` with a new subject name. The first book makes the subject.
+- **How do I delete a subject?** On the list of subjects, click "Delete" below the subject. Then click the red button in the panel that opens. The tutor deletes the books, the concepts, your progress, and the folder of the subject. You cannot undo this.
 - **Can I delete `data/parse/`?** Yes. Nothing else uses it.
 
 ## Status and roadmap

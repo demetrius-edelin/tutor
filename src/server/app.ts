@@ -30,7 +30,7 @@ import {
 } from "../tutor/lesson.js";
 import { applyBookOrder, applySuggestedOrder, queueView, removeFromQueue, reorderQueue } from "../tutor/queue.js";
 import type { AfterTestAction, Choice, Mark } from "./api-types.js";
-import { conceptMap, listSubjects, section, subjectDetail } from "./queries.js";
+import { conceptMap, deleteSubject, listSubjects, section, subjectDetail } from "./queries.js";
 
 export interface ServerOptions {
   db: Db;
@@ -75,6 +75,14 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError }: Serve
   app.get<{ Params: { slug: string } }>("/api/subjects/:slug", async (request, reply) => {
     const subject = subjectDetail(db, request.params.slug);
     return subject ?? reply.code(404).send({ error: `The subject "${request.params.slug}" does not exist.` });
+  });
+
+  // Delete a subject with its books, its concepts, the progress of the learner, and its files.
+  app.delete<{ Params: { slug: string } }>("/api/subjects/:slug", async (request, reply) => {
+    if (!deleteSubject(db, dataDir, request.params.slug)) {
+      return reply.code(404).send({ error: `The subject "${request.params.slug}" does not exist.` });
+    }
+    return { ok: true };
   });
 
   app.get<{ Params: { slug: string } }>("/api/subjects/:slug/map", async (request, reply) => {
