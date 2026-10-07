@@ -1,6 +1,6 @@
 # <img src="src/app/public/logo.svg" alt="" height="32"> Tutor
 
-> See also my other project, [Tapas Habit & Goal Tracker](https://tapastracker.app), a full-featured habit tracker for iPhone and Android.
+> See also my other project, [Tapas Habit & Goal Tracker](https://tapastracker.app), a full-featured habit tracker for iPhone and Android. Also, **I am available for hire.** Contact me on [LinkedIn](https://www.linkedin.com/in/demetrius-edelin/).
 
 A personal tutor that teaches from your own books. You make a subject of study, for example "SQL", and add books to it. The tutor finds the concepts in the books and checks which concepts you know. Then it teaches the other concepts one at a time, with references to the books, and tests each one.
 
@@ -213,7 +213,3 @@ Before you send a pull request, do these steps:
 ## License
 
 [MIT](LICENSE)
-
----
-
-**I am available for hire.** Contact me on [LinkedIn](https://www.linkedin.com/in/demetrius-edelin/).
