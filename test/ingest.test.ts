@@ -199,6 +199,46 @@ describe("ingestBook", () => {
     expect(ids.length).toBeGreaterThan(firstIds.length);
   });
 
+  it("saves some sections, and adds more sections later without a change to the other sections", async () => {
+    const otherDb = openDb(":memory:");
+    const run = (selection: { sections?: string[]; chapters?: number[] }, replace = false, llm = new FakeLlm()) =>
+      ingestBook({ llm, db: otherDb, dataDir, subjectName: "Sections", bookFile, book, ...selection, replace });
+    const sources = () =>
+      otherDb
+        .prepare("SELECT s.chapter || '.' || s.number FROM concept_sources cs JOIN sections s ON s.id = cs.section_id ORDER BY s.chapter, s.number")
+        .pluck()
+        .all();
+    const rows = (table: string) => otherDb.prepare(`SELECT id FROM ${table} ORDER BY id`).pluck().all();
+
+    const first = new FakeLlm();
+    const report = await run({ sections: ["1.2"] }, false, first);
+    expect(report.chapters).toMatchObject([{ number: 1, sections: 1, concepts: 1 }]);
+    expect(first.calls.filter((call) => call.stage === "extract").flatMap((call) => call.request.sources!.map((source) => source.id))).toEqual(["1.2"]);
+    expect(sources()).toEqual(["1.2"]);
+    const sections = rows("sections");
+    expect(sections.length).toBe(book.chapters.reduce((total, chapter) => total + chapter.sections.length, 0));
+
+    // A new section and a new chapter need no --replace. The book keeps its sections, so old lessons keep their references.
+    await run({ sections: ["2.1", "2.3"] });
+    await run({ chapters: [3] });
+    expect(sources()).toEqual(["1.2", "2.1", "2.3", "3.1"]);
+    expect(rows("sections")).toEqual(sections);
+    expect(rows("books")).toHaveLength(1);
+
+    // A section with concepts needs --replace. Then only the sources of this section change.
+    await expect(run({ sections: ["1.1", "1.2"] })).rejects.toThrow(/sections 1\.2 of "Fixture Book" have concepts already.*--replace/);
+    const concepts = rows("concepts");
+    const again = new FakeLlm();
+    await run({ sections: ["1.2"] }, true, again);
+    expect(again.count("extract")).toBe(0);
+    expect(sources()).toEqual(["1.2", "2.1", "2.3", "3.1"]);
+    expect(rows("concepts")).toEqual(concepts);
+
+    await expect(run({ sections: ["9.9"] })).rejects.toThrow(/no section 9\.9/);
+    otherDb.prepare("UPDATE sections SET path = 'other.md' WHERE chapter = 5 AND number = 1").run();
+    await expect(run({ sections: ["5.1"] })).rejects.toThrow(/do not match the new parse/);
+  });
+
   it("needs --replace for a book that the subject has already", async () => {
     await expect(ingestBook({ llm: new FakeLlm(), db, dataDir, subjectName: "Git", bookFile, book })).rejects.toThrow(/--replace/);
   });

@@ -2,8 +2,9 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync,
 import { basename, join, relative } from "node:path";
 import type { Db } from "../db/index.js";
 import type { LlmClient } from "../llm/index.js";
+import { selectSections } from "./core/book.js";
 import { slugify } from "./core/text.js";
-import type { ParsedBook, ParseWarning } from "./core/types.js";
+import type { ParsedBook, ParsedSection, ParseWarning } from "./core/types.js";
 import { sectionFileName, writeParsedBook } from "./core/write.js";
 import { emptyMap, loadMap, mapToMarkdown, saveMap, sourceDisplay, type ConceptMap } from "./map.js";
 import { containsQuote } from "../llm/references.js";
@@ -20,11 +21,14 @@ export interface IngestOptions {
   book: ParsedBook;
   // Run only these chapters.
   chapters?: number[];
+  // Run only these sections, for example "1.10". With chapters too, the run takes the sections of the two lists.
+  // On a book that the subject has already, a run with some sections keeps the concepts of the other sections.
+  sections?: string[];
   // A preview does not change the database. It writes the concept map and the report as preview files.
   preview?: boolean;
   // Remove the cached chapter results first.
   fresh?: boolean;
-  // Replace the book if the subject has it already.
+  // Replace the book if the subject has it already. A run with some sections replaces only the sources of these sections.
   replace?: boolean;
   log?: (line: string) => void;
 }
@@ -63,22 +67,6 @@ export function bookDir(dataDir: string, subjectName: string, book: Pick<ParsedB
   return join(subjectDir(dataDir, subjectName), "books", slugify(book.title));
 }
 
-// The chapters with a valid cached result. They need no model request.
-export function cachedChapters(dataDir: string, subjectName: string, book: ParsedBook): Set<number> {
-  const workDir = join(bookDir(dataDir, subjectName, book), "work");
-  const cached = new Set<number>();
-  for (const chapter of book.chapters) {
-    const file = join(workDir, `chapter-${String(chapter.number).padStart(2, "0")}.json`);
-    if (!existsSync(file)) continue;
-    try {
-      if ((JSON.parse(readFileSync(file, "utf8")) as ChapterDigest).key === chapterKey(chapterInput(chapter))) cached.add(chapter.number);
-    } catch {
-      // A broken cache file counts as no cache.
-    }
-  }
-  return cached;
-}
-
 export function chapterInput(chapter: ParsedBook["chapters"][number]): ChapterInput {
   return {
     number: chapter.number,
@@ -90,6 +78,40 @@ export function chapterInput(chapter: ParsedBook["chapters"][number]): ChapterIn
       words: section.words,
     })),
   };
+}
+
+// The selected sections of each chapter. A chapter without a selected section is not in the list.
+export function selectedInputs(book: ParsedBook, chapters?: number[], sections?: string[]): ChapterInput[] {
+  const selected = selectSections(book, chapters, sections);
+  return book.chapters
+    .map((chapter) => chapterInput(chapter))
+    .map((input) => ({ ...input, sections: input.sections.filter((section) => selected.has(section.id)) }))
+    .filter((input) => input.sections.length > 0);
+}
+
+// The cache file of a chapter digest. A digest of some sections of a chapter has its own file, with a part of the key in the name.
+function digestFile(workDir: string, book: ParsedBook, input: ChapterInput): string {
+  const name = `chapter-${String(input.number).padStart(2, "0")}`;
+  const full = book.chapters.find((chapter) => chapter.number === input.number)!.sections.length === input.sections.length;
+  return join(workDir, full ? `${name}.json` : `${name}-${chapterKey(input).slice(0, 10)}.json`);
+}
+
+function cachedDigest(workDir: string, book: ParsedBook, input: ChapterInput): ChapterDigest | null {
+  const file = digestFile(workDir, book, input);
+  if (!existsSync(file)) return null;
+  try {
+    const digest = JSON.parse(readFileSync(file, "utf8")) as ChapterDigest;
+    return digest.key === chapterKey(input) ? digest : null;
+  } catch {
+    // A broken cache file counts as no cache.
+    return null;
+  }
+}
+
+// The chapters with a valid cached result for their selected sections. They need no model request.
+export function cachedChapters(dataDir: string, subjectName: string, book: ParsedBook, inputs: ChapterInput[]): Set<number> {
+  const workDir = join(bookDir(dataDir, subjectName, book), "work");
+  return new Set(inputs.filter((input) => cachedDigest(workDir, book, input)).map((input) => input.number));
 }
 
 // Remove the concepts that have no source and no progress, and the modules with no concept.
@@ -114,6 +136,31 @@ function recheckQuotes(digest: ChapterDigest, chapter: ChapterInput): ChapterDig
   return digest;
 }
 
+// The database rows of the sections of a book that the subject has already, by section key.
+// A run with some sections keeps these rows, so they must match the sections of the new parse.
+function keptSections(
+  db: Db,
+  bookId: number,
+  book: ParsedBook,
+  bookSlug: string,
+  sectionPath: (chapter: number, section: ParsedSection) => string,
+): Map<string, number> {
+  const rows = db.prepare("SELECT id, chapter, number, path FROM sections WHERE book_id = ?").all(bookId) as {
+    id: number;
+    chapter: number;
+    number: number;
+    path: string;
+  }[];
+  const byId = new Map(rows.map((row) => [`${row.chapter}.${row.number}`, row]));
+  const sections = book.chapters.flatMap((chapter) => chapter.sections.map((section) => ({ chapter: chapter.number, section })));
+  const match =
+    rows.length === sections.length && sections.every(({ chapter, section }) => byId.get(section.id)?.path === sectionPath(chapter, section));
+  if (!match) {
+    throw new Error(`The sections of "${book.title}" in the database do not match the new parse. Ingest the full book again with --replace.`);
+  }
+  return new Map(rows.map((row) => [`${bookSlug}#${row.chapter}.${row.number}`, row.id]));
+}
+
 export async function ingestBook(options: IngestOptions): Promise<IngestReport> {
   const { llm, db, dataDir, subjectName, book } = options;
   const log = options.log ?? (() => {});
@@ -125,12 +172,33 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
   const existing = subject
     ? (db.prepare("SELECT id FROM books WHERE subject_id = ? AND slug = ?").get(subject.id, bookSlug) as { id: number } | undefined)
     : undefined;
+  const dir = bookDir(dataDir, subjectName, book);
+  const sectionPath = (chapter: number, section: ParsedSection) =>
+    relative(dataDir, join(dir, "sections", sectionFileName(chapter, section.number, section.title)));
+  const sectionInfo = new Map(book.chapters.flatMap((chapter) => chapter.sections.map((section) => [section.id, section])));
+  const inputs = selectedInputs(book, options.chapters, options.sections);
+  const keys = new Set(inputs.flatMap((input) => input.sections.map((section) => `${bookSlug}#${section.id}`)));
+  const partial = keys.size < sectionInfo.size;
+
+  // A run with some sections of a book that the subject has already keeps the book and its sections.
+  // The old lessons and questions keep their references, and the other sections keep their concepts.
+  const kept = existing && partial && !preview ? keptSections(db, existing.id, book, bookSlug, sectionPath) : null;
   if (existing && !preview && !options.replace) {
-    throw new Error(`The subject "${subjectName}" has the book "${book.title}" already. To ingest it again, add --replace.`);
+    if (!kept) throw new Error(`The subject "${subjectName}" has the book "${book.title}" already. To ingest it again, add --replace.`);
+    const used = new Set(
+      db
+        .prepare("SELECT DISTINCT section_id FROM concept_sources WHERE section_id IN (SELECT id FROM sections WHERE book_id = ?)")
+        .pluck()
+        .all(existing.id) as number[],
+    );
+    const again = [...keys].filter((key) => used.has(kept.get(key)!)).map((key) => key.slice(bookSlug.length + 1));
+    if (again.length > 0) {
+      const list = again.length > 5 ? `${again.slice(0, 5).join(", ")} and ${again.length - 5} more` : again.join(", ");
+      throw new Error(`The sections ${list} of "${book.title}" have concepts already. To ingest them again, add --replace.`);
+    }
   }
 
   // Keep a copy of the book file, the section files, and the parse report.
-  const dir = bookDir(dataDir, subjectName, book);
   mkdirSync(dir, { recursive: true });
   const bookCopy = join(dir, basename(options.bookFile));
   if (!existsSync(bookCopy)) copyFileSync(options.bookFile, bookCopy);
@@ -141,34 +209,31 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
   const workDir = join(dir, "work");
   mkdirSync(workDir, { recursive: true });
   if (options.fresh) {
-    for (const file of readdirSync(workDir)) if (/^chapter-\d+\.json$/.test(file)) rmSync(join(workDir, file));
+    for (const file of readdirSync(workDir)) if (/^chapter-\d+(-[0-9a-f]+)?\.json$/.test(file)) rmSync(join(workDir, file));
   }
-  const chapters = book.chapters.filter((chapter) => !options.chapters || options.chapters.includes(chapter.number));
   const digests: ChapterDigest[] = [];
-  for (const chapter of chapters) {
-    const input = chapterInput(chapter);
-    const cacheFile = join(workDir, `chapter-${String(chapter.number).padStart(2, "0")}.json`);
-    if (existsSync(cacheFile)) {
-      const cached = JSON.parse(readFileSync(cacheFile, "utf8")) as ChapterDigest;
-      if (cached.key === chapterKey(input)) {
-        log(`Chapter ${chapter.number}: ${chapter.title} (from the cache)`);
-        digests.push(recheckQuotes(cached, input));
-        continue;
-      }
+  for (const input of inputs) {
+    const chapter = book.chapters.find((item) => item.number === input.number)!;
+    const part = input.sections.length < chapter.sections.length ? `, sections ${input.sections.map((section) => section.id).join(", ")}` : "";
+    const cached = cachedDigest(workDir, book, input);
+    if (cached) {
+      log(`Chapter ${chapter.number}: ${chapter.title}${part} (from the cache)`);
+      digests.push(recheckQuotes(cached, input));
+      continue;
     }
-    log(`Chapter ${chapter.number}: ${chapter.title}`);
+    log(`Chapter ${chapter.number}: ${chapter.title}${part}`);
     const digest = await digestChapter(llm, book.title, input, chapter.checklist, log);
-    writeFileSync(cacheFile, `${JSON.stringify(digest, null, 2)}\n`);
+    writeFileSync(digestFile(workDir, book, input), `${JSON.stringify(digest, null, 2)}\n`);
     digests.push(digest);
   }
 
   // Stage 4: merge the chapters into the concept map, in the order of the book.
   const map: ConceptMap = subject ? loadMap(db, subject.id) : emptyMap();
   if (existing) {
-    // The replaced book must not keep its old sources in the map.
-    for (const concept of map.concepts) concept.sources = concept.sources.filter((source) => !source.key.startsWith(`${bookSlug}#`));
+    // The replaced book must not keep its old sources in the map. A run with some sections replaces only the sources of these sections.
+    const replaced = (key: string) => (partial ? keys.has(key) : key.startsWith(`${bookSlug}#`));
+    for (const concept of map.concepts) concept.sources = concept.sources.filter((source) => !replaced(source.key));
   }
-  const sectionInfo = new Map(book.chapters.flatMap((chapter) => chapter.sections.map((section) => [section.id, section])));
   const stats = new Map<number, { added: number; joined: number }>();
   for (const digest of digests) {
     const chapter = book.chapters.find((item) => item.number === digest.chapter)!;
@@ -195,22 +260,29 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
     db.transaction(() => {
       const subjectId =
         subject?.id ?? Number(db.prepare("INSERT INTO subjects (slug, name) VALUES (?, ?)").run(subjectSlug, subjectName).lastInsertRowid);
-      // Removing the book also removes its sections and the sources that point to them.
-      if (existing) db.prepare("DELETE FROM books WHERE id = ?").run(existing.id);
-      const bookId = Number(
-        db
-          .prepare("INSERT INTO books (subject_id, slug, title, file, status) VALUES (?, ?, ?, ?, 'ready')")
-          .run(subjectId, bookSlug, book.title, relative(dataDir, bookCopy)).lastInsertRowid,
-      );
-      const insertSection = db.prepare(
-        "INSERT INTO sections (book_id, chapter, number, chapter_title, title, page, path, words) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      );
-      const sectionRows = new Map<string, number>();
-      for (const chapter of book.chapters) {
-        for (const section of chapter.sections) {
-          const path = relative(dataDir, join(dir, "sections", sectionFileName(chapter.number, section.number, section.title)));
-          const row = insertSection.run(bookId, chapter.number, section.number, chapter.title, section.title, section.page, path, section.words);
-          sectionRows.set(`${bookSlug}#${section.id}`, Number(row.lastInsertRowid));
+      let sectionRows = kept;
+      if (sectionRows) {
+        // The book and its sections stay. Only the old sources of the selected sections go.
+        const removeSources = db.prepare("DELETE FROM concept_sources WHERE section_id = ?");
+        for (const key of keys) removeSources.run(sectionRows.get(key));
+      } else {
+        // Removing the book also removes its sections and the sources that point to them.
+        if (existing) db.prepare("DELETE FROM books WHERE id = ?").run(existing.id);
+        const bookId = Number(
+          db
+            .prepare("INSERT INTO books (subject_id, slug, title, file, status) VALUES (?, ?, ?, ?, 'ready')")
+            .run(subjectId, bookSlug, book.title, relative(dataDir, bookCopy)).lastInsertRowid,
+        );
+        const insertSection = db.prepare(
+          "INSERT INTO sections (book_id, chapter, number, chapter_title, title, page, path, words) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        );
+        sectionRows = new Map<string, number>();
+        for (const chapter of book.chapters) {
+          for (const section of chapter.sections) {
+            const path = sectionPath(chapter.number, section);
+            const row = insertSection.run(bookId, chapter.number, section.number, chapter.title, section.title, section.page, path, section.words);
+            sectionRows.set(`${bookSlug}#${section.id}`, Number(row.lastInsertRowid));
+          }
         }
       }
       saveMap(db, subjectId, map, sectionRows);
@@ -225,7 +297,7 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
     return {
       number: chapter.number,
       title: chapter.title,
-      sections: chapter.sections.length,
+      sections: inputs.find((input) => input.number === digest.chapter)!.sections.length,
       concepts: digest.concepts.length,
       emptySections: digest.emptySections.map((item) => ({ ...item, title: titleOf(item.sectionId) })),
       missingSections: digest.missingSections.map((sectionId) => ({ sectionId, title: titleOf(sectionId) })),

@@ -127,7 +127,7 @@ describe("imageMarkdown", () => {
 function bookWithImages(count: number): ParsedBook {
   const ids = Array.from({ length: count }, (_, i) => imageId(square(i)));
   return {
-    chapters: [{ number: 1, sections: ids.map((id) => ({ images: [id] })) }],
+    chapters: [{ number: 1, sections: ids.map((id, i) => ({ id: `1.${i + 1}`, images: [id] })) }],
     images: new Map(ids.map((id, i) => [id, { mediaType: "image/png", data: square(i) }])),
   } as unknown as ParsedBook;
 }
@@ -152,10 +152,13 @@ describe("readImages", () => {
     expect(again.count("image")).toBe(0);
   });
 
-  it("reads only the images of the selected chapters", async () => {
+  it("reads only the images of the selected chapters and sections", async () => {
+    const book = bookWithImages(2);
     const llm = new FakeLlm();
-    expect(await readImages(llm, bookWithImages(2), cacheFile, { chapters: [2] })).toMatchObject({ total: 0, read: 0 });
+    expect(await readImages(llm, book, cacheFile, { chapters: [2] })).toMatchObject({ total: 0, read: 0 });
     expect(llm.count("image")).toBe(0);
+    expect(await readImages(llm, book, cacheFile, { sections: ["1.2"] })).toMatchObject({ total: 1, read: 1 });
+    expect(imagesToRead(book, cacheFile)).toEqual([imageIds(book)[0]]);
   });
 
   it("stops after failures in a row, and keeps the results before them", async () => {

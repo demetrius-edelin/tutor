@@ -130,10 +130,11 @@ PORT=8080 npm start
 
 - **Must I run `parse` before `ingest`?** No. Ingest parses the book by itself. The `parse` command only prints a report in the terminal, at no cost. See [Check a book](docs/usage.md#check-a-book).
 - **How do I find the number of a chapter for `--chapters`?** Run `npm run parse` and read the `#` column. This number can be different from the number in the title of the chapter.
-- **Must I ingest the full book?** No. With `--chapters`, you can study a book one part at a time. Later, you can add more chapters.
+- **How do I find the id of a section for `--sections`?** Run `npm run parse` and read the file names in `data/parse/<book>/sections/`. The file `01-10-pointers.md` is section `1.10`.
+- **Must I ingest the full book?** No. With `--chapters` or `--sections`, you can study a book one part at a time. Later, you can add more parts.
 - **Does `ingest` always save to the database?** Yes. Only `--preview` keeps the database as it is. With `--chapters`, the app shows the concepts of these chapters immediately.
 - **Do I pay two times for the chapters of a preview?** No. The tutor keeps the model results of each run, so a later run does not pay for these chapters again.
-- **How do I add more chapters later?** Run `ingest` again with `--replace`, for the full book or for a longer chapter list. See [Add more chapters later](docs/usage.md#add-more-chapters-later).
+- **How do I add more chapters later?** Run `ingest` again with a list of the new chapters or sections. See [Add more chapters later](docs/usage.md#add-more-chapters-later).
 - **Can I move or delete the book file after ingest?** Yes. Ingest keeps a copy of the book file in the folder of the book.
 - **How do I add a second book to a subject?** Run `npm run ingest` again with the same subject name. The tutor adds the concepts of the new book to the concept map of the subject.
 - **How do I make a new subject?** Run `npm run ingest` with a new subject name. The first book makes the subject.

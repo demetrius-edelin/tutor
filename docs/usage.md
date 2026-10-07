@@ -51,7 +51,7 @@ npm run parse -- /path/to/book.epub
 This command reads the book and prints a report in the terminal. It does not use the model, so it costs nothing. The command has two uses:
 
 - Find a problem in a book before you pay for ingest.
-- Find the chapter numbers for `ingest --chapters`.
+- Find the chapter numbers for `ingest --chapters` and the section ids for `ingest --sections`.
 
 The report looks like this example:
 
@@ -106,6 +106,8 @@ The command also writes files to `data/parse/<book>/`. Open them in a text edito
 - `sections/`: one Markdown file for each section, for example `02-01-sql-basics.md`.
 - `parse-report.json`: the chapters, the sections, the page numbers, the checklist terms, and the warnings.
 
+The name of a section file starts with the chapter number and the section number. These two numbers make the id of the section. For example, `02-01-sql-basics.md` is section `2.1`. Use this id with `ingest --sections`. The `id` field in `parse-report.json` shows the same id.
+
 No other command reads these files. To write them to a different folder, add `--out <folder>`.
 
 ## Step 3: Add a book to a subject
@@ -140,6 +142,12 @@ You can ingest the full book at one time, or a book one part at a time.
    npm run ingest -- SQL /path/to/book.pdf --chapters 1-3
    ```
 
+   Or ingest only some sections:
+
+   ```
+   npm run ingest -- SQL /path/to/book.pdf --sections 2.4,2.7
+   ```
+
    Or ingest the full book:
 
    ```
@@ -150,14 +158,19 @@ You can ingest the full book at one time, or a book one part at a time.
 
 ### Add more chapters later
 
-After a run with `--chapters`, the subject has the book. A new run of the same book then needs `--replace`.
+After a run with `--chapters` or `--sections`, the subject has the book. To add more chapters or sections, run `ingest` again with a list of the new parts only:
 
-- To add all the other chapters, ingest the full book with `--replace`.
-- To add only some chapters, use `--chapters` with `--replace`. Put the chapters that you saved before into the list too.
+```
+npm run ingest -- SQL /path/to/book.pdf --chapters 4-6
+```
 
-If the list does not contain a chapter that you saved before, the concepts of that chapter lose their source. The tutor deletes each of these concepts that you did not start.
+The command adds the concepts of the new parts to the subject. The other sections keep their concepts, and your old lessons keep their references.
 
-The chapters that you saved before come from the cache, so you do not pay for them again. Your concepts and their progress stay. But the book gets new sections, so the references of your old lessons break. To get a lesson with correct references, open the lesson and click "Teach it again".
+If a section in the list has concepts already, the command stops. To ingest that section again, add `--replace`. Then only the concepts of the sections in the list change. The tutor deletes each concept that loses its last source, if you did not start the concept.
+
+You can also ingest the full book with `--replace`. The chapters that you saved before come from the cache, so you do not pay for them again. Your concepts and their progress stay. But the book gets new sections, so the references of your old lessons break. To get a lesson with correct references, open the lesson and click "Teach it again".
+
+A run with a list needs the same sections as the first run. After a parser change, the sections can be different. Then the command stops, and only a full run with `--replace` can update the book.
 
 ### The files of a book
 
@@ -172,10 +185,11 @@ Ingest writes these files to `data/subjects/<subject>/books/<book>/`:
 ### Ingest options
 
 - `--chapters <list>`: ingest only these chapters, for example `1-3` or `2,5`. Use it to study a book one part at a time. To add more chapters later, see [Add more chapters later](#add-more-chapters-later).
+- `--sections <list>`: ingest only these sections, for example `2.4` or `2.4-2.7,3.1`. A range contains all the sections between its two ids, in the order of the book. To find the id of a section, see [Check a book](#check-a-book). You can use `--sections` and `--chapters` together. Then the command ingests the sections of the two lists.
 - `--preview`: do not change the database. The command writes the concept map and the report as preview files. Use it with `--chapters` to check the concepts of some chapters before you save them.
 - `--yes`: start without the question.
 - `--fresh`: ignore the cached chapter results. The cached image texts stay.
-- `--replace`: ingest again a book that is already in the subject. The book gets new sections, so the references of your old lessons break. To update the text of a book and keep your progress, use `npm run refresh`.
+- `--replace`: ingest again a book that is already in the subject. With `--chapters` or `--sections`, only the concepts of the sections in the list change. Without a list, the book gets new sections, so the references of your old lessons break. To update the text of a book and keep your progress, use `npm run refresh`.
 
 For now, you add books from the terminal only.
 

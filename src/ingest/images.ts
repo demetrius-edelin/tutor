@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import type { LlmClient } from "../llm/index.js";
+import { selectSections } from "./core/book.js";
 import { normalizeSpace } from "./core/text.js";
 import type { ParsedBook } from "./core/types.js";
 
@@ -74,20 +75,21 @@ export function cachedImageText(cacheFile: string): Map<string, string> {
   return text;
 }
 
-// The ids of the images in the chapters, or in the selected chapters only.
-export function imageIds(book: ParsedBook, chapters?: number[]): string[] {
-  const selected = book.chapters.filter((chapter) => !chapters || chapters.includes(chapter.number));
-  return [...new Set(selected.flatMap((chapter) => chapter.sections.flatMap((section) => section.images)))];
+// The ids of the images in the chapters, or in the selected chapters and sections only.
+export function imageIds(book: ParsedBook, chapters?: number[], sections?: string[]): string[] {
+  const selected = selectSections(book, chapters, sections);
+  const all = book.chapters.flatMap((chapter) => chapter.sections.filter((section) => selected.has(section.id)));
+  return [...new Set(all.flatMap((section) => section.images))];
 }
 
-// The images of the chapters that the model did not read yet.
-export function imagesToRead(book: ParsedBook, cacheFile: string, chapters?: number[]): string[] {
+// The images of the chapters and sections that the model did not read yet.
+export function imagesToRead(book: ParsedBook, cacheFile: string, chapters?: number[], sections?: string[]): string[] {
   const cache = loadCache(cacheFile);
-  return imageIds(book, chapters).filter((id) => !cache[id]);
+  return imageIds(book, chapters, sections).filter((id) => !cache[id]);
 }
 
 export interface ImageReport {
-  // The images of the selected chapters.
+  // The images of the selected chapters and sections.
   total: number;
   // The images from the cache, and the images that the model read in this run.
   cached: number;
@@ -99,8 +101,9 @@ export interface ImageReport {
 }
 
 export interface ReadImagesOptions {
-  // Read only the images of these chapters.
+  // Read only the images of these chapters and sections.
   chapters?: number[];
+  sections?: string[];
   log?: (line: string) => void;
 }
 
@@ -108,7 +111,7 @@ export interface ReadImagesOptions {
 // so a stopped run loses no result. If the calls fail, the sections keep the placeholders of these images.
 export async function readImages(llm: LlmClient, book: ParsedBook, cacheFile: string, options: ReadImagesOptions = {}): Promise<ImageReport> {
   const log = options.log ?? (() => {});
-  const ids = imageIds(book, options.chapters);
+  const ids = imageIds(book, options.chapters, options.sections);
   const cache = loadCache(cacheFile);
   const todo = ids.filter((id) => !cache[id]);
   const tooLarge = todo.filter((id) => book.images.get(id)!.data.length > MAX_IMAGE_BYTES);

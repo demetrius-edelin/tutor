@@ -240,3 +240,14 @@ function toSection(
     images: [...new Set(ids)].filter((id) => images.has(id)),
   };
 }
+
+// The ids of the sections in the selected chapters and of the selected sections. With no list, the ids of all the sections.
+export function selectSections(book: ParsedBook, chapters?: number[], sections?: string[]): Set<string> {
+  const all = book.chapters.flatMap((chapter) => chapter.sections.map((section) => ({ chapter: chapter.number, id: section.id })));
+  const unknown = sections?.filter((id) => !all.some((section) => section.id === id)) ?? [];
+  if (unknown.length > 0) throw new Error(`The book has no section ${unknown.join(", ")}.`);
+  const selected = all.filter(
+    (section) => (!chapters && !sections) || chapters?.includes(section.chapter) || sections?.includes(section.id),
+  );
+  return new Set(selected.map((section) => section.id));
+}
