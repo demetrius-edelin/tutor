@@ -6,9 +6,18 @@ A personal tutor that teaches from your own books. You make a subject of study, 
 
 The tutor runs on your computer. It uses one large language model (LLM) from Anthropic, OpenAI, or OpenRouter. You select the model.
 
-| Concept map | Lesson | Test |
-| :---: | :---: | :---: |
-| <img src="docs/images/concept-map.jpg" alt="The concept map of the subject C. The color of each row shows the status of the concept." width="240"> | <img src="docs/images/lesson.jpg" alt="A lesson about the address-of operator in C. It has an explanation with numbered references to the book, and an example." width="240"> | <img src="docs/images/test.jpg" alt="The test for the address-of operator. It has one question and an answer to check." width="240"> |
+<table>
+  <tr>
+    <th>Concept map</th>
+    <th>Lesson</th>
+    <th>Test</th>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/images/concept-map.jpg" alt="The concept map of the subject C. The color of each row shows the status of the concept." width="240"></td>
+    <td valign="top"><img src="docs/images/lesson.jpg" alt="A lesson about the address-of operator in C. It has an explanation with numbered references to the book, an example, common mistakes, and a box for questions." width="240"></td>
+    <td valign="top"><img src="docs/images/test.jpg" alt="The test for the address-of operator. It has one question and an answer to check." width="240"></td>
+  </tr>
+</table>
 
 ## Why not a simple chat with your books?
 
