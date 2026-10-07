@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AfterTestAction, AttemptView, Choice, QuestionView, SessionView } from "../../server/api-types";
 import { getJson, postJson } from "../api";
+import { InlineCode } from "../components/InlineCode";
 import { Layout, Notice } from "../components/Layout";
 import { SectionPanel } from "../components/SectionPanel";
 import { Spinner } from "../components/Spinner";
@@ -258,7 +259,9 @@ function QuestionCard({
         </div>
       )}
       <p className="question-about">{about}</p>
-      <p className="question-text">{question.text}</p>
+      <p className="question-text">
+        <InlineCode text={question.text} />
+      </p>
 
       {question.kind === "choice" && question.choices && (
         <fieldset className="options" disabled={attempt !== null}>
@@ -269,7 +272,9 @@ function QuestionCard({
             return (
               <label key={i} className={`option ${state}`}>
                 <input type="radio" name={`question-${question.id}`} checked={picked} onChange={() => setChoice(i)} />
-                <span>{option}</span>
+                <span>
+                  <InlineCode text={option} />
+                </span>
               </label>
             );
           })}
@@ -318,18 +323,28 @@ function QuestionCard({
           {question.kind === "choice" ? (
             <>
               <p className="verdict">{attempt.correct ? "Correct" : "Not correct"}</p>
-              {attempt.keyPoints[0] && <p>{attempt.keyPoints[0]}</p>}
+              {attempt.keyPoints[0] && (
+                <p>
+                  <InlineCode text={attempt.keyPoints[0]} />
+                </p>
+              )}
             </>
           ) : (
             <>
               <p className="verdict">{attempt.disputed ? "Counted as correct" : VERDICT[attempt.score]}</p>
-              {attempt.feedback && <p>{attempt.feedback}</p>}
+              {attempt.feedback && (
+                <p>
+                  <InlineCode text={attempt.feedback} />
+                </p>
+              )}
               {attempt.keyPoints.length > 0 && (
                 <>
                   <p className="feedback-label">A good answer has these points:</p>
                   <ul>
                     {attempt.keyPoints.map((point) => (
-                      <li key={point}>{point}</li>
+                      <li key={point}>
+                        <InlineCode text={point} />
+                      </li>
                     ))}
                   </ul>
                 </>
@@ -337,7 +352,7 @@ function QuestionCard({
               {attempt.modelAnswer && (
                 <p>
                   <span className="feedback-label">Model answer: </span>
-                  {attempt.modelAnswer}
+                  <InlineCode text={attempt.modelAnswer} />
                 </p>
               )}
               {!attempt.correct && (
@@ -423,10 +438,17 @@ function ResultsView({ session }: { session: SessionView }) {
               </div>
               {result.wrong.map((wrong) => (
                 <div key={wrong.question} className="wrong">
-                  <p className="wrong-question">{wrong.question}</p>
+                  <p className="wrong-question">
+                    <InlineCode text={wrong.question} />
+                  </p>
                   <p className="quiet">
                     Your answer: {wrong.answer}
-                    {wrong.feedback && wrong.feedback !== "Not correct." ? ` ${wrong.feedback}` : ""}
+                    {wrong.feedback && wrong.feedback !== "Not correct." && (
+                      <>
+                        {" "}
+                        <InlineCode text={wrong.feedback} />
+                      </>
+                    )}
                   </p>
                 </div>
               ))}
@@ -514,10 +536,17 @@ function TestResults({ session }: { session: SessionView }) {
       <h2 id="wrong-heading">Wrong answers</h2>
       {wrong.map((item) => (
         <div key={item.question} className="wrong">
-          <p className="wrong-question">{item.question}</p>
+          <p className="wrong-question">
+            <InlineCode text={item.question} />
+          </p>
           <p className="quiet">
             Your answer: {item.answer}
-            {item.feedback && item.feedback !== "Not correct." ? ` ${item.feedback}` : ""}
+            {item.feedback && item.feedback !== "Not correct." && (
+              <>
+                {" "}
+                <InlineCode text={item.feedback} />
+              </>
+            )}
           </p>
         </div>
       ))}

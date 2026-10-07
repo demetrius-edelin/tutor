@@ -1,5 +1,6 @@
 import type { ModuleSummary, StatusCounts, SubjectDetail } from "../../server/api-types";
 import { useApi } from "../api";
+import { InlineCode } from "../components/InlineCode";
 import { Layout, Notice } from "../components/Layout";
 import { knownShare, ProgressBar, ProgressLegend } from "../components/Progress";
 import { href } from "../router";
@@ -110,7 +111,9 @@ function NextCard({ subject }: { subject: SubjectDetail }) {
           <p className="next-meta">
             Module {next.module.position}, {next.module.name}. {next.status === "learning" ? "You started the lesson." : "First in your study queue."}
           </p>
-          <p className="objective">{next.objective}</p>
+          <p className="objective">
+            <InlineCode text={next.objective} />
+          </p>
           <p className="button-row">
             <a className="button" href={href.lesson(next.conceptId)}>
               {next.status === "learning" ? "Continue the lesson" : "Start the lesson"}

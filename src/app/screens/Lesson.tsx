@@ -3,6 +3,7 @@ import type { LessonReference, LessonView, QueueView } from "../../server/api-ty
 import { getJson, postJson } from "../api";
 import { CitedMarkdown, ReferenceList } from "../components/CitedMarkdown";
 import { Drawer } from "../components/Drawer";
+import { InlineCode } from "../components/InlineCode";
 import { Layout, Notice } from "../components/Layout";
 import { SectionPanel } from "../components/SectionPanel";
 import { Spinner } from "../components/Spinner";
@@ -44,7 +45,9 @@ function ConceptHeader({ view, onChange }: { view: LessonView; onChange: (view: 
           onChange={(starred) => onChange({ ...view, concept: { ...view.concept, starred } })}
         />
       </div>
-      <p className="lead">{view.concept.objective}</p>
+      <p className="lead">
+        <InlineCode text={view.concept.objective} />
+      </p>
       <p className="quiet small">
         {LEVEL[view.concept.level]} {view.concept.kind}, module {view.concept.module.position}, {view.concept.module.name}
         {view.lesson && view.lesson.round > 1 ? `. Lesson ${view.lesson.round}` : ""}

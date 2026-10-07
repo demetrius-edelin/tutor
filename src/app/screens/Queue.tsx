@@ -12,6 +12,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useEffect, useState } from "react";
 import type { QueueItem, QueueView, QueueWarning } from "../../server/api-types";
 import { getJson, postJson, useApi } from "../api";
+import { InlineCode } from "../components/InlineCode";
 import { Layout, Notice } from "../components/Layout";
 import { SectionPanel } from "../components/SectionPanel";
 import { href } from "../router";
@@ -272,7 +273,9 @@ function QueueRow(props: {
           <p className="concept-meta">
             Module {item.module.position}, {item.module.name}. {LEVEL[item.level]} {item.kind}.
           </p>
-          <p className="objective">{item.objective}</p>
+          <p className="objective">
+            <InlineCode text={item.objective} />
+          </p>
           {source && (
             <p className="queue-source">
               <span>Source:</span>

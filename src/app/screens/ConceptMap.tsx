@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ConceptMapView, ConceptView, Mark, SelectionResult, Status } from "../../server/api-types";
 import { postJson, useApi } from "../api";
+import { InlineCode } from "../components/InlineCode";
 import { Layout, Notice } from "../components/Layout";
 import { SectionPanel } from "../components/SectionPanel";
 import { StarButton } from "../components/StarButton";
@@ -124,7 +125,8 @@ function MapView({ map: loaded, focus, focusModule }: { map: ConceptMapView; foc
     <>
       <h1>Concept map</h1>
       <p className="lead">
-        {map.modules.length} modules and {total} concepts from the books of {map.subject.name}. Open a concept to see its sources. Use
+        {map.modules.length} {map.modules.length === 1 ? "module" : "modules"} and {total} {total === 1 ? "concept" : "concepts"} from the
+        books of {map.subject.name}. Open a concept to see its sources. Use
         the buttons next to a concept to learn it, test it, or skip it. To do this for many concepts in one step, select their
         boxes. The color of a row shows its status: yellow to learn, green known, and gray skipped.
       </p>
@@ -144,7 +146,7 @@ function MapView({ map: loaded, focus, focusModule }: { map: ConceptMapView; foc
         </label>
         {query && (
           <span className="quiet" role="status">
-            {shown} of {total} concepts
+            {shown} of {total} {total === 1 ? "concept" : "concepts"}
           </span>
         )}
       </div>
@@ -309,7 +311,11 @@ function ConceptRow(props: {
           </div>
           <ConceptActions concept={concept} actions={actions} />
         </div>
-        {(props.showGoal || open) && <p className="objective">{concept.objective}</p>}
+        {(props.showGoal || open) && (
+          <p className="objective">
+            <InlineCode text={concept.objective} />
+          </p>
+        )}
         {open && (
           <div className="concept-details" id={detailsId}>
             {concept.prerequisites.length > 0 && (
