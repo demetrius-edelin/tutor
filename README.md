@@ -109,12 +109,20 @@ The tutor has no default model. After a change to `.env`, run `npm run llm:check
 ### Which model to use
 
 We tested the tutor with different models. GPT-6 Luna from OpenAI, at the reasoning level `high`, gave the best results. It was also the cheapest model in our tests, and it is very smart for a model in its price range.
+**Update, October 2026:** Claude Haiku 5.5 from Anthropic has now the same price as GPT-6 Luna, but it gives much better results!
+```
+LLM_PROVIDER=anthropic
+LLM_MODEL=claude-haiku-5-5
+LLM_REASONING=high
+```
+ If you use OpenAI, use these values:
 
 ```
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-6-luna
 LLM_REASONING=high
 ```
+
 
 ### Cost
 
