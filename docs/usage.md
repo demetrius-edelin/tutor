@@ -5,6 +5,7 @@ This guide explains each step and each command of the tutor. For an overview, se
 - [Step 1: Set up the tutor](#step-1-set-up-the-tutor)
 - [Step 2: Check the model and the book (optional)](#step-2-check-the-model-and-the-book-optional)
 - [Step 3: Add a book to a subject](#step-3-add-a-book-to-a-subject)
+  - [Add an online book](#add-an-online-book)
 - [Step 4: Study in the browser](#step-4-study-in-the-browser)
 - [Update a book after a tutor update](#update-a-book-after-a-tutor-update)
 
@@ -155,6 +156,57 @@ You can ingest the full book at one time, or a book one part at a time.
    ```
 
    The app shows the concepts of the chapters that you ingested. The chapters of the preview come from the cache, so you do not pay for them again. The concept map of the subject goes to `data/subjects/<subject>/concept-map.md`.
+
+### Add an online book
+
+The tutor can also teach from an online book or from online documentation, for example `https://doc.rust-lang.org/book/`. First, the `fetch` command downloads the pages into an EPUB file. Then you add the EPUB file to a subject with `ingest`, the same as other books.
+
+1. Download the book:
+
+   ```
+   npm run fetch -- https://doc.rust-lang.org/book/
+   ```
+
+2. The command shows the chapters that it found, with the number of pages in each chapter. Then it asks which chapters to download. To download all the chapters, press Enter. To download some chapters, type a list, for example `1-3,5`.
+
+3. Check the EPUB file:
+
+   ```
+   npm run parse -- data/web/the-rust-programming-language.epub
+   ```
+
+4. Add the EPUB file to a subject:
+
+   ```
+   npm run ingest -- Rust data/web/the-rust-programming-language.epub
+   ```
+
+The start address sets the part of the site to download. The command keeps only the pages in the folder of the start address. If no page is in that folder, the command uses the parent folder. For example, `https://docs.cakemail.com/en/docs/first-steps` gives the pages in `https://docs.cakemail.com/en/docs/`. For a different part of a large documentation site, start from a page in that part.
+
+The command finds the chapters in one of these places:
+
+1. An `llms.txt` file. Many documentation sites have this file. It lists the pages of the site. With this file, the command uses no model.
+2. The links of the start page. One model request finds the table of contents in these links. The request is small. The command shows the model before the request.
+3. The links of the page that you give with `--toc <url>`. If the chapter list is wrong or empty, use this option. Give a page that lists all the pages of the book.
+
+The command does not follow links from page to page. It downloads only the pages in the table of contents. It waits one second between two requests, and it obeys `robots.txt`. Some sites show the same text under two addresses. The command keeps only the first of these pages.
+
+The EPUB file is a copy of the site on the day of the download. A later change to the site does not change your concepts or the references of your lessons.
+
+Fetch options:
+
+- `--chapters <list>`: download only these chapters, for example `1-3` or `2,5`. The command does not ask which chapters to download.
+- `--toc <url>`: read the table of contents from the links of this page.
+- `--title <text>`: the title of the book. The default is the title of the site. If you download only some chapters, the default title also contains these chapters. The title gives the name of the EPUB file and the folder of the book in a subject. If you download two parts of one site, give each part its own title.
+- `--yes`: download all the chapters without the question, and replace an old EPUB file with the same name.
+
+The command cannot read these pages:
+
+- Pages that show their text only after JavaScript runs.
+- Pages behind a login or a paywall. If you bought the book, use the EPUB file from the publisher.
+- Pages that only list links to other sites.
+
+The tutor cannot update a downloaded book yet. If the site changes and you want the new text, download the site again with a new `--title`. Then ingest the new EPUB file as a new book.
 
 ### Add more chapters later
 

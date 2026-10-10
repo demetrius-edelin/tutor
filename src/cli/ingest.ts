@@ -9,6 +9,7 @@ import { bookDir, cachedChapters, ingestBook, selectedInputs, type IngestReport 
 import { readBookSource } from "../ingest/parse.js";
 import { requestsFor } from "../ingest/stages/digest.js";
 import { createClient, LlmError } from "../llm/index.js";
+import { parseChapters } from "./chapters.js";
 
 const USAGE = `Usage: npm run ingest -- <subject> <book.epub | book.pdf> [options]
 
@@ -20,16 +21,6 @@ Options:
   --yes              Start without the question.
   --fresh            Ignore the cached chapter results.
   --replace          Replace the book if the subject has it already.`;
-
-function parseChapters(value: string): number[] {
-  const numbers = new Set<number>();
-  for (const part of value.split(",")) {
-    const [start, end] = part.split("-").map((item) => Number(item.trim()));
-    if (!start || Number.isNaN(start)) throw new Error(`"${value}" is not a valid chapter list.`);
-    for (let n = start; n <= (end || start); n++) numbers.add(n);
-  }
-  return [...numbers].sort((a, b) => a - b);
-}
 
 // A range of sections, for example 1.10-2.3, contains all the sections between the two sections, in the order of the book.
 function parseSections(value: string, book: ParsedBook): string[] {

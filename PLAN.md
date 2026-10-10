@@ -1,6 +1,6 @@
 # Build Plan
 
-Status: draft 2. Date: 2026-10-03. The design is in `DESIGN-v3.md`. This file gives the build order for phase 1 and phase 2.
+Status: draft 3. Date: 2026-10-10. The design is in `DESIGN-v3.md`. This file gives the build order for phase 1, phase 2, and the later milestones.
 
 ## Rules
 
@@ -26,7 +26,12 @@ Status: draft 2. Date: 2026-10-03. The design is in `DESIGN-v3.md`. This file gi
 - Lesson length fix: done. The tutor writes one lesson with references in one call. The length follows the concept, and the prompt has no minimum length. The "Explain in more detail" button is gone. Schema version 6 keeps the detailed version of each old lesson.
 - Milestone 11: done. The "Review board" tab shows one line for each concept, with the status filters, the star filter, and the search. The address keeps the filters.
 - Milestone 12: done. "Test me again" on the lesson page of a mastered concept uses the questions of the last test, with no model call to write questions. "Learn again" is dropped, because a click on the board opens the lesson. Phase 2 is complete.
-- Milestone 13: built. The parser keeps the images of PDF and EPUB books, ingest reads them with the model, and `npm run refresh` adds them to an ingested book. A run with a fake model on a copy of the user data matched all sections and kept all lessons. The exit test needs a run of `npm run refresh` with the model of the user.
+- Milestone 13: done. The parser keeps the images of PDF and EPUB books, ingest reads them with the model, and `npm run refresh` adds them to an ingested book.
+- Test size: done. The model gives each concept a number of test questions from 1 to 5. A simple concept gets fewer questions.
+- Delete a subject: done. The home screen has a button that deletes a subject with its books, concepts, progress, and files.
+- Ingest of sections: done. `npm run ingest -- <subject> <book> --sections <list>` ingests some sections of a chapter. This helps with books that have very large chapters.
+- Milestone 14: done. `npm run fetch` reads `/en/llms.txt` of the Cakemail docs and shows the folders of `/en/docs/` as 16 chapters. A download of two chapters parsed with no lost text.
+- Milestone 15: built. One model request found the table of contents of the Rust book in `toc.html`: 25 chapters and 111 pages. For "30 Days of Vue", it gave each day one time. The parse of the two books kept 100% to 105% of the words. The exit test needs a preview of one chapter of a fetched book with the model of the user.
 
 ## Milestones
 
@@ -61,7 +66,7 @@ Phase 2 adds the review board and the stars. See "Review board" in `DESIGN-v3.md
     - Exit test: select "Learned" and "Starred". The board shows only the starred concepts that are `known` or `mastered`. A reload keeps the filters.
 12. Test me again. This milestone replaces "Learn again": a click on a concept on the board opens its lesson, so the board needs no button.
     - Add the "Test me again" button to the "After the lesson" part of the lesson page of a `mastered` concept.
-    - The button uses `POST /api/concepts/:id/check` with the body `{ "again": true }`. The server copies the 3 questions of the last finished test into a new test session. The options of the recall question get a new order. The session is ready at once, with no model call.
+    - The button uses `POST /api/concepts/:id/check` with the body `{ "again": true }`. The server copies the questions of the last finished test into a new test session. The options of the recall question get a new order. The session is ready at once, with no model call.
     - If the concept has no finished test, the server writes new questions, as for "Test me".
     - A pass keeps the concept `mastered`. After a fail, the concept stays `mastered`, and the results offer "Teach it again", "Later", and "Skip".
     - Exit test: on the lesson page of a `mastered` concept with an old test, click "Test me again". The test opens at once with the old questions. After a pass, the concept is still `mastered`.
@@ -80,6 +85,74 @@ After milestone 12, phase 2 is complete.
     - Do not use `npm run ingest -- --replace` for an existing book. It removes the book row, so the IDs of all sections change. Then the references of the old lessons and the sections of the questions break.
     - Old lessons do not change. For a concept with an image in its sections, use "Teach it again" to get a lesson with the content of the image.
     - Exit test: run `refresh` on a book with code images. A section with a code image contains the code as a code block. The progress in the app is the same as before.
+14. Fetch online documentation with `llms.txt`.
+    - Some books and most product documentation are on the web only. The tutor reads only EPUB and PDF files.
+    - Add `npm run fetch -- <url> [options]`. The command downloads the pages of an online book or of online documentation into one EPUB file in `data/web/`.
+    - Then `parse`, `ingest`, and `refresh` read the EPUB file as a usual book. Their code does not change.
+    - The EPUB file is the snapshot of the site. A later change to the site does not change the concepts or the references. The user can open the file in an e-book reader to check it.
+    - Put the code in `src/ingest/web/` and the command in `src/cli/fetch.ts`.
+    - Scope:
+      - The start URL sets the scope. `fetch` keeps only the pages in the folder of the start URL.
+      - If no page is in the folder of the start URL, `fetch` uses the parent folder. For example, `https://docs.cakemail.com/en/docs/first-steps` gives the scope `/en/docs/`.
+      - `fetch` does not follow links from page to page. Only the table of contents gives the pages.
+    - The `llms.txt` file:
+      - Many documentation sites have an `llms.txt` file. It lists the pages of the site, often with a Markdown version of each page.
+      - `fetch` looks for `llms.txt` in each folder of the start URL, from the deepest folder up to the root. For example, the Cakemail docs have the file at `/en/llms.txt`.
+      - If the file has more than one `##` heading, each heading starts a chapter. If not, each folder of the page URLs is a chapter. A page that is not in a subfolder is a chapter of its own.
+      - Each page is a section of its chapter. Chapters keep the order of their first page in the file. Pages keep the order of the file.
+      - If a link ends in `.md`, `fetch` downloads the Markdown and converts it to HTML with a Markdown library, for example `marked`.
+      - MDX (Markdown with components) pages can contain component tags such as `<Stepper>`. Remove these tags and keep their content.
+      - `fetch` downloads the other links as HTML pages.
+    - Selection of chapters:
+      - `fetch` shows the chapters as a numbered list, with the number of pages in each chapter.
+      - `fetch` asks which chapters to download. The default is all chapters.
+      - `--chapters <list>` gives the answer without the question, as in `ingest`. `--yes` takes all chapters without the question.
+      - For a book, the user takes all chapters. For a large documentation site, the user takes some parts only.
+    - Content of an HTML page:
+      - Keep the `<main>` element. If the page has no `<main>`, keep `<article>`. If the page has no `<article>`, keep `<body>`.
+      - Remove the elements with no text of the page, for example `<nav>`, `<script>`, `<button>`, `<form>`, `<svg>`, and `<footer>`. Most sites put the previous and next links in a `<nav>` element.
+      - Remove the anchor marks next to headings, for example "#" or "¶". A heading keeps only its text and its inline elements.
+      - Keep the `class` attribute only on code and on note boxes. Other classes of a site can look like the heading classes of a publisher.
+      - If the first heading repeats the title of the page, remove it. Move the next heading to the base level, and move the other headings with it.
+      - Download the images of the kept content in the formats that the parser reads. Also download images from other hosts, because many sites use a CDN (content delivery network).
+      - Convert each page to XHTML with cheerio, because the EPUB reader parses XHTML in XML mode.
+      - Some sites show the same text under two URLs. If a page has the same text as an earlier page, skip it, and show it in the report.
+    - The EPUB file:
+      - Each chapter is one XHTML file, and each page is a `<section>` in the file. With one file for each page, the parser makes each page a chapter.
+      - The title comes from `llms.txt` or from the `<title>` of the start page. The author is the host name of the site.
+      - If the user takes some chapters only, the title also names the chapters. The title gives the file name and the folder of the book in a subject. `--title <text>` sets a different title.
+      - `dc:source` keeps the start URL, and `dc:date` keeps the date of the fetch.
+      - The nav document keeps the chapters and their pages.
+    - Polite fetch:
+      - Send one request at a time, with a pause of 1 second between requests. Use the user agent `tutor-fetch`.
+      - Obey `robots.txt`. Skip the pages that it disallows, and show them in the report.
+      - Before the download, show the number of pages and an estimate of the time.
+      - If a page fails, try it again one time. Then skip it, and show it in the report.
+    - Tests use a fake fetch function with small pages in the test code. They cover the scope rule, the `llms.txt` chapters, the MDX tags, `robots.txt`, and the EPUB file. The EPUB file must parse with `parseBook` into the expected chapters and sections.
+    - Update `README.md` and `docs/usage.md`.
+    - Exit test: run `npm run fetch -- https://docs.cakemail.com/en/docs/first-steps`. `fetch` uses `/en/llms.txt` and shows the folders of `/en/docs/` as chapters. `npm run parse` on the EPUB file shows no lost text.
+15. Fetch online books with no `llms.txt`.
+    - If the site has no `llms.txt`, `fetch` reads the table of contents from the HTML of the start page.
+    - `fetch` collects the links of the start page in page order, with their depth in lists. It also keeps the text of a list item with no link, for example the title of a group.
+    - `fetch` keeps only the links in the scope.
+    - If the start page has an `<iframe>` from the same site, `fetch` also reads the links of the `<iframe>`. The Rust book needs this rule. JavaScript fills its sidebar, but `toc.html` in an `<iframe>` has the full list.
+    - A card link can contain a heading, a number, and a series name. The text of the heading is the title of the link.
+    - One model request turns the link list into the table of contents. The model removes menus, footer links, print versions, and duplicate pages. For example, the start page of "30 Days of Vue" links each day under two URLs.
+    - The model answers with the numbers of the links, not with the URLs. This keeps the answer short.
+    - `fetch` shows the model name before the request. It does not ask first, because the cost of one request is small. If `.env` has no model, `fetch` stops with a clear message.
+    - Add `--toc <url>`. If the start page does not give the full list of pages, the user gives a page that does. `fetch` then reads the links of that page.
+    - Tests use the fake model client. They cover the `<iframe>` rule, the scope rule for HTML links, and the duplicate pages.
+    - Exit test:
+      - `npm run fetch -- https://doc.rust-lang.org/book/` finds the table of contents in `toc.html`. `npm run parse` on the EPUB file shows the chapters and sections with no lost text.
+      - `npm run fetch -- https://www.newline.co/30-days-of-vue` gives each day one time.
+      - A preview of one chapter of a fetched book gives a good concept map.
+
+Milestones 14 and 15 do not cover these cases:
+
+- Sites that show the text only after JavaScript runs. These sites need a headless browser (a browser with no window), and the build stays light.
+- Pages behind a login or a paywall, for example Manning liveBook. The purchase of a Manning book gives an EPUB file, and the tutor reads EPUB files.
+- Pages that only list links to other sites, for example the Flutter "Learning resources" page.
+- An update of fetched documentation. If the sections of a book change, `refresh` stops. To update, fetch the site again and ingest it as a new book.
 
 ## Options
 

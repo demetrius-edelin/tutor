@@ -1,8 +1,8 @@
 # <img src="src/app/public/logo.svg" alt="" height="32"> Tutor
 
-> See also my other project, [Tapas Habit & Goal Tracker](https://tapastracker.app), a full-featured habit tracker for iPhone and Android. Also, **I am available for hire.** Contact me on [LinkedIn](https://www.linkedin.com/in/demetrius-edelin/).
+> See also my other project, [Tapas Habit & Goal Tracker](https://tapastracker.app), a full-featured habit tracker for iPhone and Android. Also, **I am looking for a full-time role** as a software developer. Contact me on [LinkedIn](https://www.linkedin.com/in/demetrius-edelin/).
 
-A personal tutor that teaches from your own books. You make a subject of study, for example "SQL", and add books to it. The tutor finds the concepts in the books and checks which concepts you know. Then it teaches the other concepts one at a time, with references to the books, and tests each one.
+A personal tutor that teaches you from your books or from online documentation. You make a subject of study, for example "SQL", and add books to it. A book can be an EPUB file, a PDF file, an online book, or online documentation. The tutor finds the concepts in the books and checks which concepts you know. Then it teaches the other concepts one at a time, with references to the books, and tests each one.
 
 The tutor runs on your computer. It uses one large language model (LLM) from Anthropic, OpenAI, or OpenRouter. You select the model.
 
@@ -39,6 +39,7 @@ npm install
 cp .env.example .env                       # then set the provider, the model, and the API key
 npm run llm:check                          # optional: send 3 small test requests to the model
 npm run ingest -- SQL /path/to/book.epub   # add a book to the subject "SQL"
+npm run fetch -- https://doc.rust-lang.org/book/   # optional: download an online book into an EPUB file
 npm start                                  # then open http://localhost:3000
 ```
 
@@ -61,7 +62,7 @@ flowchart LR
 
 1. [Set up the tutor](docs/usage.md#step-1-set-up-the-tutor). Do this one time.
 2. [Check the model and the book](docs/usage.md#step-2-check-the-model-and-the-book-optional). This step is optional. It saves no data.
-3. [Add a book to a subject](docs/usage.md#step-3-add-a-book-to-a-subject). Add the full book, or only the chapters that you want to study now. Only this step puts books into the tutor.
+3. [Add a book to a subject](docs/usage.md#step-3-add-a-book-to-a-subject). Add the full book, or only the chapters that you want to study now. Only this step puts books into the tutor. For an online book, [download it first](docs/usage.md#add-an-online-book).
 4. [Study in the browser](docs/usage.md#step-4-study-in-the-browser). Start the app and learn. The app shows the next action at each stage.
 
 The [usage guide](docs/usage.md) explains each step and each command.
@@ -84,6 +85,7 @@ The model writes the questions and grades the open answers. If you think that a 
 |---|---|---|---|
 | `npm run llm:check` | Optional. After a change to `.env`. | Yes, 3 small requests. | Nothing. |
 | `npm run parse -- <book>` | Optional. To check a book and to find the chapter numbers for `--chapters`. | No. | A report in `data/parse/<book>/`, for you to read. |
+| `npm run fetch -- <url>` | To study an online book or online documentation. Then use the EPUB file as the book. | Only for a site with no `llms.txt` file: one small request. | An EPUB file in `data/web/`. |
 | `npm run ingest -- <subject> <book> --chapters <list> --preview` | Recommended. To check the concepts of some chapters before you save them. | Yes. | Preview files in the folder of the book. The database does not change. |
 | `npm run ingest -- <subject> <book> --chapters <list>` | To study some chapters of a book. | Yes. | The folder of the book and the database. |
 | `npm run ingest -- <subject> <book>` | To study all the chapters of a book. | Yes. | The folder of the book and the database. |
@@ -146,6 +148,7 @@ PORT=8080 npm start
 - EPUB files work best. The parser reads the publisher CSS for headings, bold, and italic.
 - PDF files must be tagged. Word and many publishing tools make tagged PDF files. The parser stops with a clear message for an untagged or a scanned PDF.
 - Some books show code or tables as images. Ingest uses the model to read them. If the model does not accept images, the images stay as placeholders.
+- Online books and online documentation: `npm run fetch` downloads the pages into an EPUB file. The command cannot read pages behind a login, or pages that show their text only after JavaScript runs. See [Add an online book](docs/usage.md#add-an-online-book).
 
 ## Common questions
 
@@ -157,6 +160,7 @@ PORT=8080 npm start
 - **Do I pay two times for the chapters of a preview?** No. The tutor keeps the model results of each run, so a later run does not pay for these chapters again.
 - **How do I add more chapters later?** Run `ingest` again with a list of the new chapters or sections. See [Add more chapters later](docs/usage.md#add-more-chapters-later).
 - **Can I move or delete the book file after ingest?** Yes. Ingest keeps a copy of the book file in the folder of the book.
+- **Can the tutor teach from online documentation?** Yes. Run `npm run fetch` with the address of the documentation. Then ingest the EPUB file. See [Add an online book](docs/usage.md#add-an-online-book).
 - **How do I add a second book to a subject?** Run `npm run ingest` again with the same subject name. The tutor adds the concepts of the new book to the concept map of the subject.
 - **How do I make a new subject?** Run `npm run ingest` with a new subject name. The first book makes the subject.
 - **How do I delete a subject?** On the list of subjects, click "Delete" below the subject. Then click the red button in the panel that opens. The tutor deletes the books, the concepts, your progress, and the folder of the subject. You cannot undo this.
@@ -189,6 +193,7 @@ Planned:
 | App | React 19 and Vite. |
 | Database | SQLite, with better-sqlite3. |
 | Book parser | JSZip and cheerio for EPUB, pdf.js for PDF, and Turndown for Markdown. |
+| Online books | The fetch function of Node.js, cheerio, marked for Markdown pages, and JSZip for the EPUB file. |
 | Model clients | The Anthropic SDK and the OpenAI SDK. OpenRouter uses the OpenAI SDK. |
 | Tests | Vitest. |
 
@@ -204,6 +209,7 @@ src/
     epub/       EPUB reader
     pdf/        tagged PDF reader
     stages/     extract, review, and merge (the model stages)
+    web/        online books: table of contents, pages, and the EPUB writer
   llm/          model client for Anthropic, OpenAI, and OpenRouter
   tutor/        diagnosis, lessons, questions, grader, and study queue
   server/       HTTP API
@@ -229,7 +235,8 @@ Before you send a pull request, do these steps:
 ## Privacy and copyright
 
 - Do not commit `data/` or `.env`. Git ignores them.
-- The `data/` folder contains the text of books that you bought.
+- The `data/` folder contains the text of books that you bought, and of the online books that you downloaded.
+- The `fetch` command obeys `robots.txt` and waits one second between two requests.
 - The repository contains no book text. The tests build their own small EPUB file in code.
 - When the tutor sends a request, it sends book text to the provider that you selected. With OpenRouter, the text goes to the vendor of the selected model.
 

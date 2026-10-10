@@ -1,7 +1,7 @@
 import type { ImageInput, LlmClient, ObjectRequest, Source, TextRequest, TextResult } from "../../src/llm/index.js";
 import { checkReferences } from "../../src/llm/references.js";
 
-export type Stage = "extract" | "review" | "merge" | "questions" | "test" | "grade" | "image" | "lesson" | "chat";
+export type Stage = "extract" | "review" | "merge" | "questions" | "test" | "grade" | "image" | "toc" | "lesson" | "chat";
 
 export interface FakeCall {
   stage: Stage;
@@ -30,6 +30,8 @@ export interface FakeHandlers {
   grade?: (prompt: string) => unknown;
   // The handler can throw an error, as a model that does not accept images.
   image?: (images: ImageInput[], call: number) => unknown;
+  // The prompt has one line for each link or group title: "12: Title -> /path" or "13: [group] Title".
+  toc?: (prompt: string) => unknown;
   text?: (request: TextRequest) => TextResult;
 }
 
@@ -98,7 +100,9 @@ export class FakeLlm implements LlmClient {
             ? "grade"
             : request.system.startsWith("You read one image")
               ? "image"
-              : "merge";
+              : request.system.startsWith("You find the table of contents")
+                ? "toc"
+                : "merge";
     this.calls.push({ stage, request: request as ObjectRequest<unknown> });
     const sources = request.sources ?? [];
     let answer: unknown;
@@ -114,6 +118,13 @@ export class FakeLlm implements LlmClient {
     } else if (stage === "test") {
       const sectionId = sources[0]?.id ?? "0";
       answer = this.handlers.test?.(request.prompt, sources) ?? { questions: defaultTestQuestions(sectionId) };
+    } else if (stage === "toc") {
+      // By default, each link is a chapter with one page.
+      const links = [...request.prompt.matchAll(/^(\d+): +(.*?) -> /gm)].map((match) => ({ number: Number(match[1]), title: match[2]! }));
+      answer = this.handlers.toc?.(request.prompt) ?? {
+        title: "Fake Book",
+        chapters: links.map((link) => ({ title: link.title, links: [link.number] })),
+      };
     } else if (stage === "image") {
       answer = this.handlers.image?.(request.images ?? [], this.count("image")) ?? { kind: "code", language: "sql", text: "SELECT 1;" };
     } else if (stage === "grade") {
