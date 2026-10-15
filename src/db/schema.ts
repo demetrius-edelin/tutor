@@ -196,7 +196,7 @@ UPDATE lesson_messages SET refs = replace(refs, '"path":"themes/', '"path":"subj
 `;
 
 // Version 9: the app runs ingest in the background. Each run keeps its status and its progress.
-// The mode "fetch" is for the download of an online book (milestone 17).
+// The mode "fetch" is for the download of an online book (milestone 18) or of a video (milestone 19).
 const V9 = `
 CREATE TABLE ingests (
   id         INTEGER PRIMARY KEY,

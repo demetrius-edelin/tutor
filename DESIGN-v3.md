@@ -1,6 +1,6 @@
 # Tutor: Design
 
-Status: draft 3, revision 12. Date: 2026-10-15. This file replaces `DESIGN.md` (draft 2).
+Status: draft 3, revision 13. Date: 2026-10-15. This file replaces `DESIGN.md` (draft 2).
 
 ## Purpose
 
@@ -13,12 +13,13 @@ The tutor uses one large language model (LLM) from Anthropic, OpenAI, or OpenRou
 ## Decisions
 
 - Subjects are neutral. The tutor has no built-in subjects and no code for a specific subject. The user creates a subject with a name and adds books to it. The books define the content of the subject.
-- Books are EPUB files or tagged PDF files.
+- Books are EPUB files or tagged PDF files. A YouTube video or playlist also becomes a book, through an EPUB file. See "Videos (phase 3)".
 - Until phase 4, the tutor runs on the laptop of the user. In phase 4, each user can also run it on a server. The tutor has no Telegram bot and no other messaging.
 - The tutor is free and open source. Each user hosts their own copy. The project offers no public hosted version. See "Self-hosted release (phase 4)".
 - The review board shows what the user learned. The user decides what to read again or to test again. The tutor has no review schedule.
 - The user makes each decision about what to test, what to learn, what to skip, and the order of study. The tutor only suggests.
 - The tutor uses one model. The user selects the provider, the model, and the API key in the `.env` file. The tutor has no default model.
+- Videos use a second model, because the main model cannot read video. This is the only exception to the rule of one model.
 
 ## Principle: the tutor suggests, the user decides
 
@@ -453,7 +454,7 @@ The star button is on the board line, in the header of the lesson page, and on t
 
 Now, ingest runs only from the command line. Phase 3 moves ingest into the app, so that the user adds a book with no terminal. Phase 4 needs this change, because the book files are on the laptop and the tutor is on the server.
 
-The commands stay. The app and the commands use the same ingest code. Milestone 16 in `PLAN.md` adds books from files. Milestone 17 adds online books.
+The commands stay. The app and the commands use the same ingest code. Milestone 16 in `PLAN.md` adds books from files. Milestone 18 adds online books. Milestones 17 and 19 add YouTube videos: first the command, then the app. See "Videos (phase 3)".
 
 ### Create a subject
 
@@ -559,7 +560,7 @@ The app does not offer a full replace of a saved book. A replace removes the boo
 
 ### Online books
 
-`npm run fetch` downloads an online book into an EPUB file. Milestone 17 adds the same function to the app. The user adds an online book in this order:
+`npm run fetch` downloads an online book into an EPUB file. Milestone 18 adds the same function to the app. The user adds an online book in this order:
 
 1. On the subject screen, the user clicks "Add an online book" and types the address.
 2. The server finds the table of contents. For a site with no `llms.txt` file, this needs one model request. The app waits for the answer, as for a new lesson.
@@ -577,6 +578,141 @@ The download obeys the same rules as the command: one request at a time, a pause
 "Stop" ends the download after the current page. A stopped download writes no EPUB file.
 
 The book page shows the skipped pages of the download above the plan.
+
+## Videos (phase 3)
+
+Many good courses exist only as videos, most of them on YouTube. A user can listen to a video course, but with no tests the user keeps little of it. The tutor turns a YouTube video or playlist into a book. Then the user studies it as any other book.
+
+The tutor writes the video as an EPUB file in `data/web/`, as for an online book. Parse, ingest, lessons, and tests read the EPUB file as a usual book. Their code does not change.
+
+Milestone 17 in `PLAN.md` adds the command. It needs nothing from the online books in the app. Milestone 19 adds videos to the app, after milestone 18 adds online books to the app.
+
+### What becomes a book
+
+The user gives the address of one video or of one playlist. Only YouTube addresses work.
+
+- One video: the video is the book. Each YouTube chapter of the video is a chapter of the book.
+- A playlist: the playlist is the book. Each video is a chapter. The YouTube chapters of a video are its sections.
+- A video with no YouTube chapters is one chapter. The parser splits it into sections by size, as for a long section of a book.
+
+The title of the book is the title of the video or of the playlist. The author is the name of the channel.
+
+For a playlist, the user selects the videos, as for the chapters of an online book. One video has no selection, because each request contains the full video. See "The request".
+
+### The video model
+
+The tutor does not download the video. It sends the YouTube address to a model that reads YouTube videos directly. The model hears the speech and sees the screen. Thus, one request gives the transcript and the code on the screen.
+
+Now only Google Gemini models read YouTube addresses. The user selects one of two providers for the video model:
+
+- `openrouter`: OpenRouter passes YouTube addresses to Gemini. The user needs no Google account, and one key serves the main model and the video model. The model name has the form `google/<model>`, for example `google/gemini-3.8-flash`.
+- `google`: the Gemini API of Google, with a Gemini key from Google AI Studio. The model name has no prefix, for example `gemini-3.8-flash`.
+
+The video model is a second model, in addition to `LLM_MODEL`. The Claude models and most other models do not accept audio or video, so the main model cannot do this work.
+
+```
+VIDEO_PROVIDER=      # openrouter or google
+VIDEO_MODEL=         # a Gemini model, in the form of the provider. The README names the models that we tested.
+OPENROUTER_API_KEY=  # for openrouter
+GEMINI_API_KEY=      # for google
+```
+
+The tutor has no default video provider and no default video model. If `VIDEO_PROVIDER`, `VIDEO_MODEL`, or the key of the video provider is empty, a video step stops with a clear message. Books from files and online books do not need the video model.
+
+### The request
+
+The tutor makes one request for each video. The request has these parts:
+
+- The YouTube address, with the processing mode `static`. In this mode, Gemini takes one frame for each second, and all of the audio. For `openrouter`, the address goes into a `video_url` part of a chat request. For `google`, it goes into a `video` part of a request to the Interactions API of Gemini (`/v1beta/interactions`).
+- A prompt with the rules of the transcript.
+- The reasoning level `low`. A transcript needs no reasoning.
+- A maximum number of output tokens from the length of the video: 700 tokens for each minute, plus 1,000, and at most 65,536.
+
+OpenRouter cannot send a part of a video to Gemini. Thus, each request contains the full video, and the user cannot select the chapters of one video. The Gemini API has clip offsets (`start_offset` and `end_offset`), but its documentation shows them only for uploaded files. Thus, the first version uses the full video with both providers. See "Open questions".
+
+The rules of the transcript:
+
+- Write the exact words of the speaker. Do not summarize, shorten, or add words. Remove only filler sounds such as "um".
+- Start a new paragraph at each change of idea, or after 30 to 60 seconds. Begin each paragraph with its start time, for example `[4:05]` or `[1:04:05]`.
+- When the screen shows code, a command, a table, or a slide with text, write its content at that point. Use a code block for code and a Markdown table for a table. If the code changes, write the new version.
+- When the speaker defines a term, write the term in bold one time. The parser takes bold terms into the checklist, as for a book. See "Stage 3: Review".
+- Write only the transcript.
+
+The prompt does not ask for chapter headings. The tutor puts each paragraph into its chapter by the start time of the paragraph. The paragraph times are more exact than the headings of the model.
+
+### Checks of the transcript
+
+The model can stop early, skip a part, or invent text. Thus, the tutor checks each transcript:
+
+- The finish reason is `stop`. A transcript that reached the token limit fails.
+- Each paragraph has a start time, and the times do not go back.
+- No gap between two paragraphs is longer than 3 minutes.
+- The last paragraph starts near the end of the video: less than 2 minutes or 10% of the length before the end, whichever is larger.
+
+If a check fails, the tutor tries one more time. If the second transcript also fails, the tutor skips the video and shows the reason in the report.
+
+The checks find a short transcript. They do not find wrong words or wrong code. In a test with a 12-minute video, the words matched the YouTube captions at 96%. Almost all differences were errors in the captions, for example "load a shiaa" for "lodash".
+
+All code blocks and tables in a transcript come from the screen. Thus, the tutor puts a note before each one, as for the code of an image: "_The tutor read this code from the video:_". The lesson model sees the note and can correct a small error in the code.
+
+### The cache
+
+A transcript costs money. The tutor keeps each transcript that passes the checks in `data/web/transcripts/<video id>.json`, with the model name and the date. A later download of the same video uses the file and makes no request, for example in a larger playlist. To get a new transcript of a video, delete its file.
+
+### The EPUB file
+
+- Each chapter is one XHTML file, and each section is a `<section>` with an `<h2>` heading, as for an online book.
+- Each paragraph starts with a link to its time in the video, for example `[12:34](https://www.youtube.com/watch?v=<id>&t=754s)`. In "Read the section", a click on the link opens the video at that time, in a new tab.
+- `dc:source` keeps the address of the video or of the playlist. `dc:date` keeps the date of the download.
+- The title gives the file name, as for an online book.
+
+The transcript is Markdown. The tutor converts it to XHTML with `marked`, as `fetch` does for the Markdown pages of `llms.txt`.
+
+### yt-dlp
+
+Before the requests, the tutor needs facts about the videos: the title, the channel, the length, and the YouTube chapters. For a playlist, it also needs the list of videos. The tool yt-dlp reads these facts from YouTube. The tutor uses yt-dlp only for these facts. It downloads no captions, no audio, and no video with it.
+
+The user does not install yt-dlp:
+
+- At the first use, the tutor downloads the single-file program of yt-dlp from the GitHub releases of yt-dlp into `data/bin/`. It selects the file for the system of the user.
+- YouTube changes often, and old versions of yt-dlp stop working. If the last update of the program is more than one day old, the tutor updates it before the download.
+- yt-dlp needs a JavaScript runtime for some YouTube pages. The tutor gives it Node.js with `--js-runtimes node:<path>`, because Node.js runs the tutor already. Thus, the user does not install Deno.
+
+If yt-dlp fails, the command shows the message of yt-dlp. Often a later update of yt-dlp repairs the problem.
+
+The first version does not use the captions of YouTube. YouTube blocks more and more caption downloads. Also, the automatic captions have no punctuation and many wrong technical words.
+
+### Cost
+
+In the mode `static`, Gemini counts about 100 input tokens for each second of video. The output is about 550 tokens for each minute. The 12-minute test video cost $0.073 with `google/gemini-3.8-flash` on OpenRouter. Thus, one hour of video costs about $0.37 with this model. On 2027-01-01, Google doubles the price of this model.
+
+With `google`, YouTube addresses are a free preview now. The free tier allows up to 8 hours of YouTube video a day, and the paid tier has no limit. On the free tier, Google uses the requests to improve its products. A request contains only a public video and the prompt. Google can end the preview at any time.
+
+Before the download, the tutor shows the total length of the selected videos. For `openrouter`, it also shows an estimate of the cost, from the public model list of OpenRouter. For `google`, it shows no cost, because Google has no price list for programs to read.
+
+Then ingest costs the same as for a book of the same size. One hour of speech gives about 10,000 to 13,000 words.
+
+### Videos in the app
+
+Milestone 19 adds videos to the "Add an online book" form of milestone 18. The button becomes "Add an online book or video".
+
+- For a YouTube address, the server reads the facts with yt-dlp, not a table of contents.
+- For a playlist, the app shows the videos with checkboxes, their lengths, and the cost estimate. For one video, it shows the chapters with no checkboxes.
+- The download is a run with the mode `fetch`, as for an online book. Each video is one step. "Stop" ends the run after the current video.
+- The finished transcripts stay in the cache. A stopped run writes no EPUB file.
+- Then the server continues as for an online book: the parse, the copy in the folder of the book, and the plan.
+
+### Limits of the first version
+
+- Only YouTube addresses, and only public videos. Gemini does not read unlisted or private videos.
+- A video can be 90 minutes long at most. The output limit of the model, 65,536 tokens, cannot hold the transcript of a longer video. In a playlist, the tutor shows a longer video as "too long" and offers no checkbox for it.
+- No other video sites, and no video files from the disk.
+
+A later version can read longer videos with the processing mode `agentic`. In this mode, Gemini moves in the video by itself, so one request can transcribe one YouTube chapter. This needs a test first. See "Options" in `PLAN.md`.
+
+### Responsibility
+
+The terms of YouTube do not allow downloads with other tools. Each user runs their own copy of the tutor, and takes the responsibility for the videos and the transcripts. The transcripts stay in `data/`, which is not in git. The README says this.
 
 ## Self-hosted release (phase 4)
 
@@ -765,7 +901,7 @@ ingests          (id, subject_id, book, file, title, mode, chapters, status, don
 - `ingests` (phase 3): one row for each run in the app: an ingest or a download of an online book.
 - `ingests.book`: the folder name of the book, for example `pro-git`. The book page shows the last run of its book.
 - `ingests.file`: the book file, relative to `data/`. For a download, the new EPUB file in `data/web/`.
-- `ingests.mode`: `preview`, `save`, or `fetch`. The mode `fetch` is a download of an online book (milestone 17).
+- `ingests.mode`: `preview`, `save`, or `fetch`. The mode `fetch` is a download of an online book (milestone 18) or of a video (milestone 19).
 - `ingests.chapters`: the selected chapters, as a JSON list.
 - `ingests.status`: `running`, `done`, `stopped`, or `failed`.
 - `ingests.done` and `ingests.total`: the finished steps and all steps of the run. A step is one model request, or one page of a download.
@@ -784,12 +920,13 @@ The concept map is in SQLite, because the merge step changes it for each new boo
 - `jszip` to read EPUB files, and `turndown` to convert XHTML to Markdown.
 - The Anthropic TypeScript SDK and the OpenAI TypeScript SDK (software development kits), behind one interface. See "Model".
 - zod for the JSON schemas and for the check of model output.
+- yt-dlp for the facts about YouTube videos. The tutor downloads the program by itself. See "Videos (phase 3)".
 
 The design has no Telegram bot, no job queue, no vector database, and no cloud services. In phase 4, the tutor runs in one container. The concept map links each concept to its sections. Thus, the tutor needs no search.
 
 ## Model
 
-The tutor uses one model for all of its work. The user selects the model in the `.env` file, from one of three providers:
+The tutor uses one model for all of its work. Videos are the only exception: they use a second model, `VIDEO_MODEL`. See "Videos (phase 3)". The user selects the model in the `.env` file, from one of three providers:
 
 - Anthropic: Claude models, through the Anthropic TypeScript SDK.
 - OpenAI: OpenAI models, through the OpenAI TypeScript SDK.
@@ -800,9 +937,12 @@ LLM_PROVIDER=        # anthropic, openai, or openrouter
 LLM_MODEL=           # the model name, exactly as the provider writes it
 LLM_REASONING=       # none, minimal, low, medium, high, xhigh, or max. Empty: the default of the model.
 OPENROUTER_PROVIDERS= # OpenRouter only: the providers that can serve the model, in order. Empty: OpenRouter selects.
+VIDEO_PROVIDER=      # videos only: openrouter or google
+VIDEO_MODEL=         # videos only: a Gemini model, in the form of the video provider
 ANTHROPIC_API_KEY=
 OPENAI_API_KEY=
 OPENROUTER_API_KEY=
+GEMINI_API_KEY=      # videos only, for the video provider google
 ```
 
 OpenRouter sends each request to one of several providers that serve the model. The providers differ in speed, price, and quality. With `OPENROUTER_PROVIDERS`, the user selects the providers. The tutor sends them as the `order` list with `allow_fallbacks: false`, so no other provider gets the request.
@@ -894,13 +1034,17 @@ data/                 (not in git)
       ingest-report.json
       ingest-report.preview.json
       concept-map.preview.md
-  web/                EPUB files of online books, from fetch
+  web/                EPUB files of online books and videos, from fetch
+    transcripts/      one transcript for each video, the cache of the video model
+  bin/                yt-dlp, which the tutor downloads by itself
 src/
   server/             HTTP API
   app/                React app
   ingest/core/        blocks, sections, Markdown, checklist (all formats)
   ingest/epub/        EPUB reader
   ingest/pdf/         tagged PDF reader
+  ingest/web/         online books: table of contents, download, EPUB writer
+  ingest/video/       YouTube videos: yt-dlp, the video model, the transcript checks
   ingest/             concept extraction, merge
   tutor/              select, diagnose, queue, teach, test, board
   grader/             scores for short and apply answers
@@ -923,7 +1067,7 @@ Each phase ends with a tool that the user can learn with.
 
 1. Phase 1: the app, with subjects and one book for each subject. Add EPUB ingest with the parse checks, the review stage, and the ingest report. Add the concept map, select and diagnose, the study queue, lessons with references, and tests with multiple-choice and short answers. Add the model client and the `.env` file.
 2. Phase 2: the review board and the stars. The user sees what they learned, tests a concept again, and keeps a list of the key concepts.
-3. Phase 3: ingest in the app. The user creates a subject and adds a book from a file or from the web. The user follows the progress of the run and reads the ingest report in the app. See "Ingest in the app (phase 3)".
+3. Phase 3: ingest in the app. The user creates a subject and adds a book from a file, from the web, or from a YouTube video or playlist. The user follows the progress of the run and reads the ingest report in the app. See "Ingest in the app (phase 3)".
 4. Phase 4: the self-hosted release. Each user runs their own copy on a laptop, a home server, a rented server, or a platform, with a password and HTTPS. See "Self-hosted release (phase 4)".
 5. Phase 5: more books for each subject. Test the merge step on real books and make it better.
 6. Later: the actions of the ingest report, the ingest test, a Telegram client, and untagged PDF files.
@@ -940,7 +1084,10 @@ Each phase ends with a tool that the user can learn with.
 8. EPUB files differ in structure. Some have a poor table of contents or few headings, and then the split into sections is bad. The parse checks and the ingest report show these problems.
 9. No method finds all concepts. The review stage and the ingest report make a missed concept visible, and the user can add it.
 10. The server parses a book in its own process. During the parse of a large PDF file, the other requests of the app wait. The tutor is for one user, so this wait is acceptable.
+11. YouTube can block yt-dlp. Google can also change or stop the YouTube function of Gemini, which is a preview now. Then videos do not work until a yt-dlp update or a change of design. Books and online books do not depend on them.
+12. The video model can write wrong code from the screen, or invent text. The transcript checks and the note before the code make this risk smaller, but they do not remove it.
 
 ## Open questions
 
 - Phase 4: the license of the repository.
+- Videos: do the clip offsets of the Gemini API work with YouTube addresses? If they do, the provider `google` can make one request for each YouTube chapter. Then the user can select the chapters of one video, and the limit of 90 minutes does not apply. A test with a Gemini key on one chapter of a short video answers the question.

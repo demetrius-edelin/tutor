@@ -1,6 +1,6 @@
 # Build Plan
 
-Status: draft 4. Date: 2026-10-15. The design is in `DESIGN-v3.md`. This file gives the build order for phases 1 to 3 and the later milestones.
+Status: draft 5. Date: 2026-10-15. The design is in `DESIGN-v3.md`. This file gives the build order for phases 1 to 3 and the later milestones.
 
 ## Rules
 
@@ -206,7 +206,58 @@ Phase 3 moves ingest into the app. See "Ingest in the app (phase 3)" in `DESIGN-
       - Click "Save these chapters". The run makes only the merge request, and the concepts show on the concept map.
       - On the subject screen, click "Add chapters". Select two more chapters and click "Save". Stop the run in the second chapter.
       - Start the run again. The first of the two chapters comes from the cache.
-17. Add an online book in the app.
+17. Fetch a YouTube video or playlist.
+    - Many courses exist only as YouTube videos. See "Videos (phase 3)" in `DESIGN-v3.md`.
+    - `npm run fetch -- <YouTube address>` accepts a video or a playlist, and writes an EPUB file to `data/web/`.
+    - The options `--title` and `--yes` work as for an online book. For a playlist, `--chapters` selects the videos. `--toc` does not apply.
+    - Put the code in `src/ingest/video/`. `src/cli/fetch.ts` sends a YouTube address to this code.
+    - Configuration:
+      - `config.ts` reads `VIDEO_PROVIDER` (`openrouter` or `google`), `VIDEO_MODEL`, and the key of the video provider: `OPENROUTER_API_KEY` or `GEMINI_API_KEY`.
+      - If one of these values is empty, a video step stops with a clear message.
+      - Add `VIDEO_PROVIDER`, `VIDEO_MODEL`, and `GEMINI_API_KEY` to `.env.example`, with a short explanation.
+    - yt-dlp:
+      - At the first use, download the yt-dlp program into `data/bin/`. Use the file of the latest GitHub release for the system: `yt-dlp_macos`, `yt-dlp.exe`, `yt-dlp_linux`, or `yt-dlp_linux_aarch64`.
+      - If the last update is more than one day old, run `yt-dlp -U` before the download.
+      - Read the facts as JSON with `-J`. For a playlist, add `--flat-playlist`. Then read each selected video with one more call, for its YouTube chapters.
+      - Always pass `--js-runtimes node:<path>` with the path of the running Node.js program, and `--no-warnings`.
+      - Keep only these facts: the ID, the title, the channel, the length, and the YouTube chapters.
+      - Put the call of yt-dlp behind a function, so that the tests use a fake function.
+    - Video client:
+      - Add a small `VideoClient` interface with one method, `transcribe`. It takes the YouTube address, the prompt, and the token limit. It returns the text, the finish reason, and the token counts.
+      - The OpenRouter class uses the OpenAI SDK, as `OpenAiClient` does. It sends a `video_url` part with `processing: "static"`, and `reasoning: { effort: "low" }`.
+      - The Google class sends one request to `https://generativelanguage.googleapis.com/v1beta/interactions` with `fetch`, and needs no SDK. The input has a `video` part with the `uri` of the video and `processing: { type: "static" }`. Use the lowest thinking level of the model.
+    - Selection and cost:
+      - For a playlist, show the videos as a numbered list with their lengths, and ask which ones to download. For one video, show its chapters.
+      - Show a video longer than 90 minutes as "too long". For one such video, the command stops with a clear message.
+      - Before the download, show the total length. Ask before the download. `--yes` gives the answer.
+      - For `openrouter`, also show the estimated cost. Get the prices of `VIDEO_MODEL` from the public model list of OpenRouter. The estimate uses 100 input tokens for each second, and 550 output tokens for each minute.
+      - For `google`, show no cost. Say that the free tier allows 8 hours of YouTube video a day.
+    - Transcripts:
+      - Write the prompt from the rules of the transcript in `DESIGN-v3.md`.
+      - Check each transcript, as "Checks of the transcript" in `DESIGN-v3.md` says. If a check fails, try one more time. Then skip the video, and show the reason in the report.
+      - Keep each transcript that passes in `data/web/transcripts/<video id>.json`. A later run uses this file and makes no request.
+    - The EPUB file:
+      - Put each paragraph into the chapter or the section of its start time.
+      - Start each paragraph with the link to its time in the video.
+      - Put "_The tutor read this code from the video:_" before each code block, and "_The tutor read this table from the video:_" before each table.
+      - Convert the Markdown to XHTML with `marked`, and write the file with `writeEpub`.
+    - App: the section panel opens external links in a new tab. Now a click on a link replaces the app.
+    - Tests use the fake yt-dlp function and a fake `VideoClient`. They cover these cases:
+      - The request body of each provider class, with a fake `fetch`.
+      - One video with YouTube chapters, one video without them, and a playlist.
+      - A transcript that fails a check, the second try, and a skipped video.
+      - The cache: a second run makes no request.
+      - The EPUB file parses with `parseBook` into the expected chapters and sections. The bold terms are in the checklist.
+    - Update `README.md`, `docs/usage.md`, and `docs/commands.md`. The README names the video models that we tested. It also says that each user takes the responsibility for the videos and the transcripts.
+    - Exit test:
+      - Use only videos of 15 minutes or less, to keep the cost small.
+      - `npm run fetch -- https://www.youtube.com/watch?v=ahCwqrYpIuM` writes an EPUB file with 6 chapters. `npm run parse` on the file shows no lost text.
+      - With a Gemini key and `VIDEO_PROVIDER=google`, the same video gives the same 6 chapters.
+      - A playlist of 2 or 3 short videos gives one chapter for each video.
+      - A second run of the same video makes no model request.
+      - Add the EPUB file in the app. A preview of one chapter gives a good concept map.
+      - In "Read the section", a time link opens the video at the correct time.
+18. Add an online book in the app.
     - Add the "Add an online book" button to the subject screen. The form has the address and an optional address of a table of contents.
     - `POST /api/fetch/toc` with the body `{ "url": "<address>", "toc": "<address>" }` finds the table of contents. The app waits for the answer, as for a new lesson.
     - The answer has the title, the scope, the chapters with their pages, and the estimated time.
@@ -227,8 +278,18 @@ Phase 3 moves ingest into the app. See "Ingest in the app (phase 3)" in `DESIGN-
     - Exit test:
       - In the app, add `https://doc.rust-lang.org/book/` with two chapters. The book page opens with the plan of the two chapters.
       - A preview of one chapter gives a good concept map.
+19. Add a YouTube video or playlist in the app.
+    - The "Add an online book" form of milestone 18 also accepts a YouTube address. The button becomes "Add an online book or video".
+    - `POST /api/fetch/toc` with a YouTube address answers with the facts of the video or the playlist, the lengths, and the estimated cost.
+    - For a playlist, the app shows the videos with checkboxes and their lengths. For one video, it shows the chapters with no checkboxes, because each request contains the full video.
+    - The download is a run with the mode `fetch`, as for an online book. Each video is one step, for example "Transcribing video 2 of 5". "Stop" ends the run after the current video.
+    - The finished transcripts stay in the cache. A stopped run writes no EPUB file.
+    - If the video provider, the video model, or its key is empty, the app shows the message about the video model and no "Download" button.
+    - Tests use the fake yt-dlp function and the fake `VideoClient`. They cover the route with a YouTube address, a run with "Stop", and a run with transcripts in the cache.
+    - Update `docs/usage.md`.
+    - Exit test: in the app, add `https://www.youtube.com/watch?v=ahCwqrYpIuM`. The book page opens with the plan of 6 chapters. A preview of one chapter gives a good concept map.
 
-After milestone 17, phase 3 is complete.
+After milestone 19, phase 3 is complete.
 
 ## Options
 
@@ -237,6 +298,8 @@ If the user asks for them, these options can come later:
 - Keep the date of the change to `mastered` for each concept. Then the board can show "learned 5 weeks ago".
 - Export the starred concepts as a Markdown list, as a summary of the books.
 - A "Quiz me" button that asks one question about one concept, with no schedule.
+- With `VIDEO_PROVIDER=google`, one request for each YouTube chapter, with the clip offsets of the Gemini API. First test that the offsets work with a YouTube address. See "Open questions" in `DESIGN-v3.md`.
+- Videos longer than 90 minutes, with the Gemini processing mode `agentic` and one request for each YouTube chapter. Test it first with one chapter of a video of about 1 hour. Never send a video of 3 hours for a test, because of the cost.
 
 ## Test books
 
