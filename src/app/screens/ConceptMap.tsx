@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import type { ConceptMapView, ConceptView, Mark, SelectionResult, Status } from "../../server/api-types";
 import { postJson, useApi } from "../api";
 import { InlineCode } from "../components/InlineCode";
@@ -43,6 +43,23 @@ const sendMarks = (subjectSlug: string, ids: number[], mark: Mark) =>
     marks: Object.fromEntries(ids.map((id) => [id, mark])),
   });
 
+// The concepts of a module in groups, one for each chapter. A concept belongs to the chapter of its first source.
+// The concepts follow the book order, so the concepts of one chapter are next to each other.
+function chapterGroups(concepts: ConceptView[], manyBooks: boolean) {
+  const groups: { key: string; label: string; concepts: ConceptView[] }[] = [];
+  for (const concept of concepts) {
+    const first = concept.sources[0];
+    const key = first ? `${first.book}#${first.chapter}` : "none";
+    const label = first
+      ? `${manyBooks ? `${first.book}, chapter` : "Chapter"} ${first.chapter}: ${first.chapterTitle}`
+      : "No source in the books";
+    const last = groups.at(-1);
+    if (last?.key === key) last.concepts.push(concept);
+    else groups.push({ key, label, concepts: [concept] });
+  }
+  return groups;
+}
+
 function matches(concept: ConceptView, query: string): boolean {
   const text = `${concept.name} ${concept.objective}`.toLowerCase();
   return query
@@ -82,6 +99,11 @@ function MapView({ map: loaded, focus, focusModule }: { map: ConceptMapView; foc
     [map, query],
   );
   const shown = modules.reduce((sum, module) => sum + module.concepts.length, 0);
+  // With more than one book, the chapter headings also name the book.
+  const manyBooks = useMemo(
+    () => new Set(map.modules.flatMap((module) => module.concepts.flatMap((concept) => concept.sources.map((source) => source.book)))).size > 1,
+    [map],
+  );
 
   // Show the new status or star of concepts after an action, without a new load of the map.
   const updateConcepts = (ids: number[], change: Partial<Pick<ConceptView, "status" | "starred">>) =>
@@ -168,23 +190,28 @@ function MapView({ map: loaded, focus, focusModule }: { map: ConceptMapView; foc
                 </button>
               )}
             </div>
-            <ul className="concepts status-rows">
-              {module.concepts.map((concept) => (
-                <ConceptRow
-                  key={concept.slug}
-                  concept={concept}
-                  subjectSlug={map.subject.slug}
-                  open={open.has(concept.slug)}
-                  selected={selected.has(concept.id)}
-                  showGoal={showGoals}
-                  onToggle={() => toggle(concept.slug)}
-                  onSelect={(checked) => setChecked([concept.id], checked)}
-                  onRead={setSection}
-                  onStatus={(status) => updateConcept(concept.id, { status })}
-                  onStar={(starred) => updateConcept(concept.id, { starred })}
-                />
-              ))}
-            </ul>
+            {chapterGroups(module.concepts, manyBooks).map((group, i) => (
+              <Fragment key={`${group.key}-${i}`}>
+                <h3 className="chapter-heading">{group.label}</h3>
+                <ul className="concepts status-rows">
+                  {group.concepts.map((concept) => (
+                    <ConceptRow
+                      key={concept.slug}
+                      concept={concept}
+                      subjectSlug={map.subject.slug}
+                      open={open.has(concept.slug)}
+                      selected={selected.has(concept.id)}
+                      showGoal={showGoals}
+                      onToggle={() => toggle(concept.slug)}
+                      onSelect={(checked) => setChecked([concept.id], checked)}
+                      onRead={setSection}
+                      onStatus={(status) => updateConcept(concept.id, { status })}
+                      onStar={(starred) => updateConcept(concept.id, { starred })}
+                    />
+                  ))}
+                </ul>
+              </Fragment>
+            ))}
           </section>
         );
       })}

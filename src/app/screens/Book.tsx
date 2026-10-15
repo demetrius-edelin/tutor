@@ -68,7 +68,7 @@ function BookBody({ data, view, url, onRun }: { data: BookView; view: "plan" | n
         {data.format.toUpperCase()} file
         {data.chapters.length > 0 && `, ${plural(data.chapters.length, "chapter")}`}.{" "}
         {data.saved
-          ? `${n(withConcepts)} of the chapters have concepts on the concept map.`
+          ? `${n(withConcepts)} of ${plural(data.chapters.length, "chapter")} ${withConcepts === 1 ? "has" : "have"} concepts on the concept map.`
           : "This book is not saved yet."}
       </p>
       {state === "run" && <RunPanel run={data.run!} onChange={onRun} />}
@@ -312,12 +312,19 @@ function ReportView({ data, report, url, onRun }: { data: BookView; report: Inge
     <>
       <section className="next-card" aria-labelledby="report-heading">
         <h2 id="report-heading" className="eyebrow">
-          {report.preview ? "Preview report" : "Ingest report"}
+          {report.preview ? "Preview report" : "Ingest report"}: {plural(report.chapters.length, "chapter")}
         </h2>
+        {/* The titles of the chapters of the run. Many titles have their own number, so the page shows the title only. */}
+        <ul className="report-chapters">
+          {report.chapters.slice(0, SHOWN_CHAPTERS).map((chapter) => (
+            <li key={chapter.number}>{chapter.title}</li>
+          ))}
+          {report.chapters.length > SHOWN_CHAPTERS && <li className="quiet">and {plural(report.chapters.length - SHOWN_CHAPTERS, "more chapter")}</li>}
+        </ul>
         <p className="objective">
           {report.preview
-            ? `The preview of ${plural(run.chapters.length, "chapter")} found ${plural(added, "new concept")}. The database did not change.`
-            : `The save of ${plural(run.chapters.length, "chapter")} added ${plural(added, "new concept")}. The concept map of ${data.subject.name} has ${plural(report.concepts, "concept")} in ${plural(report.modules, "module")} now.`}
+            ? `The preview found ${plural(added, "new concept")}. The database did not change.`
+            : `The save added ${plural(added, "new concept")}. The concept map of ${data.subject.name} has ${plural(report.concepts, "concept")} in ${plural(report.modules, "module")} now.`}
         </p>
         {report.preview ? (
           <p className="button-row">
@@ -424,6 +431,9 @@ function ReportView({ data, report, url, onRun }: { data: BookView; report: Inge
     </>
   );
 }
+
+// The report names at most this number of chapters at the top. The table of chapters below has all of them.
+const SHOWN_CHAPTERS = 4;
 
 const LEVEL: Record<PreviewModule["concepts"][number]["level"], string> = { basic: "Basic", intermediate: "Intermediate", advanced: "Advanced" };
 const KIND: Record<PreviewModule["concepts"][number]["kind"], string> = { knowledge: "Knowledge", skill: "Skill" };

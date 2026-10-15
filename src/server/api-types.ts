@@ -155,6 +155,9 @@ export interface SourceRef {
   // The section number in the book, for example "2.3".
   ref: string;
   book: string;
+  // The number of the chapter in the tutor, and its title. The title can have its own number.
+  chapter: number;
+  chapterTitle: string;
   title: string;
   page: string | null;
   quote: string;

@@ -159,11 +159,21 @@ export function conceptMap(db: Db, slug: string): ConceptMapView | undefined {
     .all(subject.id) as { concept_id: number; slug: string; name: string }[];
   const sources = db
     .prepare(
-      `SELECT cs.concept_id, s.id AS sectionId, s.chapter, s.number, s.title, s.page, cs.quote, b.title AS book
+      `SELECT cs.concept_id, s.id AS sectionId, s.chapter, s.number, s.chapter_title, s.title, s.page, cs.quote, b.title AS book
        FROM concept_sources cs JOIN sections s ON s.id = cs.section_id JOIN books b ON b.id = s.book_id
        WHERE b.subject_id = ? ORDER BY b.id, s.chapter, s.number`,
     )
-    .all(subject.id) as { concept_id: number; sectionId: number; chapter: number; number: number; title: string; page: string | null; quote: string; book: string }[];
+    .all(subject.id) as {
+    concept_id: number;
+    sectionId: number;
+    chapter: number;
+    number: number;
+    chapter_title: string;
+    title: string;
+    page: string | null;
+    quote: string;
+    book: string;
+  }[];
 
   return {
     subject: { slug: subject.slug, name: subject.name },
@@ -183,6 +193,8 @@ export function conceptMap(db: Db, slug: string): ConceptMapView | undefined {
               sectionId: source.sectionId,
               ref: `${source.chapter}.${source.number}`,
               book: source.book,
+              chapter: source.chapter,
+              chapterTitle: source.chapter_title,
               title: source.title,
               page: source.page,
               quote: source.quote,

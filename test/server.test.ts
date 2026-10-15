@@ -69,7 +69,14 @@ describe("API", () => {
     expect(concepts.length).toBeGreaterThan(5);
     const withPrerequisite = concepts.find((concept) => concept.prerequisites.length > 0)!;
     expect(withPrerequisite.prerequisites[0]).toEqual({ slug: concepts[0]!.slug, name: concepts[0]!.name });
-    expect(concepts[1]!.sources[0]).toMatchObject({ ref: "1.2", book: "Fixture Book", title: "First Section", page: "5" });
+    expect(concepts[1]!.sources[0]).toMatchObject({
+      ref: "1.2",
+      book: "Fixture Book",
+      chapter: 1,
+      chapterTitle: "Getting Started",
+      title: "First Section",
+      page: "5",
+    });
   });
 
   it("gives the Markdown text of a section", async () => {

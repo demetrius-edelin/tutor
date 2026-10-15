@@ -714,7 +714,7 @@ Some requests wait for the model, for example a new lesson. A book upload can al
   - The "Add chapters" button of each book with chapters without concepts.
   - One line for a run in progress, with a link to the book page.
 - Book (phase 3): the plan, the progress of a run, and the ingest report of one book. See "The book page".
-- Map: the modules and concepts, with the status, the star, and the sources of each concept. Mark one concept with its buttons, or select many concepts and mark them in one step. Undo a skip here. A module on the subject screen opens the map at that module.
+- Map: the modules and concepts, with the status, the star, and the sources of each concept. Inside a module, a small heading starts the concepts of each chapter. Mark one concept with its buttons, or select many concepts and mark them in one step. Undo a skip here. A module on the subject screen opens the map at that module.
 - Diagnosis: the questions one at a time. Then the results, with the "Learn" and "Skip" choices.
 - Queue: the study queue, with drag and drop and the queue buttons.
 - Review board: one short line for each concept, with the status filters, the star filter, and the search. See "Review board".
