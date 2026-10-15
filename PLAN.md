@@ -1,6 +1,6 @@
 # Build Plan
 
-Status: draft 3. Date: 2026-10-10. The design is in `DESIGN-v3.md`. This file gives the build order for phase 1, phase 2, and the later milestones.
+Status: draft 4. Date: 2026-10-15. The design is in `DESIGN-v3.md`. This file gives the build order for phases 1 to 3 and the later milestones.
 
 ## Rules
 
@@ -153,6 +153,78 @@ Milestones 14 and 15 do not cover these cases:
 - Pages behind a login or a paywall, for example Manning liveBook. The purchase of a Manning book gives an EPUB file, and the tutor reads EPUB files.
 - Pages that only list links to other sites, for example the Flutter "Learning resources" page.
 - An update of fetched documentation. If the sections of a book change, `refresh` stops. To update, fetch the site again and ingest it as a new book.
+
+## Phase 3 milestones
+
+Phase 3 moves ingest into the app. See "Ingest in the app (phase 3)" in `DESIGN-v3.md`. The commands stay, and the app uses the same code.
+
+16. Add a book in the app.
+    - Shared code:
+      - Move the code around `ingestBook` from `src/cli/ingest.ts` into `src/ingest/`. The command and the server use this code.
+      - This code parses the book with the cached image texts, counts the model requests, reads the images, and builds the book again.
+      - The count gives the number of model requests for each chapter. The command adds up the numbers. Its output does not change.
+      - Give `readImages` and `ingestBook` a progress callback and a stop check. The stop check runs before each image, each chapter, and each merge.
+    - Database:
+      - Migration 9 adds the table `ingests`. See "Data model" in `DESIGN-v3.md`.
+      - At the start of the server, a run with the status `running` becomes `failed`. A session with the status `preparing` does the same now.
+    - Server routes:
+      - `POST /api/subjects` with the body `{ "name": "SQL" }` creates an empty subject. If the subject exists, the route answers 409.
+      - `POST /api/subjects/:slug/books?name=<file name>` takes the book file as the body, with the type `application/octet-stream`.
+      - The upload route has a body limit of 200 MB. It keeps only the base name of the file. It parses the file, keeps it in the folder of the book, and answers with the folder name.
+      - `GET /api/subjects/:slug/books/:book` answers with the plan of the book, the last run of the book, and the report of that run.
+      - `POST /api/subjects/:slug/books/:book/ingest` with the body `{ "mode": "preview", "chapters": [1, 2] }` starts a run. The mode is `preview` or `save`.
+      - If a run is in progress, the start route answers 409.
+      - `GET /api/ingests/:id` answers with the status and the progress of a run.
+      - `POST /api/ingests/:id/stop` stops a run after the current image, chapter, or merge.
+      - `GET /api/subjects/:slug` also gives the run in progress of the subject.
+      - `DELETE /api/subjects/:slug` answers 409 during a run on the subject.
+    - The plan of a book has these parts:
+      - The title, the format, the parse warnings, and the model name. If `.env` has no model, the plan has the message about the model.
+      - For each chapter: the number, the title, the sections, the words, the images to read, the model requests, and a mark for a chapter with concepts.
+      - For a saved book, the server parses the copy of the book file again and compares the sections with the database. If they do not match, the plan has the message and no run.
+    - App:
+      - Home: add the "New subject" field. A new subject opens its subject screen. If there are no subjects, the notice shows the field, not the `npm run ingest` command.
+      - Subject screen: add the "Add a book" button, with a file picker for `.epub` and `.pdf` files.
+      - Subject screen: add "Add chapters" to each book with chapters without concepts. Show a run in progress as one line, with a link to the book page.
+      - An empty subject shows only the part with the books and the "Add a book" button.
+      - Book page: add the route `#/subjects/<slug>/books/<book>` with the plan, run, and report states. See "The book page" in `DESIGN-v3.md`.
+      - The checkboxes start empty. "Select all" selects the chapters without concepts. The "Preview" and "Save" buttons show the number of model requests for the selection.
+      - The report shows the table of chapters that the command prints, the sections without concepts, the minor items, the quote warnings, and the parse warnings.
+      - The report of a preview also shows the preview concept map, with `react-markdown`. It has the "Save these chapters" and "Change the chapters" buttons.
+    - Tests use the fake model client. They cover these cases:
+      - The upload route, also with a file that the parser cannot read.
+      - The plan, with chapters in the cache and chapters with concepts.
+      - A preview, and a save of some chapters.
+      - "Stop", the rule of one run at a time, and a run that becomes `failed` at the start of the server.
+    - Update `README.md` and `docs/usage.md`. The app becomes the main way to add a book. The commands stay in the guide.
+    - Exit test:
+      - In the app, create a subject. Upload a real EPUB file and preview one chapter. The report and the preview concept map show.
+      - Click "Save these chapters". The run makes only the merge request, and the concepts show on the concept map.
+      - On the subject screen, click "Add chapters". Select two more chapters and click "Save". Stop the run in the second chapter.
+      - Start the run again. The first of the two chapters comes from the cache.
+17. Add an online book in the app.
+    - Add the "Add an online book" button to the subject screen. The form has the address and an optional address of a table of contents.
+    - `POST /api/fetch/toc` with the body `{ "url": "<address>", "toc": "<address>" }` finds the table of contents. The app waits for the answer, as for a new lesson.
+    - The answer has the title, the scope, the chapters with their pages, and the estimated time.
+    - The app shows the chapters with checkboxes. All chapters start selected, as in the command.
+    - `POST /api/subjects/:slug/fetch` with the table of contents and the chapters starts a run with the mode `fetch`.
+    - The server keeps no state between the two requests, so the app sends the table of contents back. The server downloads only the pages in the scope.
+    - If `data/web/` has a file with the same title, the route starts no run and answers with the file name. Then the app offers "Use the downloaded file" and "Download again".
+    - `POST /api/subjects/:slug/books/web` with the body `{ "file": "<name>.epub" }` adds a file from `data/web/` as a book. "Use the downloaded file" uses this route.
+    - Give `fetchBook` a progress callback and a stop check, as `ingestBook` has. The stop check runs before each page.
+    - At the end of the run, the server writes the EPUB file to `data/web/`. Then it parses the file and keeps a copy in the folder of the book, as for an upload.
+    - The book page opens in the plan state. The skipped pages of the download show above the plan.
+    - Tests use a fake fetch function and the fake model client. They cover these cases:
+      - The route of the table of contents.
+      - A download with "Stop". The stopped download writes no EPUB file.
+      - An EPUB file with the same title in `data/web/`.
+      - The plan after the download.
+    - Update `README.md` and `docs/usage.md`.
+    - Exit test:
+      - In the app, add `https://doc.rust-lang.org/book/` with two chapters. The book page opens with the plan of the two chapters.
+      - A preview of one chapter gives a good concept map.
+
+After milestone 17, phase 3 is complete.
 
 ## Options
 

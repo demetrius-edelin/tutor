@@ -1,6 +1,6 @@
 # Tutor: Design
 
-Status: draft 3, revision 11. Date: 2026-10-04. This file replaces `DESIGN.md` (draft 2).
+Status: draft 3, revision 12. Date: 2026-10-15. This file replaces `DESIGN.md` (draft 2).
 
 ## Purpose
 
@@ -203,7 +203,7 @@ In the merge step, the model gets only the names and objectives of the concepts,
 
 ### Ingest report
 
-After ingest, the tutor writes a report for the book. In phase 3, the subject screen shows it:
+After ingest, the tutor writes a report for the book. In phase 3, the book page shows it:
 
 - The parse warnings: lost text, empty sections, and files outside of chapters.
 - The number of sections and concepts in each chapter.
@@ -211,10 +211,10 @@ After ingest, the tutor writes a report for the book. In phase 3, the subject sc
 - The checklist items with the mark "minor".
 - The concepts with a quote that the code did not find.
 
-The report has two actions:
+Later, the report gets two actions. Phase 3 does not have them:
 
-- Add as concept: the model writes a concept for a "minor" item or for a section without a concept.
-- Run again: ingest runs the extract and review stages again for one chapter.
+- Add as concept: the model writes one concept for a "minor" item or for a section without a concept. Then the merge step adds the concept to the concept map.
+- Run again: ingest runs the extract and review stages again for one chapter, with no cache. Then the merge step adds the new concepts. The section rows keep their IDs. The run adds concepts and sources. It does not remove a concept or change the progress of the user.
 
 The report shows the gaps, and the user decides what to fix.
 
@@ -445,63 +445,131 @@ The star button is on the board line, in the header of the lesson page, and on t
 
 ## Ingest in the app (phase 3)
 
-Now, ingest runs only from the command line. Phase 3 moves ingest into the app, so that the user adds a book with no terminal. Phase 4 needs this step, because the book files are on the laptop and the tutor is on the server.
+Now, ingest runs only from the command line. Phase 3 moves ingest into the app, so that the user adds a book with no terminal. Phase 4 needs this change, because the book files are on the laptop and the tutor is on the server.
 
-The `npm run ingest` command stays. The app and the command use the same ingest code.
+The commands stay. The app and the commands use the same ingest code. Milestone 16 in `PLAN.md` adds books from files. Milestone 17 adds online books.
 
 ### Create a subject
 
-The home screen has a field to create a subject. The user types a name, and the tutor creates an empty subject. Then the subject screen opens, with the "Add book" button.
+The home screen has a field to create a subject. The user types a name, and the tutor creates an empty subject. Then the subject screen opens. A subject with no books shows only the "Add a book" and "Add an online book" buttons.
+
+### The book page
+
+Each book has its own page, at `#/subjects/<subject>/books/<book>`. The page has three states:
+
+- Plan: the chapters of the book, with checkboxes, and the buttons that start a run.
+- Run: the progress of the run, with the "Stop" button.
+- Report: the result of the last run.
+
+The plan and the report have too many parts for the subject screen, so they get their own page. The page gets its state from the server, so a reload shows the same state.
 
 ### Add a book
 
-The subject screen has the "Add book" button. The flow has these steps:
+The user adds a book in this order:
 
-1. The user selects an EPUB file or a tagged PDF file.
-2. The browser sends the file to the server. The server keeps the file in `data/uploads/` and parses it. The parse uses no model, so it costs nothing.
-3. The app shows the parse result: the chapters, the kept text of each chapter, the parse warnings, and the number of model requests. The command line shows the same data.
-4. The user starts a preview or a full run.
+1. On the subject screen, the user clicks "Add a book" and selects an EPUB file or a tagged PDF file.
+2. The browser sends the file to the server as the body of one request. Thus, the server needs no package for multipart uploads.
+3. The server parses the file. The parse uses no model, so it costs nothing.
+4. The server keeps the file in the folder of the book, as the command does. The tutor has no folder for uploads.
+5. The book page opens in the plan state.
+
+The upload route accepts a file of up to 200 MB.
 
 If the parser cannot read the file, for example an untagged PDF file, the app shows the message of the parser. Then the app offers no run.
 
-If `.env` has no model, the app shows the parse result and the message about the model. The app shows no start button.
+If the subject has a book with the same title already, the server keeps the old file. The book page of that book opens, as for "Add chapters". To replace a book, use `npm run ingest` with `--replace`.
 
-The browser sends the file as the body of one request. Thus, the server needs no package for multipart uploads. The upload route needs a body limit that fits a large PDF file.
+### The plan
 
-The app has two types of run:
+The plan shows these parts:
 
-- Preview: the user selects some chapters. Ingest runs on these chapters and does not change the database. The app shows the preview concept map and the preview report.
-- Full run: ingest runs on all chapters and saves the result. The chapters of an earlier preview come from the cache and cost nothing.
+- The title and the format of the book, and the parse warnings.
+- One row for each chapter: a checkbox, the number, the title, the sections, the words, the images, and the model requests.
+- The name of the model from `.env`.
+- The "Preview" and "Save" buttons, with the number of model requests for the selected chapters.
 
-The command can also save some chapters to the database: `--chapters` without `--preview`. The command also keeps the options `--fresh` and `--replace`. The app does not offer these runs and options.
+The checkboxes start empty, because a run costs money. "Select all" selects each chapter without concepts. A click on a button starts the run at once. The button shows the number of requests, so the app asks no more questions.
 
-Before each run, the app shows the number of model requests, as the command does. If ingest reads the images of the book (milestone 13 in `PLAN.md`), the number includes the images.
+The number of requests of a chapter includes the images to read, the extract and review stages, and the merge. A chapter in the cache needs only the merge request. The server sends the number for each chapter, and the app adds up the numbers of the selected chapters.
+
+If `.env` has no model, the plan shows the message about the model. Then the app shows no start button.
+
+### Preview and save
+
+The app has two types of run. Both types run on the selected chapters:
+
+- Preview: ingest does not change the database. The report shows the preview concept map.
+- Save: ingest saves the result. The concept map shows the new concepts at once. The chapters of an earlier preview come from the cache and cost nothing.
+
+Thus, the user can study a book one part at a time in the app, as with `--chapters` in the command.
+
+These options stay in the command only:
+
+- `--sections`, for a chapter that is too large for one run. Such chapters are rare.
+- `--fresh` and `--replace`. They remove earlier results, and the user needs them only to repair a book.
 
 A subject can get a second book in phase 3, because the merge step exists already. Phase 5 tests the merge on real books and makes it better.
+
+### Add chapters
+
+The folder of the book keeps a copy of the book file. Thus, the user adds more chapters to a book with no new upload.
+
+On the subject screen, each book with chapters without concepts has the "Add chapters" button. The button opens the book page in the plan state. A chapter with concepts shows "Has concepts" and has no checkbox. To ingest such a chapter again, use the command with `--replace`.
+
+A chapter with concepts from some sections only, after `--sections`, also counts as a chapter with concepts. The command adds the other sections of that chapter.
+
+Before the plan of a saved book, the server parses the copy again. Then it compares the sections with the rows in the database, as a run with some chapters does. If they do not match, the plan shows the message and offers no run. This can occur after a parser change that splits the book into different sections. Then only `npm run ingest` with `--replace` can update the book.
 
 ### Progress
 
 Ingest of a full book takes a long time. Thus, ingest runs in the background, in the server process, as the preparation of a diagnosis does. The tutor has no job queue.
 
-- The new table `ingests` keeps each run, with its status and its progress. See "Data model".
-- The subject screen shows the run in progress: the current step, for example "Chapter 4 of 12: review", and the "Stop" button. The app asks the server for the progress every few seconds.
-- "Stop" ends the run after the current chapter. The finished chapters stay in the cache. Thus, the next run does not pay for them again.
-- Only one ingest runs at a time. Two runs on one subject can overwrite the merge result of each other.
+- The table `ingests` keeps each run, with its status and its progress. See "Data model".
+- The book page shows the current step, for example "Chapter 4 of 12: Joins", a progress bar, and the "Stop" button. The app asks the server for the progress every 2 seconds.
+- The subject screen shows a run in progress as one line, with a link to the book page.
+- "Stop" ends the run after the current image, chapter, or merge. The image texts and the finished chapters stay in the cache. Thus, the next run does not pay for them again.
+- The merge results have no cache. If the user stops a run in the merge stage, the next run pays for the merge requests again.
+- Only one run is in progress at a time, in all subjects. Two runs on one subject can overwrite the merge result of each other.
+- The user can study during a run. A run only adds concepts and sources, so it does not change the progress of the user.
+- The tutor does not delete a subject during a run on that subject.
 - If the server stops during a run, the run becomes `failed` at the next start. A new run continues from the cache.
-- A full run saves the book, its sections, and the concept map in one transaction at the end, as now. Thus, a run that fails or stops does not change the concept map.
+- A save run saves the book, its sections, and the concept map in one transaction at the end, as now. Thus, a run that fails or stops does not change the concept map.
 
 ### Ingest report in the app
 
-After a run, the subject screen shows the ingest report of the book. The section "Ingest report" gives the content. The app reads the report from the `ingest-report.json` file of the book.
+After a run, the book page shows the report of the run. The section "Ingest report" gives the content. The book page also shows the table of chapters that the command prints. The app reads the report from the `ingest-report.json` file of the book. After a preview, the app reads `ingest-report.preview.json`.
 
-The two actions of the report work in this way:
+The report of a preview also shows the preview concept map from the `concept-map.preview.md` file. It has two buttons:
 
-- Add as concept: the model writes one concept for a "minor" item or for a section without a concept. Then the merge step adds the concept to the concept map.
-- Run again: ingest runs the extract and review stages again for one chapter, with no cache. Then the merge step adds the new concepts.
+- "Save these chapters" starts a save run of the same chapters. The chapters and their images come from the cache, so the run makes only the merge requests.
+- "Change the chapters" opens the plan.
 
-"Run again" keeps the section rows and their IDs. It adds concepts and sources. It does not remove a concept or change its progress.
+After a save run, the report has a link to the concept map.
+
+The actions "Add as concept" and "Run again" come later. See "Ingest report".
 
 The app does not offer a full replace of a saved book. A replace removes the book row, and all sections get new IDs. Then the old lessons and the old questions lose their sections.
+
+### Online books
+
+`npm run fetch` downloads an online book into an EPUB file. Milestone 17 adds the same function to the app. The user adds an online book in this order:
+
+1. On the subject screen, the user clicks "Add an online book" and types the address.
+2. The server finds the table of contents. For a site with no `llms.txt` file, this needs one model request. The app waits for the answer, as for a new lesson.
+3. The app shows the title, the chapters with their number of pages, and the estimated time. Each chapter has a checkbox. All chapters start selected, as in the command.
+4. The user clicks "Download". The download is a run in the background, with the progress and the "Stop" button.
+5. The server writes the EPUB file to `data/web/`, as the command does.
+6. Then the server continues as for an uploaded file: the parse, the copy in the folder of the book, and the plan.
+
+A second field of the form is optional. It takes the address of a page with the full table of contents, as `--toc` does.
+
+If `data/web/` has a file with the same title, the app offers two buttons: "Use the downloaded file" and "Download again".
+
+The download obeys the same rules as the command: one request at a time, a pause of 1 second, and `robots.txt`. A download is a run, so the rule of one run at a time applies to it too.
+
+"Stop" ends the download after the current page. A stopped download writes no EPUB file.
+
+The book page shows the skipped pages of the download above the plan.
 
 ## Self-hosted release (phase 4)
 
@@ -634,7 +702,11 @@ Some requests wait for the model, for example a new lesson. A book upload can al
 ## Screens
 
 - Home: the list of subjects, with the progress of each subject. A field to create a new subject (phase 3).
-- Subject: the books of the subject and the progress. In phase 3: the "Add book" button, the ingest progress, and the ingest report of each book. Until then, ingest runs from the command line. The "Next to learn" card opens the lesson of the first concept in the queue.
+- Subject: the books of the subject and the progress. The "Next to learn" card opens the lesson of the first concept in the queue. In phase 3, the screen also has these parts:
+  - The "Add a book" and "Add an online book" buttons.
+  - The "Add chapters" button of each book with chapters without concepts.
+  - One line for a run in progress, with a link to the book page.
+- Book (phase 3): the plan, the progress of a run, and the ingest report of one book. See "The book page".
 - Map: the modules and concepts, with the status, the star, and the sources of each concept. Mark one concept with its buttons, or select many concepts and mark them in one step. Undo a skip here. A module on the subject screen opens the map at that module.
 - Diagnosis: the questions one at a time. Then the results, with the "Learn" and "Skip" choices.
 - Queue: the study queue, with drag and drop and the queue buttons.
@@ -672,22 +744,26 @@ questions        (id, concept_id, purpose, kind, text, choices, answer, key_poin
 attempts         (id, question_id, answer, score, feedback, disputed, created_at)
 lessons          (id, concept_id, round, text, refs, created_at)
 lesson_messages  (id, lesson_id, role, text, created_at)
-ingests          (id, subject_id, file, title, mode, chapters, status, done, total, step, error, created_at)
+ingests          (id, subject_id, book, file, title, mode, chapters, status, done, total, step, result, error, created_at)
 ```
 
-- `books.status`: `ingesting`, `ready`, or `failed`. The tutor saves a book only at the end of a full run, so a saved book is `ready`.
+- `books.status`: `ingesting`, `ready`, or `failed`. The tutor saves a book only at the end of a save run, so a saved book is `ready`.
 - `sections.page`: the print page from the EPUB page list. For an EPUB file without a page list, it is empty.
 - `questions.purpose`: `diagnose` or `test`.
 - `questions.kind`: `choice`, `short`, or `apply`.
 - `concepts.status`: see "Concept status".
 - `concepts.queue_pos`: the position in the study queue. It is empty for a concept that is not in the queue.
 - `concepts.starred`: 1 for a concept with a star, else 0.
-- `ingests` (phase 3): one row for each ingest run in the app.
-- `ingests.mode`: `preview`, `full`, or `chapter`. The mode `chapter` is "Run again" for one chapter.
-- `ingests.chapters`: the chapters of a preview, as a JSON list. It is empty for a full run.
+- `ingests` (phase 3): one row for each run in the app: an ingest or a download of an online book.
+- `ingests.book`: the folder name of the book, for example `pro-git`. The book page shows the last run of its book.
+- `ingests.file`: the book file, relative to `data/`. For a download, the new EPUB file in `data/web/`.
+- `ingests.mode`: `preview`, `save`, or `fetch`. The mode `fetch` is a download of an online book (milestone 17).
+- `ingests.chapters`: the selected chapters, as a JSON list.
 - `ingests.status`: `running`, `done`, `stopped`, or `failed`.
-- `ingests.done` and `ingests.total`: the finished chapters and all chapters of the run.
-- `ingests.step`: the current step, for example "Chapter 4 of 12: review".
+- `ingests.done` and `ingests.total`: the finished steps and all steps of the run. A step is one image, the extract and review stages of one chapter, the merge of one chapter, or one page of a download.
+- `ingests.step`: the text of the current step, for example "Chapter 4 of 12: Joins".
+- `ingests.result`: for a download, the counts and the skipped pages, as JSON. An ingest keeps its result in the report file.
+- `ingests.error`: the message of a failed run.
 
 The concept map is in SQLite, because the merge step changes it for each new book. The section text stays in Markdown files.
 
@@ -808,7 +884,9 @@ data/                 (not in git)
       work/           cached results of the extract and review stages, and the image texts
       parse-report.json
       ingest-report.json
-  uploads/            uploaded book files that wait for ingest (phase 3)
+      ingest-report.preview.json
+      concept-map.preview.md
+  web/                EPUB files of online books, from fetch
 src/
   server/             HTTP API
   app/                React app
@@ -837,10 +915,10 @@ Each phase ends with a tool that the user can learn with.
 
 1. Phase 1: the app, with subjects and one book for each subject. Add EPUB ingest with the parse checks, the review stage, and the ingest report. Add the concept map, select and diagnose, the study queue, lessons with references, and tests with multiple-choice and short answers. Add the model client and the `.env` file.
 2. Phase 2: the review board and the stars. The user sees what they learned, tests a concept again, and keeps a list of the key concepts.
-3. Phase 3: ingest in the app. The user creates a subject, adds a book, follows the progress, and reads the ingest report in the app. See "Ingest in the app (phase 3)".
+3. Phase 3: ingest in the app. The user creates a subject and adds a book from a file or from the web. The user follows the progress of the run and reads the ingest report in the app. See "Ingest in the app (phase 3)".
 4. Phase 4: the self-hosted release. Each user runs their own copy on a laptop, a home server, a rented server, or a platform, with a password and HTTPS. See "Self-hosted release (phase 4)".
 5. Phase 5: more books for each subject. Test the merge step on real books and make it better.
-6. Later: the ingest test, a Telegram client, and untagged PDF files.
+6. Later: the actions of the ingest report, the ingest test, a Telegram client, and untagged PDF files.
 
 ## Risks
 
@@ -853,6 +931,7 @@ Each phase ends with a tool that the user can learn with.
 7. With OpenRouter, the prompts and the book text go to the vendor of the selected model. Read the data policy of each vendor before you use it.
 8. EPUB files differ in structure. Some have a poor table of contents or few headings, and then the split into sections is bad. The parse checks and the ingest report show these problems.
 9. No method finds all concepts. The review stage and the ingest report make a missed concept visible, and the user can add it.
+10. The server parses a book in its own process. During the parse of a large PDF file, the other requests of the app wait. The tutor is for one user, so this wait is acceptable.
 
 ## Open questions
 
