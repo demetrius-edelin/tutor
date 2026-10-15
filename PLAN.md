@@ -32,6 +32,8 @@ Status: draft 5. Date: 2026-10-15. The design is in `DESIGN-v3.md`. This file gi
 - Ingest of sections: done. `npm run ingest -- <subject> <book> --sections <list>` ingests some sections of a chapter. This helps with books that have very large chapters.
 - Milestone 14: done. `npm run fetch` reads `/en/llms.txt` of the Cakemail docs and shows the folders of `/en/docs/` as 16 chapters. A download of two chapters parsed with no lost text.
 - Milestone 15: built. One model request found the table of contents of the Rust book in `toc.html`: 25 chapters and 111 pages. For "30 Days of Vue", it gave each day one time. The parse of the two books kept 100% to 105% of the words. The exit test needs a preview of one chapter of a fetched book with the model of the user.
+- Milestone 16: done. The app adds a book from a file, with the plan, the preview, the save, the progress, and the report.
+- Milestone 17: built. At the first use, `npm run fetch` installed yt-dlp 2026.08.19 by itself. It read the 6 chapters of the Fireship video "TypeScript - The Basics" (12 minutes). Gemini 3.8 Flash on OpenRouter wrote the transcript for $0.069, and the estimate was $0.08. The parse kept 100% to 102% of the words, with 8 bold terms and no warnings. A second run used the cache and made no request. Two videos of the playlist "100 Seconds of Code" cost $0.019. A preview of the chapter "Type Annotation" with Claude Haiku 5.5 gave 12 good concepts. Not tested yet: the Gemini API of Google, because there is no key, and a time link in "Read the section" of a saved book.
 
 ## Milestones
 
@@ -237,7 +239,7 @@ Phase 3 moves ingest into the app. See "Ingest in the app (phase 3)" in `DESIGN-
       - Check each transcript, as "Checks of the transcript" in `DESIGN-v3.md` says. If a check fails, try one more time. Then skip the video, and show the reason in the report.
       - Keep each transcript that passes in `data/web/transcripts/<video id>.json`. A later run uses this file and makes no request.
     - The EPUB file:
-      - Put each paragraph into the chapter or the section of its start time.
+      - A paragraph lasts until the next paragraph starts. Put each paragraph into the chapter or the section that holds the larger share of its time.
       - Start each paragraph with the link to its time in the video.
       - Put "_The tutor read this code from the video:_" before each code block, and "_The tutor read this table from the video:_" before each table.
       - Convert the Markdown to XHTML with `marked`, and write the file with `writeEpub`.

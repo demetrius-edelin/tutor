@@ -638,7 +638,7 @@ The rules of the transcript:
 - When the speaker defines a term, write the term in bold one time. The parser takes bold terms into the checklist, as for a book. See "Stage 3: Review".
 - Write only the transcript.
 
-The prompt does not ask for chapter headings. The tutor puts each paragraph into its chapter by the start time of the paragraph. The paragraph times are more exact than the headings of the model.
+The prompt does not ask for chapter headings. The paragraph times are more exact than the headings of the model. A paragraph lasts until the next paragraph starts. The tutor puts each paragraph into the chapter that holds the larger share of its time. A paragraph often starts some seconds before a YouTube chapter, with the first words of that chapter. In the test video, a rule by the start time put such a paragraph into the wrong chapter.
 
 ### Checks of the transcript
 

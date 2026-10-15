@@ -2,7 +2,7 @@
 
 > See also my other project, [Tapas Habit & Goal Tracker](https://tapastracker.app), a full-featured habit tracker for iPhone and Android. Also, **I am looking for a full-time role** as a software developer. Contact me on [LinkedIn](https://www.linkedin.com/in/demetrius-edelin/).
 
-A personal tutor that teaches you from your books or from online documentation. You make a subject of study, for example "SQL", and add books to it. A book can be an EPUB file, a PDF file, an online book, or online documentation. The tutor finds the concepts in the books and checks which concepts you know. Then it teaches the other concepts one at a time, with references to the books, and tests each one.
+A personal tutor that teaches you from your books or from online documentation. You make a subject of study, for example "SQL", and add books to it. A book can be an EPUB file, a PDF file, an online book, online documentation, or a YouTube video or playlist. The tutor finds the concepts in the books and checks which concepts you know. Then it teaches the other concepts one at a time, with references to the books, and tests each one.
 
 The tutor runs on your computer. It uses one large language model (LLM) from Anthropic, OpenAI, or OpenRouter. You select the model.
 
@@ -90,6 +90,7 @@ The app does the main work. Use a command in the terminal for these tasks:
 
 - Check the model after a change to `.env`: `npm run llm:check`.
 - Download an online book or online documentation into an EPUB file: `npm run fetch`. Then add the EPUB file in the app.
+- Get the transcript of a YouTube video or playlist into an EPUB file: `npm run fetch` with the YouTube address. Then add the EPUB file in the app.
 - Check a book at no cost before you add it: `npm run parse`.
 - Ingest some sections of a very large chapter, or ingest a chapter again: `npm run ingest` with `--sections` or `--replace`.
 - Update the text of your books after an update of the tutor: `npm run refresh`.
@@ -107,6 +108,9 @@ The tutor reads its configuration from the `.env` file. Copy `.env.example` to `
 | `LLM_REASONING` | Optional. `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. Empty means the default of the model. |
 | `OPENROUTER_PROVIDERS` | Optional, for OpenRouter only. The providers that can serve the model, in order. |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY` | The API key of the selected provider. |
+| `VIDEO_PROVIDER` | Videos only. `openrouter` or `google`. |
+| `VIDEO_MODEL` | Videos only. A Gemini model, exactly as the video provider writes it. |
+| `GEMINI_API_KEY` | Videos only, for `VIDEO_PROVIDER=google`. A key from Google AI Studio. |
 
 The tutor has no default model. After a change to `.env`, run `npm run llm:check`.
 
@@ -127,6 +131,22 @@ LLM_MODEL=gpt-6-luna
 LLM_REASONING=high
 ```
 
+### Which video model to use
+
+YouTube videos need a second model, because the main model cannot read video. Only Gemini models read YouTube videos. We tested Gemini 3.8 Flash through OpenRouter. It wrote a good transcript, also of the code on the screen. With these values, your OpenRouter key serves the video model:
+
+```
+VIDEO_PROVIDER=openrouter
+VIDEO_MODEL=google/gemini-3.8-flash
+```
+
+If you have a Gemini key from Google AI Studio, use these values. We did not test this path with a real key yet.
+
+```
+VIDEO_PROVIDER=google
+VIDEO_MODEL=gemini-3.8-flash
+GEMINI_API_KEY=
+```
 
 ### Cost
 
@@ -136,6 +156,8 @@ The tutor uses your API key, so your provider charges you for each request.
 - The tutor keeps the model results of each chapter and each image in a cache. A later run does not pay again for the chapters in the cache.
 - In the app, the diagnosis, the lessons, the questions about a lesson, and the tests use the model.
 - A high reasoning level makes each request slower.
+- A YouTube video costs one request of the video model. With Gemini 3.8 Flash on OpenRouter, a 12-minute video cost $0.07, so one hour costs about $0.37. Google doubles the price of this model on January 1, 2027. The tutor keeps each transcript, so you pay for a video only one time.
+- With a Gemini key, YouTube videos are free now, because Google offers them as a preview. The free tier allows 8 hours of video a day. Google can end the preview at any time.
 
 ### Port
 
@@ -151,6 +173,7 @@ PORT=8080 npm start
 - PDF files must be tagged. Word and many publishing tools make tagged PDF files. The parser stops with a clear message for an untagged or a scanned PDF.
 - Some books show code or tables as images. Ingest uses the model to read them. If the model does not accept images, the images stay as placeholders.
 - Online books and online documentation: `npm run fetch` downloads the pages into an EPUB file. Then you add the file in the app. The command cannot read pages behind a login, or pages that show their text only after JavaScript runs. See [Download an online book](docs/commands.md#download-an-online-book).
+- YouTube videos and playlists: `npm run fetch` writes the transcript into an EPUB file. Each YouTube chapter of a video becomes a chapter of the book. For a playlist, each video becomes a chapter. The transcript also contains the code on the screen. See [Download a YouTube video or playlist](docs/commands.md#download-a-youtube-video-or-playlist).
 
 ## Common questions
 
@@ -162,6 +185,7 @@ PORT=8080 npm start
 - **In which order does the concept map show the concepts?** In the order of the books, the chapters, and the sections. The order in which you add the chapters does not change it.
 - **Can I move or delete the book file after I add it?** Yes. The tutor keeps a copy of the book file in the folder of the book.
 - **Can the tutor teach from online documentation?** Yes. Download it with `npm run fetch`, then add the EPUB file in the app. See [Download an online book](docs/commands.md#download-an-online-book).
+- **Can the tutor teach from a YouTube course?** Yes. Set the video model in `.env`. Then get the transcript with `npm run fetch` and the YouTube address, and add the EPUB file in the app. A link before each paragraph opens the video at that point. See [Download a YouTube video or playlist](docs/commands.md#download-a-youtube-video-or-playlist).
 - **How do I add a second book to a subject?** On the subject screen, click "Add a book". The tutor adds the concepts of the new book to the concept map of the subject.
 - **How do I make a new subject?** On the list of subjects, type a name in the "New subject" field. Then click "Create".
 - **How do I delete a subject?** On the list of subjects, click "Delete" below the subject. Then click the red button in the panel that opens. The tutor deletes the books, the concepts, your progress, and the folder of the subject. You cannot undo this.
@@ -175,6 +199,7 @@ The tutor is at version 0.1.0. All the app stages and the commands in this READM
 Planned:
 
 - Add an online book from the app. Now you download it with a command, then you add the EPUB file in the app.
+- Add a YouTube video or playlist from the app, in the same way.
 - A container image, to run the tutor on your own server.
 
 ## Development
@@ -196,6 +221,7 @@ Planned:
 | Database | SQLite, with better-sqlite3. |
 | Book parser | JSZip and cheerio for EPUB, pdf.js for PDF, and Turndown for Markdown. |
 | Online books | The fetch function of Node.js, cheerio, marked for Markdown pages, and JSZip for the EPUB file. |
+| Videos | yt-dlp for the facts about YouTube videos (the tutor downloads it), and a Gemini model for the transcript. |
 | Model clients | The Anthropic SDK and the OpenAI SDK. OpenRouter uses the OpenAI SDK. |
 | Tests | Vitest. |
 
@@ -212,6 +238,7 @@ src/
     pdf/        tagged PDF reader
     stages/     extract, review, and merge (the model stages)
     web/        online books: table of contents, pages, and the EPUB writer
+    video/      YouTube videos: yt-dlp, the video model, and the transcript checks
   llm/          model client for Anthropic, OpenAI, and OpenRouter
   tutor/        diagnosis, lessons, questions, grader, and study queue
   server/       HTTP API
@@ -239,6 +266,8 @@ Before you send a pull request, do these steps:
 - Do not commit `data/` or `.env`. Git ignores them.
 - The `data/` folder contains a copy of each book file that you add, the text of these books, and the online books that you downloaded.
 - The `fetch` command obeys `robots.txt` and waits one second between two requests.
+- For a YouTube video, the tutor does not download the video. It sends the YouTube address to the video model. It uses yt-dlp only for the title, the length, and the chapters of the video.
+- The terms of YouTube do not allow downloads with other tools. You run your own copy of the tutor, so you take the responsibility for the videos and the transcripts that you use. The transcripts stay in `data/web/transcripts/`.
 - The repository contains no book text. The tests build their own small EPUB file in code.
 - When the tutor sends a request, it sends book text to the provider that you selected. With OpenRouter, the text goes to the vendor of the selected model.
 

@@ -6,6 +6,7 @@ The app does the main work of the tutor: you add books, preview and save chapter
 - [Check the model](#check-the-model)
 - [Check a book](#check-a-book)
 - [Download an online book](#download-an-online-book)
+- [Download a YouTube video or playlist](#download-a-youtube-video-or-playlist)
 - [Ingest a book from the terminal](#ingest-a-book-from-the-terminal)
 - [Update a book after a tutor update](#update-a-book-after-a-tutor-update)
 
@@ -16,7 +17,7 @@ The app does the main work of the tutor: you add books, preview and save chapter
 | `npm start` | Each time that you want to study. It starts the app. | Yes, for ingest, the diagnosis, the lessons, and the tests. | Your books and your progress. |
 | `npm run llm:check` | Optional. After a change to `.env`. | Yes, 3 small requests. | Nothing. |
 | `npm run parse -- <book>` | Optional. To check a book at no cost, and to find the section ids for `--sections`. | No. | A report in `data/parse/<book>/`, for you to read. |
-| `npm run fetch -- <url>` | To study an online book or online documentation. Then add the EPUB file in the app. | Only for a site with no `llms.txt` file: one small request. | An EPUB file in `data/web/`. |
+| `npm run fetch -- <url>` | To study an online book, online documentation, or a YouTube video or playlist. Then add the EPUB file in the app. | For a site with no `llms.txt` file: one small request. For YouTube: one request of the video model for each video. | An EPUB file in `data/web/`. For YouTube, also the transcripts in `data/web/transcripts/`. |
 | `npm run ingest -- <subject> <book> [options]` | For the options that the app does not have: `--sections`, `--fresh`, and `--replace`. | Yes. | The folder of the book and the database. |
 | `npm run refresh -- <subject> <book>` | Only after an update of the tutor that changes the parser. | Only for new images. | The section files of the book. |
 
@@ -144,6 +145,56 @@ The command cannot read these pages:
 - Pages that only list links to other sites.
 
 The tutor cannot update a downloaded book yet. If the site changes and you want the new text, download the site again with a new `--title`. Then add the new EPUB file as a new book.
+
+## Download a YouTube video or playlist
+
+The tutor can also teach from a YouTube video or a YouTube playlist. The `fetch` command writes the transcript into an EPUB file. Then you add the EPUB file in the app, the same as other books.
+
+The tutor does not download the video. It sends the YouTube address to a video model, which hears the speech and sees the screen. Thus, the transcript also contains the code, the commands, and the tables on the screen.
+
+1. Set the video model in `.env`. See [Which video model to use](../README.md#which-video-model-to-use).
+
+2. Get the transcript:
+
+   ```
+   npm run fetch -- "https://www.youtube.com/watch?v=ahCwqrYpIuM"
+   ```
+
+   Put the address in quotes. Some shells, for example zsh, change an address with `?` in it.
+
+3. The command shows the YouTube chapters of the video, or the videos of the playlist. For a playlist, it asks which videos to download. To download all the videos, press Enter. To download some videos, type a list, for example `1-3,5`.
+
+4. The command shows the total length and, for OpenRouter, the estimated cost. Then it asks before it sends the requests.
+
+5. In the app, open the subject and click "Add a book". Select the EPUB file in the `data/web/` folder of the tutor, for example `data/web/typescript-the-basics.epub`.
+
+At the first use, the command downloads the yt-dlp program from GitHub into `data/bin/`. You install nothing. The tutor uses yt-dlp only for the facts about a video: the title, the channel, the length, and the YouTube chapters. YouTube changes often, so the command updates yt-dlp one time a day.
+
+The book has these parts:
+
+- One video: each YouTube chapter is a chapter of the book.
+- A playlist: each video is a chapter, and the YouTube chapters of a video are its sections.
+- A video with no YouTube chapters is one chapter. The parser splits it into sections by size.
+- Each paragraph starts with a link to its time in the video. In "Read the section", a click on the link opens the video at that point.
+- Before each code block and each table, a note tells you that the tutor read it from the video. The model can make an error in the code. The lesson model sees the note and can correct a small error.
+
+The command checks each transcript. If a transcript stops early, or has a gap of more than 3 minutes, the command tries one more time. After a second bad transcript, it skips the video and shows the reason.
+
+The command keeps each good transcript in `data/web/transcripts/`, one file for each video. A later download of the same video uses this file and costs nothing, for example in a larger playlist. To get a new transcript of a video, delete its file.
+
+Fetch options for YouTube:
+
+- `--chapters <list>`: for a playlist, download only these videos, for example `1-3` or `2,5`. The command does not ask which videos to download. For one video, this option does not apply, because each request contains the full video.
+- `--title <text>`: the title of the book. The default is the title of the video or of the playlist. If you download only some videos of a playlist, the default title also contains these videos.
+- `--yes`: download all the videos without the questions, and replace an old EPUB file with the same name.
+
+The command cannot read these videos:
+
+- Videos longer than 90 minutes. The transcript of a longer video does not fit into the answer of the model. In a playlist, the command shows such a video as "too long".
+- Private and unlisted videos. The video model reads only public videos.
+- Videos from other sites, and video files on your computer.
+
+The terms of YouTube do not allow downloads with other tools. You run your own copy of the tutor, so you take the responsibility for the videos and the transcripts that you use.
 
 ## Ingest a book from the terminal
 

@@ -145,6 +145,16 @@ npm run fetch -- https://doc.rust-lang.org/book/
 
 Then click "Add a book" and select the EPUB file in the `data/web/` folder of the tutor. See [Download an online book](commands.md#download-an-online-book).
 
+### Add a YouTube video or playlist
+
+The app cannot get the transcript of a video yet. First, set the video model in `.env`. Then get the transcript into an EPUB file with the `fetch` command:
+
+```
+npm run fetch -- "https://www.youtube.com/watch?v=ahCwqrYpIuM"
+```
+
+Then click "Add a book" and select the EPUB file in the `data/web/` folder of the tutor. See [Download a YouTube video or playlist](commands.md#download-a-youtube-video-or-playlist).
+
 ### The files of a book
 
 The tutor writes these files to `data/subjects/<subject>/books/<book>/`:

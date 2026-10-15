@@ -6,19 +6,21 @@ import { slugify } from "../ingest/core/text.js";
 import { bookTitle, fetchBook } from "../ingest/web/fetch.js";
 import { Downloader, httpFetcher } from "../ingest/web/http.js";
 import { findToc } from "../ingest/web/toc.js";
+import { isYoutubeUrl } from "../ingest/video/youtube.js";
 import { createClient } from "../llm/index.js";
 import { parseChapters } from "./chapters.js";
+import { fetchVideoCommand } from "./fetch-video.js";
 
 const USAGE = `Usage: npm run fetch -- <url> [options]
 
-Download an online book or online documentation into an EPUB file in data/web/.
-Then add the EPUB file to a subject with npm run ingest.
+Download an online book, online documentation, or the transcript of a YouTube video or playlist
+into an EPUB file in data/web/. Then add the EPUB file to a subject in the app.
 
 Options:
-  --chapters <list>  Download only these chapters, for example 1-3 or 2,5.
-  --toc <url>        Read the table of contents from the links of this page.
-  --title <text>     The title of the book. The default is the title of the site.
-  --yes              Download all the chapters without the question, and replace an old EPUB file.`;
+  --chapters <list>  Download only these chapters, for example 1-3 or 2,5. For a playlist: these videos.
+  --toc <url>        Read the table of contents from the links of this page. Not for YouTube.
+  --title <text>     The title of the book. The default is the title of the site, the video, or the playlist.
+  --yes              Download all the chapters without the questions, and replace an old EPUB file.`;
 
 const VALUE_FLAGS = ["--chapters", "--toc", "--title"];
 
@@ -53,6 +55,11 @@ async function main(): Promise<void> {
   if (tocUrl !== undefined && !/^https?:\/\//i.test(tocUrl)) throw new Error(`"${tocUrl}" is not a web address.`);
 
   loadEnvFile();
+  if (isYoutubeUrl(startUrl)) {
+    if (tocUrl !== undefined) throw new Error("--toc does not apply to a YouTube address.");
+    await fetchVideoCommand({ url: startUrl, chapters: valueOf("--chapters"), title: valueOf("--title"), yes: flag("--yes"), ask });
+    return;
+  }
   const download = new Downloader(httpFetcher);
   console.log(`\nStart page: ${startUrl}`);
   const toc = await findToc({

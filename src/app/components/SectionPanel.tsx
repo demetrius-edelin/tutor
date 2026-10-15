@@ -40,7 +40,22 @@ export function SectionPanel({ sectionId, quote, onClose, onBack }: { sectionId:
       {section.state === "error" && <p>{section.message}</p>}
       {section.state === "ready" && (
         <article className="reading">
-          <Markdown remarkPlugins={[remarkGfm]}>{section.data.markdown}</Markdown>
+          <Markdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              // A link to another site, for example to a time in a video, opens in a new tab. Then the app stays open.
+              a: ({ href, children }) =>
+                href && /^https?:\/\//i.test(href) ? (
+                  <a href={href} target="_blank" rel="noreferrer">
+                    {children}
+                  </a>
+                ) : (
+                  <a href={href}>{children}</a>
+                ),
+            }}
+          >
+            {section.data.markdown}
+          </Markdown>
         </article>
       )}
     </Drawer>

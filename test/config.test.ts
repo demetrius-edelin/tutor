@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ConfigError, loadEnvFile, modelConfig } from "../src/config.js";
+import { ConfigError, loadEnvFile, modelConfig, videoConfig } from "../src/config.js";
 
 describe("modelConfig", () => {
   it("reads the provider, the model, and the key of the provider", () => {
@@ -36,6 +36,24 @@ describe("modelConfig", () => {
     expect(() => modelConfig({ LLM_PROVIDER: "anthropic", LLM_MODEL: "x", OPENAI_API_KEY: "key" })).toThrow(
       /ANTHROPIC_API_KEY/,
     );
+  });
+});
+
+describe("videoConfig", () => {
+  it("reads the video provider, the video model, and the key of the video provider", () => {
+    expect(videoConfig({ VIDEO_PROVIDER: "OpenRouter", VIDEO_MODEL: "google/gemini-3.8-flash", OPENROUTER_API_KEY: "key-1" })).toEqual({
+      provider: "openrouter",
+      model: "google/gemini-3.8-flash",
+      apiKey: "key-1",
+    });
+    expect(videoConfig({ VIDEO_PROVIDER: "google", VIDEO_MODEL: "gemini-3.8-flash", GEMINI_API_KEY: "key-2" }).apiKey).toBe("key-2");
+  });
+
+  it("has no default video model, and needs the key of the video provider", () => {
+    expect(() => videoConfig({})).toThrow(/VIDEO_PROVIDER/);
+    expect(() => videoConfig({ VIDEO_PROVIDER: "anthropic", VIDEO_MODEL: "m" })).toThrow(/not valid/);
+    expect(() => videoConfig({ VIDEO_PROVIDER: "google" })).toThrow(/VIDEO_MODEL/);
+    expect(() => videoConfig({ VIDEO_PROVIDER: "google", VIDEO_MODEL: "m", OPENROUTER_API_KEY: "k" })).toThrow(/GEMINI_API_KEY/);
   });
 });
 

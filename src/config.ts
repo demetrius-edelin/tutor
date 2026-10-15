@@ -76,3 +76,44 @@ export function modelConfig(env: NodeJS.ProcessEnv = process.env): ModelConfig {
       : [];
   return { provider: provider as Provider, model, apiKey, reasoning: (reasoning || null) as ReasoningLevel | null, providers };
 }
+
+// Videos use a second model, because the main model cannot read video. Only Gemini models read YouTube addresses:
+// through OpenRouter, or through the Gemini API of Google.
+export const VIDEO_PROVIDERS = ["openrouter", "google"] as const;
+export type VideoProvider = (typeof VIDEO_PROVIDERS)[number];
+
+export const VIDEO_KEY_NAMES: Record<VideoProvider, string> = {
+  openrouter: "OPENROUTER_API_KEY",
+  google: "GEMINI_API_KEY",
+};
+
+export interface VideoConfig {
+  provider: VideoProvider;
+  model: string;
+  apiKey: string;
+}
+
+export function describeVideoModel(config: VideoConfig): string {
+  return `${config.provider} ${config.model}`;
+}
+
+// The video model that the user selected in .env. The tutor has no default video model.
+export function videoConfig(env: NodeJS.ProcessEnv = process.env): VideoConfig {
+  const provider = (env.VIDEO_PROVIDER ?? "").trim().toLowerCase();
+  if (!provider) {
+    throw new ConfigError("Videos need a video model. In .env, set VIDEO_PROVIDER to openrouter or google, and set VIDEO_MODEL.");
+  }
+  if (!(VIDEO_PROVIDERS as readonly string[]).includes(provider)) {
+    throw new ConfigError(`VIDEO_PROVIDER "${provider}" is not valid. Use openrouter or google.`);
+  }
+  const model = (env.VIDEO_MODEL ?? "").trim();
+  if (!model) {
+    throw new ConfigError("No video model is selected. In .env, set VIDEO_MODEL to a Gemini model of the video provider.");
+  }
+  const keyName = VIDEO_KEY_NAMES[provider as VideoProvider];
+  const apiKey = (env[keyName] ?? "").trim();
+  if (!apiKey) {
+    throw new ConfigError(`The video provider "${provider}" needs an API key. In .env, set ${keyName}.`);
+  }
+  return { provider: provider as VideoProvider, model, apiKey };
+}
