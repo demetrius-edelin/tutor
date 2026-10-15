@@ -11,6 +11,11 @@ export async function postJson<T>(url: string, body: unknown = {}): Promise<T> {
   return send<T>(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 }
 
+// Send a file as the body of one request, so that the server needs no package for multipart uploads.
+export async function postFile<T>(url: string, file: Blob): Promise<T> {
+  return send<T>(url, { method: "POST", headers: { "content-type": "application/octet-stream" }, body: file });
+}
+
 // A DELETE request has no body, because the server refuses a JSON content type with an empty body.
 export async function deleteJson<T>(url: string): Promise<T> {
   return send<T>(url, { method: "DELETE" });

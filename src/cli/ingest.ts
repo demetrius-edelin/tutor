@@ -2,12 +2,9 @@ import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { ConfigError, loadEnvFile, modelConfig } from "../config.js";
 import { openDb } from "../db/index.js";
-import { buildBook } from "../ingest/core/book.js";
 import type { ParsedBook } from "../ingest/core/types.js";
-import { cachedImageText, imageCacheFile, imagesToRead, readImages } from "../ingest/images.js";
-import { bookDir, cachedChapters, ingestBook, selectedInputs, type IngestReport } from "../ingest/ingest.js";
-import { readBookSource } from "../ingest/parse.js";
-import { requestsFor } from "../ingest/stages/digest.js";
+import { selectedInputs, type IngestReport } from "../ingest/ingest.js";
+import { countRequests, loadBook, runIngest } from "../ingest/run.js";
 import { createClient, LlmError } from "../llm/index.js";
 import { parseChapters } from "./chapters.js";
 
@@ -77,19 +74,15 @@ async function main(): Promise<void> {
   loadEnvFile();
   const config = modelConfig();
   // The sections get the image texts from the cache now. The model reads the other images after the question.
-  const source = await readBookSource(readFileSync(bookFile), bookFile);
-  const cacheFile = imageCacheFile(bookDir("data", subjectName, source));
-  let book = buildBook(source, { imageText: cachedImageText(cacheFile) });
+  const loaded = await loadBook("data", subjectName, readFileSync(bookFile), bookFile);
+  const { book } = loaded;
   const chapters = chaptersValue ? parseChapters(chaptersValue) : undefined;
   const sections = sectionsValue ? parseSections(sectionsValue, book) : undefined;
   const selected = selectedInputs(book, chapters, sections);
   if (selected.length === 0) throw new Error("No chapter matches the --chapters list.");
 
   // Cached chapters need no extract and review requests. Each chapter needs one merge request.
-  const cached = flag("--fresh") ? new Set<number>() : cachedChapters("data", subjectName, book, selected);
-  const images = imagesToRead(book, cacheFile, chapters, sections).length;
-  const requests =
-    selected.filter((input) => !cached.has(input.number)).reduce((total, input) => total + requestsFor(input), 0) + selected.length + images;
+  const { images, requests, chapters: counts } = countRequests("data", subjectName, loaded, chapters, sections, flag("--fresh"));
   const selectedSections = selected.flatMap((input) => input.sections);
   const words = selectedSections.reduce((total, section) => total + section.words, 0);
   console.log(`\nBook: ${book.title}`);
@@ -101,7 +94,7 @@ async function main(): Promise<void> {
   if (sections) for (const section of selectedSections) console.log(`  ${section.id}  ${section.title}`);
   console.log(`Text: ${words.toLocaleString("en-US")} words`);
   if (images > 0) console.log(`Images: ${images} to read with the model`);
-  const cachedCount = selected.filter((chapter) => cached.has(chapter.number)).length;
+  const cachedCount = counts.filter((chapter) => chapter.cached).length;
   console.log(`Model requests: about ${requests}${cachedCount > 0 ? ` (${cachedCount} chapters come from the cache)` : ""}.\n`);
 
   if (!flag("--yes")) {
@@ -114,32 +107,22 @@ async function main(): Promise<void> {
     }
   }
 
-  const llm = createClient(config);
-  if (images > 0) {
-    const imageReport = await readImages(llm, book, cacheFile, {
-      ...(chapters ? { chapters } : {}),
-      ...(sections ? { sections } : {}),
-      log: (line) => console.log(line),
-    });
-    if (imageReport.warning) console.log(`\n${imageReport.warning}\n`);
-    book = buildBook(source, { imageText: imageReport.text });
-  }
-
   const db = openDb("data/tutor.db");
   try {
-    const report = await ingestBook({
-      llm,
+    const report = await runIngest({
+      llm: createClient(config),
       db,
       dataDir: "data",
       subjectName,
       bookFile,
-      book,
+      loaded,
       ...(chapters ? { chapters } : {}),
       ...(sections ? { sections } : {}),
       preview: flag("--preview"),
       fresh: flag("--fresh"),
       replace: flag("--replace"),
       log: (line) => console.log(line),
+      warn: (message) => console.log(`\n${message}\n`),
     });
     printReport(report);
   } finally {

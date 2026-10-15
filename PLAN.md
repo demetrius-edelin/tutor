@@ -191,12 +191,16 @@ Phase 3 moves ingest into the app. See "Ingest in the app (phase 3)" in `DESIGN-
       - The checkboxes start empty. "Select all" selects the chapters without concepts. The "Preview" and "Save" buttons show the number of model requests for the selection.
       - The report shows the table of chapters that the command prints, the sections without concepts, the minor items, the quote warnings, and the parse warnings.
       - The report of a preview also shows the preview concept map, with `react-markdown`. It has the "Save these chapters" and "Change the chapters" buttons.
+    - Book order of the concept map:
+      - A concept takes the place of its first source, and a module takes the place of its first concept. See "Concept map" in `DESIGN-v3.md`.
+      - Each save gives the modules new numbers in the book order. Migration 10 does the same one time for the existing modules.
+      - The map screen shows the concepts of each module in the book order.
     - Tests use the fake model client. They cover these cases:
       - The upload route, also with a file that the parser cannot read.
       - The plan, with chapters in the cache and chapters with concepts.
       - A preview, and a save of some chapters.
       - "Stop", the rule of one run at a time, and a run that becomes `failed` at the start of the server.
-    - Update `README.md` and `docs/usage.md`. The app becomes the main way to add a book. The commands stay in the guide.
+    - Update `README.md` and `docs/usage.md`. The app becomes the main way to add a book. The commands move to a new reference, `docs/commands.md`.
     - Exit test:
       - In the app, create a subject. Upload a real EPUB file and preview one chapter. The report and the preview concept map show.
       - Click "Save these chapters". The run makes only the merge request, and the concepts show on the concept map.
@@ -219,7 +223,7 @@ Phase 3 moves ingest into the app. See "Ingest in the app (phase 3)" in `DESIGN-
       - A download with "Stop". The stopped download writes no EPUB file.
       - An EPUB file with the same title in `data/web/`.
       - The plan after the download.
-    - Update `README.md` and `docs/usage.md`.
+    - Update `README.md`, `docs/usage.md`, and `docs/commands.md`. The app becomes the main way to add an online book.
     - Exit test:
       - In the app, add `https://doc.rust-lang.org/book/` with two chapters. The book page opens with the plan of the two chapters.
       - A preview of one chapter gives a good concept map.

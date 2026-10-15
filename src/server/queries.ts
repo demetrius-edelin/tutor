@@ -13,6 +13,8 @@ import {
   type SubjectDetail,
   type SubjectSummary,
 } from "./api-types.js";
+import { CONCEPT_PLACE } from "../ingest/map.js";
+import { runningIngest, toIngestView } from "./ingests.js";
 
 interface SubjectRow {
   id: number;
@@ -90,6 +92,16 @@ export function subjectDetail(db: Db, slug: string): SubjectDetail | undefined {
     .get(subject.id) as
     | { conceptId: number; name: string; objective: string; status: Status; modulePosition: number; moduleName: string }
     | undefined;
+  // The last run of each book that the subject did not save.
+  const unsavedBooks = db
+    .prepare(
+      `SELECT i.book AS slug, i.title FROM ingests i
+       WHERE i.subject_id = ? AND i.id = (SELECT MAX(id) FROM ingests WHERE subject_id = i.subject_id AND book = i.book)
+         AND i.book NOT IN (SELECT slug FROM books WHERE subject_id = i.subject_id)
+       ORDER BY i.id DESC`,
+    )
+    .all(subject.id) as { slug: string; title: string }[];
+  const running = runningIngest(db, subject.slug);
   return {
     ...summary(db, subject),
     bookList: books.map(({ file, ...book }) => ({ ...book, format: extname(file).toLowerCase() === ".pdf" ? "pdf" : "epub" })),
@@ -103,6 +115,8 @@ export function subjectDetail(db: Db, slug: string): SubjectDetail | undefined {
           module: { position: next.modulePosition, name: next.moduleName },
         }
       : null,
+    ingest: running ? toIngestView(running, false) : null,
+    unsavedBooks,
   };
 }
 
@@ -132,7 +146,9 @@ export function conceptMap(db: Db, slug: string): ConceptMapView | undefined {
   }[];
   const concepts = db
     .prepare(
-      "SELECT id, module_id, slug, name, objective, kind, level, status, starred FROM concepts WHERE subject_id = ? ORDER BY id",
+      // The concepts follow the book order: the place of their first source. A concept with no source comes last.
+      `SELECT id, module_id, slug, name, objective, kind, level, status, starred FROM concepts c WHERE subject_id = ?
+       ORDER BY ${CONCEPT_PLACE} IS NULL, ${CONCEPT_PLACE}, id`,
     )
     .all(subject.id) as (Omit<ConceptView, "prerequisites" | "sources" | "starred"> & { module_id: number; starred: number })[];
   const prerequisites = db

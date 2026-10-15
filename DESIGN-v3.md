@@ -82,6 +82,12 @@ Size rule: one concept is an idea that the tutor can teach in 5 to 10 minutes an
 
 The user does not write the concept map. The model makes it during ingest. The user can see it on the map screen.
 
+The map follows the book order. The order of the ingest runs does not change it:
+
+- A concept takes the place of its first source: the book, then the chapter, then the section. The books come in the order of ingest.
+- A module takes the place of its first concept. After each save, the modules get new numbers in this order.
+- A concept or a module with no source comes last.
+
 ## Ingest
 
 Ingest is the most important step. If ingest misses a concept, the user never sees it. Thus, ingest has three goals:
@@ -525,7 +531,8 @@ Before the plan of a saved book, the server parses the copy again. Then it compa
 Ingest of a full book takes a long time. Thus, ingest runs in the background, in the server process, as the preparation of a diagnosis does. The tutor has no job queue.
 
 - The table `ingests` keeps each run, with its status and its progress. See "Data model".
-- The book page shows the current step, for example "Chapter 4 of 12: Joins", a progress bar, and the "Stop" button. The app asks the server for the progress every 2 seconds.
+- The book page shows the current step, a progress bar, and the "Stop" button. The app asks the server for the progress every 2 seconds.
+- A step is one model request. Thus, the progress bar moves after each request, also in a long chapter. The estimate of the requests gives the total.
 - The subject screen shows a run in progress as one line, with a link to the book page.
 - "Stop" ends the run after the current image, chapter, or merge. The image texts and the finished chapters stay in the cache. Thus, the next run does not pay for them again.
 - The merge results have no cache. If the user stops a run in the merge stage, the next run pays for the merge requests again.
@@ -753,6 +760,7 @@ ingests          (id, subject_id, book, file, title, mode, chapters, status, don
 - `questions.kind`: `choice`, `short`, or `apply`.
 - `concepts.status`: see "Concept status".
 - `concepts.queue_pos`: the position in the study queue. It is empty for a concept that is not in the queue.
+- `modules.position`: the number of the module in the book order. See "Concept map".
 - `concepts.starred`: 1 for a concept with a star, else 0.
 - `ingests` (phase 3): one row for each run in the app: an ingest or a download of an online book.
 - `ingests.book`: the folder name of the book, for example `pro-git`. The book page shows the last run of its book.
@@ -760,8 +768,8 @@ ingests          (id, subject_id, book, file, title, mode, chapters, status, don
 - `ingests.mode`: `preview`, `save`, or `fetch`. The mode `fetch` is a download of an online book (milestone 17).
 - `ingests.chapters`: the selected chapters, as a JSON list.
 - `ingests.status`: `running`, `done`, `stopped`, or `failed`.
-- `ingests.done` and `ingests.total`: the finished steps and all steps of the run. A step is one image, the extract and review stages of one chapter, the merge of one chapter, or one page of a download.
-- `ingests.step`: the text of the current step, for example "Chapter 4 of 12: Joins".
+- `ingests.done` and `ingests.total`: the finished steps and all steps of the run. A step is one model request, or one page of a download.
+- `ingests.step`: the text of the current step, for example: Finding the concepts in chapter 4 of 12, "Joins".
 - `ingests.result`: for a download, the counts and the skipped pages, as JSON. An ingest keeps its result in the report file.
 - `ingests.error`: the message of a failed run.
 

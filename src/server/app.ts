@@ -30,6 +30,8 @@ import {
 } from "../tutor/lesson.js";
 import { applyBookOrder, applySuggestedOrder, queueView, removeFromQueue, reorderQueue } from "../tutor/queue.js";
 import type { AfterTestAction, Choice, Mark } from "./api-types.js";
+import { addBook, bookView, createSubject, MAX_UPLOAD_BYTES } from "./books.js";
+import { failInterruptedIngests, findBook, ingestRow, runningIngest, startIngest, toIngestView } from "./ingests.js";
 import { conceptMap, deleteSubject, listSubjects, section, subjectDetail } from "./queries.js";
 
 export interface ServerOptions {
@@ -40,6 +42,8 @@ export interface ServerOptions {
   // The model client, or null if .env selects no model. Then llmError tells why.
   llm?: LlmClient | null;
   llmError?: string;
+  // The model in one line, for the book page.
+  modelName?: string;
 }
 
 export interface TutorServer extends FastifyInstance {
@@ -47,10 +51,13 @@ export interface TutorServer extends FastifyInstance {
   idle(): Promise<void>;
 }
 
-export function buildServer({ db, dataDir, appDir, llm = null, llmError }: ServerOptions): TutorServer {
+export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelName }: ServerOptions): TutorServer {
   const app = Fastify({ logger: false }) as unknown as TutorServer;
   const jobs = new Set<Promise<void>>();
+  // The ingest runs that the user stopped. A run ends before its next step.
+  const stops = new Set<number>();
   failInterruptedSessions(db);
+  failInterruptedIngests(db);
   const runInBackground = (job: Promise<void>) => {
     jobs.add(job);
     void job.finally(() => jobs.delete(job));
@@ -64,13 +71,24 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError }: Serve
   };
 
   // Errors of the tutor go to the app as { error } with their status code.
+  // A request error of Fastify keeps its status code, for example 413 for a file that is too large.
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof TutorError) return reply.code(error.status).send({ error: error.message });
+    const fastifyError = error as { code?: string; statusCode?: number };
+    if (fastifyError.code === "FST_ERR_CTP_BODY_TOO_LARGE") {
+      return reply.code(413).send({ error: `The file is too large. The tutor accepts book files of up to ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.` });
+    }
     const message = error instanceof Error ? error.message : String(error);
-    return reply.code(500).send({ error: message });
+    const status = fastifyError.statusCode && fastifyError.statusCode >= 400 && fastifyError.statusCode < 500 ? fastifyError.statusCode : 500;
+    return reply.code(status).send({ error: message });
   });
 
+  // The browser sends a book file as the body of one request, so the server needs no package for multipart uploads.
+  app.addContentTypeParser("application/octet-stream", { parseAs: "buffer" }, (_request, body, done) => done(null, body));
+
   app.get("/api/subjects", async () => listSubjects(db));
+
+  app.post<{ Body: { name: unknown } }>("/api/subjects", async (request) => createSubject(db, request.body?.name));
 
   app.get<{ Params: { slug: string } }>("/api/subjects/:slug", async (request, reply) => {
     const subject = subjectDetail(db, request.params.slug);
@@ -79,6 +97,8 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError }: Serve
 
   // Delete a subject with its books, its concepts, the progress of the learner, and its files.
   app.delete<{ Params: { slug: string } }>("/api/subjects/:slug", async (request, reply) => {
+    const running = runningIngest(db, request.params.slug);
+    if (running) throw new TutorError(`The tutor runs ingest on "${running.title}" in this subject. Stop the run, or wait for its end.`, 409);
     if (!deleteSubject(db, dataDir, request.params.slug)) {
       return reply.code(404).send({ error: `The subject "${request.params.slug}" does not exist.` });
     }
@@ -88,6 +108,47 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError }: Serve
   app.get<{ Params: { slug: string } }>("/api/subjects/:slug/map", async (request, reply) => {
     const map = conceptMap(db, request.params.slug);
     return map ?? reply.code(404).send({ error: `The subject "${request.params.slug}" does not exist.` });
+  });
+
+  // Ingest in the app
+
+  // Upload a book file. The query gives the file name, and the body is the file.
+  app.post<{ Params: { slug: string }; Querystring: { name?: string }; Body: unknown }>(
+    "/api/subjects/:slug/books",
+    { bodyLimit: MAX_UPLOAD_BYTES },
+    async (request) => addBook(db, dataDir, request.params.slug, request.query.name, request.body),
+  );
+
+  app.get<{ Params: { slug: string; book: string } }>("/api/subjects/:slug/books/:book", async (request, reply) => {
+    const book = findBook(db, dataDir, request.params.slug, request.params.book);
+    if (!book) return reply.code(404).send({ error: `The subject "${request.params.slug}" has no book "${request.params.book}".` });
+    const model = { name: llm ? (modelName ?? null) : null, error: llm ? null : (llmError ?? "No model is set in .env.") };
+    return bookView(db, dataDir, book, model, (id) => stops.has(id));
+  });
+
+  // Start a preview or a save of some chapters of a book.
+  app.post<{ Params: { slug: string; book: string }; Body: { mode: unknown; chapters: unknown } }>(
+    "/api/subjects/:slug/books/:book/ingest",
+    async (request, reply) => {
+      const book = findBook(db, dataDir, request.params.slug, request.params.book);
+      if (!book) return reply.code(404).send({ error: `The subject "${request.params.slug}" has no book "${request.params.book}".` });
+      const { id, job } = startIngest({ db, llm: requireModel(), dataDir, book, mode: request.body?.mode, chapters: request.body?.chapters, stops });
+      runInBackground(job);
+      return toIngestView(ingestRow(db, id)!, false);
+    },
+  );
+
+  app.get<{ Params: { id: string } }>("/api/ingests/:id", async (request, reply) => {
+    const row = ingestRow(db, Number(request.params.id));
+    return row ? toIngestView(row, stops.has(row.id)) : reply.code(404).send({ error: `The run ${request.params.id} does not exist.` });
+  });
+
+  // Stop a run. It ends after the current image, chapter, or merge.
+  app.post<{ Params: { id: string } }>("/api/ingests/:id/stop", async (request, reply) => {
+    const row = ingestRow(db, Number(request.params.id));
+    if (!row) return reply.code(404).send({ error: `The run ${request.params.id} does not exist.` });
+    if (row.status === "running") stops.add(row.id);
+    return toIngestView(row, stops.has(row.id));
   });
 
   app.get<{ Params: { id: string } }>("/api/sections/:id", async (request, reply) => {

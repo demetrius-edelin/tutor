@@ -12,6 +12,8 @@ export interface MapSource {
   display: string;
   quote: string;
   quoteFound: boolean;
+  // The place of the section in the books, from sectionPlace. It gives the book order of the map.
+  place: number;
 }
 
 export interface MapConcept {
@@ -75,6 +77,7 @@ interface ConceptRow {
 interface SourceRow {
   concept_id: number;
   quote: string;
+  book_id: number;
   book_slug: string;
   book_title: string;
   chapter: number;
@@ -87,6 +90,33 @@ export function sourceDisplay(bookTitle: string, sectionId: string, sectionTitle
   return `${bookTitle}, ${sectionId} ${sectionTitle}${page ? `, p. ${page}` : ""}`;
 }
 
+// The book order: the books in the order of ingest (the id of the book), then the chapters and the sections.
+// SECTION_PLACE is the same formula in SQL, for a section with the alias "s".
+export function sectionPlace(bookId: number, chapter: number, section: number): number {
+  return bookId * 1_000_000_000_000 + chapter * 1_000_000 + section;
+}
+
+const SECTION_PLACE = "(s.book_id * 1000000000000 + s.chapter * 1000000 + s.number)";
+
+// SQL for the place of the concept with the alias "c": the place of its first source. It is NULL for a concept with no source.
+export const CONCEPT_PLACE = `(SELECT MIN(${SECTION_PLACE}) FROM concept_sources cs JOIN sections s ON s.id = cs.section_id WHERE cs.concept_id = c.id)`;
+
+// Put the map in the book order. A concept takes the place of its first source, and a module takes the place of its first concept.
+// The modules get new numbers in this order. A concept or a module with no source keeps its order, at the end.
+export function sortMap(map: ConceptMap): void {
+  const placeOf = (concept: MapConcept) => Math.min(...concept.sources.map((source) => source.place));
+  const before = new Map(map.concepts.map((concept, i) => [concept, i]));
+  // Infinity minus Infinity is NaN, which counts as equal. Then the old order decides.
+  map.concepts.sort((a, b) => placeOf(a) - placeOf(b) || before.get(a)! - before.get(b)!);
+  const modulePlace = (module: MapModule) =>
+    Math.min(...map.concepts.filter((concept) => sameName(concept.module, module.name)).map(placeOf));
+  [...map.modules]
+    .sort((a, b) => modulePlace(a) - modulePlace(b) || a.position - b.position)
+    .forEach((module, i) => {
+      module.position = i + 1;
+    });
+}
+
 export function loadMap(db: Db, subjectId: number): ConceptMap {
   const modules = db
     .prepare("SELECT id, name, position FROM modules WHERE subject_id = ? ORDER BY position")
@@ -94,12 +124,13 @@ export function loadMap(db: Db, subjectId: number): ConceptMap {
   const concepts = db
     .prepare(
       `SELECT c.id, c.slug, c.name, c.objective, c.kind, c.level, m.name AS module
-       FROM concepts c JOIN modules m ON m.id = c.module_id WHERE c.subject_id = ? ORDER BY m.position, c.id`,
+       FROM concepts c JOIN modules m ON m.id = c.module_id WHERE c.subject_id = ?
+       ORDER BY m.position, ${CONCEPT_PLACE} IS NULL, ${CONCEPT_PLACE}, c.id`,
     )
     .all(subjectId) as ConceptRow[];
   const sources = db
     .prepare(
-      `SELECT cs.concept_id, cs.quote, b.slug AS book_slug, b.title AS book_title, s.chapter, s.number, s.title, s.page
+      `SELECT cs.concept_id, cs.quote, b.id AS book_id, b.slug AS book_slug, b.title AS book_title, s.chapter, s.number, s.title, s.page
        FROM concept_sources cs JOIN sections s ON s.id = cs.section_id JOIN books b ON b.id = s.book_id
        WHERE b.subject_id = ? ORDER BY s.chapter, s.number`,
     )
@@ -130,16 +161,18 @@ export function loadMap(db: Db, subjectId: number): ConceptMap {
             display: sourceDisplay(source.book_title, sectionId, source.title, source.page),
             quote: source.quote,
             quoteFound: true,
+            place: sectionPlace(source.book_id, source.chapter, source.number),
           };
         }),
     })),
   };
 }
 
-// Save the new modules, the new concepts, and the new sources and prerequisites.
+// Save the new modules, the new concepts, and the new sources and prerequisites, and the numbers of all modules.
 // sectionRows gives the database id of each section key.
 export function saveMap(db: Db, subjectId: number, map: ConceptMap, sectionRows: Map<string, number>): void {
   const insertModule = db.prepare("INSERT INTO modules (subject_id, position, name) VALUES (?, ?, ?)");
+  const updateModule = db.prepare("UPDATE modules SET position = ? WHERE id = ?");
   const insertConcept = db.prepare(
     "INSERT INTO concepts (subject_id, module_id, slug, name, objective, kind, level) VALUES (?, ?, ?, ?, ?, ?, ?)",
   );
@@ -148,6 +181,7 @@ export function saveMap(db: Db, subjectId: number, map: ConceptMap, sectionRows:
 
   for (const module of map.modules) {
     if (module.rowId === null) module.rowId = Number(insertModule.run(subjectId, module.position, module.name).lastInsertRowid);
+    else updateModule.run(module.position, module.rowId);
   }
   for (const concept of map.concepts) {
     if (concept.rowId !== null) continue;
@@ -169,6 +203,48 @@ export function saveMap(db: Db, subjectId: number, map: ConceptMap, sectionRows:
       if (prereqId !== undefined) insertPrereq.run(concept.rowId, prereqId);
     }
   }
+}
+
+// The concepts of a preview as data, for the app: only the concepts with a source in the sections of the run.
+// The modules are in the order of the concept map.
+export interface PreviewModule {
+  // The number of the module on the concept map.
+  position: number;
+  name: string;
+  concepts: {
+    name: string;
+    objective: string;
+    kind: Kind;
+    level: Level;
+    sources: { text: string; quoteFound: boolean }[];
+    // The names of the prerequisites.
+    needs: string[];
+    // True for a concept that is on the concept map already. The run joins its own concept to it.
+    onMap: boolean;
+  }[];
+}
+
+// keys: the source keys of the sections of the run, for example "pro-git#3.2".
+export function mapPreview(map: ConceptMap, keys: ReadonlySet<string>): PreviewModule[] {
+  const nameOf = new Map(map.concepts.map((concept) => [concept.slug, concept.name]));
+  return [...map.modules]
+    .sort((a, b) => a.position - b.position)
+    .map((module) => ({
+      position: module.position,
+      name: module.name,
+      concepts: map.concepts
+        .filter((concept) => sameName(concept.module, module.name) && concept.sources.some((source) => keys.has(source.key)))
+        .map((concept) => ({
+          name: concept.name,
+          objective: concept.objective,
+          kind: concept.kind,
+          level: concept.level,
+          sources: concept.sources.map((source) => ({ text: source.display, quoteFound: source.quoteFound })),
+          needs: concept.prerequisites.map((slug) => nameOf.get(slug) ?? slug),
+          onMap: concept.rowId !== null,
+        })),
+    }))
+    .filter((module) => module.concepts.length > 0);
 }
 
 // The concept map as Markdown, for people to read.

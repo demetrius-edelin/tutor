@@ -7,7 +7,9 @@ import { formatSources, readJson } from "./prompt.js";
 import { checkReferences, ReferenceList } from "./references.js";
 import { LlmError, type LlmClient, type ObjectRequest, type TextRequest, type TextResult } from "./types.js";
 
-const MAX_TOKENS = 16000;
+// The reasoning of the model counts toward this limit, so a long chapter needs a large limit.
+// The SDK refuses a large limit on a request with no streaming, so each request streams.
+const MAX_TOKENS = 64000;
 
 // For these models, the API can run a refused request again on a different model.
 // See "Refusal Fallbacks" in the Claude API documentation.
@@ -20,7 +22,6 @@ interface AnyResponse {
   stop_reason: string | null;
   stop_details?: { category?: string | null; explanation?: string | null } | null;
   content: Array<{ type: string; text?: string; citations?: Array<Record<string, unknown>> | null }>;
-  parsed_output?: unknown;
   usage?: { output_tokens?: number };
 }
 
@@ -43,21 +44,15 @@ export class AnthropicClient implements LlmClient {
     return this.config.reasoning ? { effort: this.config.reasoning as "low" | "medium" | "high" | "xhigh" | "max" } : {};
   }
 
-  private async call(kind: "parse" | "create", params: Record<string, unknown>): Promise<AnyResponse> {
+  private async call(params: Record<string, unknown>): Promise<AnyResponse> {
     const base = { model: this.config.model, max_tokens: MAX_TOKENS, ...params };
     const start = Date.now();
     let response: AnyResponse;
     try {
-      if (this.fallback) {
-        const beta = { ...base, betas: [FALLBACK_BETA], fallbacks: "default" as const };
-        response = (await (kind === "parse"
-          ? this.sdk.beta.messages.parse(beta as never)
-          : this.sdk.beta.messages.create(beta as never))) as unknown as AnyResponse;
-      } else {
-        response = (await (kind === "parse"
-          ? this.sdk.messages.parse(base as never)
-          : this.sdk.messages.create(base as never))) as unknown as AnyResponse;
-      }
+      const stream = this.fallback
+        ? this.sdk.beta.messages.stream({ ...base, betas: [FALLBACK_BETA], fallbacks: "default" } as never)
+        : this.sdk.messages.stream(base as never);
+      response = (await stream.finalMessage()) as unknown as AnyResponse;
     } catch (error) {
       logModelCall(start, `failed: ${error instanceof Error ? error.message : String(error)}`);
       throw toLlmError(error, this.config);
@@ -72,7 +67,10 @@ export class AnthropicClient implements LlmClient {
       throw new LlmError(`The model refused the request (${reason}).`);
     }
     if (response.stop_reason === "max_tokens") {
-      throw new LlmError("The answer of the model was too long and stopped before the end.");
+      throw new LlmError(
+        `The answer of the model was too long and stopped before the end (${response.usage?.output_tokens ?? 0} output tokens). ` +
+          "The reasoning counts as output. If the model reasons too long, set a lower LLM_REASONING.",
+      );
     }
   }
 
@@ -94,23 +92,24 @@ export class AnthropicClient implements LlmClient {
     }
     content.push({ type: "text", text: request.prompt });
     const messages: Anthropic.MessageParam[] = [{ role: "user", content }];
-    const format = zodOutputFormat(request.schema as never);
+    // The format has no parse function, so the SDK does not parse the answer. Its parse throws on an incomplete answer,
+    // before this code can check the stop reason or ask again.
+    const { type, schema } = zodOutputFormat(request.schema as never);
+    const format = { type, schema };
 
     for (let attempt = 1; attempt <= 2; attempt++) {
-      const response = await this.call("parse", {
+      const response = await this.call({
         system: request.system,
         messages,
         output_config: { ...this.effort(), format },
       });
       this.checkStop(response);
       const text = AnthropicClient.textOf(response);
-      let value: unknown = response.parsed_output;
-      if (value === null || value === undefined) {
-        try {
-          value = readJson(text);
-        } catch {
-          value = undefined;
-        }
+      let value: unknown;
+      try {
+        value = readJson(text);
+      } catch {
+        value = undefined;
       }
       const result = request.schema.safeParse(value);
       if (result.success) return result.data;
@@ -138,7 +137,7 @@ export class AnthropicClient implements LlmClient {
       { role: "user", content: [...documents, { type: "text", text: first.content }] },
       ...rest.map((message) => ({ role: message.role, content: message.content })),
     ];
-    const response = await this.call("create", {
+    const response = await this.call({
       system: request.system,
       messages,
       ...(this.config.reasoning ? { output_config: this.effort() } : {}),

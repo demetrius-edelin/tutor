@@ -19,12 +19,14 @@ export function requestsFor(chapter: ChapterInput): number {
 }
 
 // Run the extract and review stages for one chapter.
+// onRequest runs before each extract and review request, with the group of sections and the number of groups.
 export async function digestChapter(
   llm: LlmClient,
   bookTitle: string,
   chapter: ChapterInput,
   checklist: ChecklistItem[],
   log: (line: string) => void = () => {},
+  onRequest: (stage: "extract" | "review", part: number, parts: number) => void = () => {},
 ): Promise<ChapterDigest> {
   const sections = new Map(chapter.sections.map((section) => [section.id, section]));
   const concepts = new Map<string, FoundConcept>();
@@ -58,6 +60,7 @@ export async function digestChapter(
   const groups = groupSections(chapter.sections);
   for (const [i, group] of groups.entries()) {
     log(`  sections ${group[0]!.id} to ${group.at(-1)!.id} (${i + 1} of ${groups.length})`);
+    onRequest("extract", i + 1, groups.length);
     const entries = await extractGroup(llm, bookTitle, chapter, group);
     for (const section of group) {
       const entry = entries.get(section.id);
@@ -69,6 +72,7 @@ export async function digestChapter(
     const ids = new Set(group.map((section) => section.id));
     const groupConcepts = [...concepts.values()].filter((concept) => concept.sources.some((source) => ids.has(source.sectionId)));
     const items = checklist.filter((item) => item.sectionId !== null && ids.has(item.sectionId));
+    onRequest("review", i + 1, groups.length);
     const review = await reviewGroup(llm, bookTitle, chapter, group, groupConcepts, items);
     for (const concept of review.newConcepts) add(concept, concept.sectionId, "review");
     minorItems.push(...review.minorItems);

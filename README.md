@@ -36,41 +36,46 @@ You need Node.js 22 or later and an API key for Anthropic, OpenAI, or OpenRouter
 git clone https://github.com/demetrius-edelin/tutor.git
 cd tutor
 npm install
-cp .env.example .env                       # then set the provider, the model, and the API key
-npm run llm:check                          # optional: send 3 small test requests to the model
-npm run ingest -- SQL /path/to/book.epub   # add a book to the subject "SQL"
-npm run fetch -- https://doc.rust-lang.org/book/   # optional: download an online book into an EPUB file
-npm start                                  # then open http://localhost:3000
+cp .env.example .env   # then set the provider, the model, and the API key
+npm run llm:check      # optional: send 3 small test requests to the model
+npm start              # then open http://localhost:3000
 ```
 
 In the Windows command prompt, use `copy` instead of `cp`.
 
-The `ingest` command shows the number of model requests and asks before it starts. To start with some chapters of the book only, see [Step 3 of the usage guide](docs/usage.md#step-3-add-a-book-to-a-subject).
+Then, in the app:
+
+1. Make a subject, for example "SQL".
+2. Click "Add a book" and select an EPUB file or a tagged PDF file.
+3. Select one chapter and click "Preview". The preview shows the concepts of the chapter and changes nothing.
+4. If the concepts look correct, click "Save these chapters". Then start to study.
+
+Before each run, the app shows the number of model requests. Later, click "Add chapters" next to the book to add more chapters.
 
 ## How it works
 
-You use the tutor in four steps. Steps 1 to 3 are commands in the terminal. Step 4 is the app in the browser.
+You use the tutor in four steps. Steps 1 and 2 are commands in the terminal. Steps 3 and 4 are in the app, in the browser.
 
 ```mermaid
 flowchart LR
-    S1["1. Set up<br/>npm install<br/>.env"] --> S2["2. Check (optional)<br/>npm run llm:check<br/>npm run parse"]
-    S2 --> S3["3. Add a book<br/>or some chapters<br/>npm run ingest"]
-    S3 --> S4["4. Study<br/>npm start"]
-    S3 -->|"more chapters or books"| S3
-    style S2 stroke-dasharray: 5 5
+    S1["1. Set up<br/>npm install<br/>.env"] --> S2["2. Start the app<br/>npm start"]
+    S2 --> S3["3. Add a book<br/>preview, then save<br/>some chapters"]
+    S3 --> S4["4. Study"]
+    S4 -->|"more chapters or books"| S3
 ```
 
 1. [Set up the tutor](docs/usage.md#step-1-set-up-the-tutor). Do this one time.
-2. [Check the model and the book](docs/usage.md#step-2-check-the-model-and-the-book-optional). This step is optional. It saves no data.
-3. [Add a book to a subject](docs/usage.md#step-3-add-a-book-to-a-subject). Add the full book, or only the chapters that you want to study now. Only this step puts books into the tutor. For an online book, [download it first](docs/usage.md#add-an-online-book).
-4. [Study in the browser](docs/usage.md#step-4-study-in-the-browser). Start the app and learn. The app shows the next action at each stage.
+2. [Start the app](docs/usage.md#step-2-start-the-app).
+3. [Add a book to a subject](docs/usage.md#step-3-add-a-book-to-a-subject). Add the full book, or only the chapters that you want to study now. For an online book, [download it first with a command](docs/commands.md#download-an-online-book).
+4. [Study](docs/usage.md#step-4-study). The app shows the next action at each stage.
 
-The [usage guide](docs/usage.md) explains each step and each command.
+The [usage guide](docs/usage.md) explains each step in the app. The [command reference](docs/commands.md) explains the commands in the terminal.
 
 ### In the app
 
 In the app, you open a subject and go through these stages:
 
+- Books: add a book, or more chapters of a book. Select the chapters, make a preview, and save it. The concept map follows the order of the books.
 - Choose: on the concept map, test, learn, or skip each concept. To do this for many concepts in one step, select their checkboxes and use the bar at the bottom of the page.
 - Diagnosis: the tutor asks 2 questions about each concept that you selected for a test. To start it, click "Test it" next to a concept, or select concepts and click "Test them".
 - Study queue: the concepts to learn, in an order that you can change.
@@ -81,18 +86,15 @@ The model writes the questions and grades the open answers. If you think that a 
 
 ## Commands
 
-| Command | Use | Uses the model | What it writes |
-|---|---|---|---|
-| `npm run llm:check` | Optional. After a change to `.env`. | Yes, 3 small requests. | Nothing. |
-| `npm run parse -- <book>` | Optional. To check a book and to find the chapter numbers for `--chapters`. | No. | A report in `data/parse/<book>/`, for you to read. |
-| `npm run fetch -- <url>` | To study an online book or online documentation. Then use the EPUB file as the book. | Only for a site with no `llms.txt` file: one small request. | An EPUB file in `data/web/`. |
-| `npm run ingest -- <subject> <book> --chapters <list> --preview` | Recommended. To check the concepts of some chapters before you save them. | Yes. | Preview files in the folder of the book. The database does not change. |
-| `npm run ingest -- <subject> <book> --chapters <list>` | To study some chapters of a book. | Yes. | The folder of the book and the database. |
-| `npm run ingest -- <subject> <book>` | To study all the chapters of a book. | Yes. | The folder of the book and the database. |
-| `npm start` | Each time that you want to study. | Yes, for the diagnosis, the lessons, and the tests. | Your progress in the database. |
-| `npm run refresh -- <subject> <book>` | Only after an update of the tutor that changes the parser. | Only for new images. | The section files of the book. |
+The app does the main work. Use a command in the terminal for these tasks:
 
-The folder of the book is `data/subjects/<subject>/books/<book>/`. The database is `data/tutor.db`.
+- Check the model after a change to `.env`: `npm run llm:check`.
+- Download an online book or online documentation into an EPUB file: `npm run fetch`. Then add the EPUB file in the app.
+- Check a book at no cost before you add it: `npm run parse`.
+- Ingest some sections of a very large chapter, or ingest a chapter again: `npm run ingest` with `--sections` or `--replace`.
+- Update the text of your books after an update of the tutor: `npm run refresh`.
+
+The [command reference](docs/commands.md) explains each command and its options. The app and the commands use the same code and the same cache.
 
 ## Configuration
 
@@ -130,7 +132,7 @@ LLM_REASONING=high
 
 The tutor uses your API key, so your provider charges you for each request.
 
-- Ingest makes the most requests, because the model reads each chapter and each image of the book. The command shows the number of requests and asks before it starts.
+- Ingest makes the most requests, because the model reads each chapter and each image of the book. Before each run, the app shows the number of requests.
 - The tutor keeps the model results of each chapter and each image in a cache. A later run does not pay again for the chapters in the cache.
 - In the app, the diagnosis, the lessons, the questions about a lesson, and the tests use the model.
 - A high reasoning level makes each request slower.
@@ -148,31 +150,31 @@ PORT=8080 npm start
 - EPUB files work best. The parser reads the publisher CSS for headings, bold, and italic.
 - PDF files must be tagged. Word and many publishing tools make tagged PDF files. The parser stops with a clear message for an untagged or a scanned PDF.
 - Some books show code or tables as images. Ingest uses the model to read them. If the model does not accept images, the images stay as placeholders.
-- Online books and online documentation: `npm run fetch` downloads the pages into an EPUB file. The command cannot read pages behind a login, or pages that show their text only after JavaScript runs. See [Add an online book](docs/usage.md#add-an-online-book).
+- Online books and online documentation: `npm run fetch` downloads the pages into an EPUB file. Then you add the file in the app. The command cannot read pages behind a login, or pages that show their text only after JavaScript runs. See [Download an online book](docs/commands.md#download-an-online-book).
 
 ## Common questions
 
-- **Must I run `parse` before `ingest`?** No. Ingest parses the book by itself. The `parse` command only prints a report in the terminal, at no cost. See [Check a book](docs/usage.md#check-a-book).
-- **How do I find the number of a chapter for `--chapters`?** Run `npm run parse` and read the `#` column. This number can be different from the number in the title of the chapter.
-- **How do I find the id of a section for `--sections`?** Run `npm run parse` and read the file names in `data/parse/<book>/sections/`. The file `01-10-pointers.md` is section `1.10`.
-- **Must I ingest the full book?** No. With `--chapters` or `--sections`, you can study a book one part at a time. Later, you can add more parts.
-- **Does `ingest` always save to the database?** Yes. Only `--preview` keeps the database as it is. With `--chapters`, the app shows the concepts of these chapters immediately.
-- **Do I pay two times for the chapters of a preview?** No. The tutor keeps the model results of each run, so a later run does not pay for these chapters again.
-- **How do I add more chapters later?** Run `ingest` again with a list of the new chapters or sections. See [Add more chapters later](docs/usage.md#add-more-chapters-later).
-- **Can I move or delete the book file after ingest?** Yes. Ingest keeps a copy of the book file in the folder of the book.
-- **Can the tutor teach from online documentation?** Yes. Run `npm run fetch` with the address of the documentation. Then ingest the EPUB file. See [Add an online book](docs/usage.md#add-an-online-book).
-- **How do I add a second book to a subject?** Run `npm run ingest` again with the same subject name. The tutor adds the concepts of the new book to the concept map of the subject.
-- **How do I make a new subject?** Run `npm run ingest` with a new subject name. The first book makes the subject.
+- **Must I add the full book?** No. Select only the chapters that you want to study now. Later, click "Add chapters" next to the book.
+- **What is the difference between "Preview" and "Save"?** A preview shows the concepts of the chapters and does not change the concept map. A save puts the concepts on the concept map, and the app shows them at once.
+- **Do I pay two times for the chapters of a preview?** No. The tutor keeps the model results of each chapter in a cache. A save after a preview makes only one merge request for each chapter.
+- **Can I leave the page during a run?** Yes. The run continues on the server. The subject screen shows the run, with a link to its progress. Only one run can work at a time.
+- **What does "Stop" do?** The run ends after the current model request. The finished chapters stay in the cache, so a new run does not pay for them again. A stopped run does not change the concept map.
+- **In which order does the concept map show the concepts?** In the order of the books, the chapters, and the sections. The order in which you add the chapters does not change it.
+- **Can I move or delete the book file after I add it?** Yes. The tutor keeps a copy of the book file in the folder of the book.
+- **Can the tutor teach from online documentation?** Yes. Download it with `npm run fetch`, then add the EPUB file in the app. See [Download an online book](docs/commands.md#download-an-online-book).
+- **How do I add a second book to a subject?** On the subject screen, click "Add a book". The tutor adds the concepts of the new book to the concept map of the subject.
+- **How do I make a new subject?** On the list of subjects, type a name in the "New subject" field. Then click "Create".
 - **How do I delete a subject?** On the list of subjects, click "Delete" below the subject. Then click the red button in the panel that opens. The tutor deletes the books, the concepts, your progress, and the folder of the subject. You cannot undo this.
-- **Can I delete `data/parse/`?** Yes. Nothing else uses it.
+- **Can I add books without the app?** Yes. The `ingest` command uses the same code as the app. It also has options that the app does not have. See [Ingest a book from the terminal](docs/commands.md#ingest-a-book-from-the-terminal).
+- **Can I delete `data/parse/`?** Yes. Only the `parse` command writes it, and nothing reads it.
 
 ## Status and roadmap
 
-The tutor is at version 0.1.0. All the commands and app stages in this README and in the usage guide work. The tutor is for one person on one computer.
+The tutor is at version 0.1.0. All the app stages and the commands in this README and in the guides work. The tutor is for one person on one computer.
 
 Planned:
 
-- Add a book from the app, with the progress of the ingest. Now you add books with a command in the terminal.
+- Add an online book from the app. Now you download it with a command, then you add the EPUB file in the app.
 - A container image, to run the tutor on your own server.
 
 ## Development
@@ -214,7 +216,7 @@ src/
   tutor/        diagnosis, lessons, questions, grader, and study queue
   server/       HTTP API
   app/          browser app (React)
-docs/           usage guide
+docs/           usage guide and command reference
 test/           tests, a fake model client, and a builder for test EPUB files
 data/           your books, the results, and the database (not in git)
 ```
@@ -235,7 +237,7 @@ Before you send a pull request, do these steps:
 ## Privacy and copyright
 
 - Do not commit `data/` or `.env`. Git ignores them.
-- The `data/` folder contains the text of books that you bought, and of the online books that you downloaded.
+- The `data/` folder contains a copy of each book file that you add, the text of these books, and the online books that you downloaded.
 - The `fetch` command obeys `robots.txt` and waits one second between two requests.
 - The repository contains no book text. The tests build their own small EPUB file in code.
 - When the tutor sends a request, it sends book text to the provider that you selected. With OpenRouter, the text goes to the vendor of the selected model.

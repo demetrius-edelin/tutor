@@ -195,7 +195,44 @@ UPDATE lessons SET refs = replace(refs, '"path":"themes/', '"path":"subjects/');
 UPDATE lesson_messages SET refs = replace(refs, '"path":"themes/', '"path":"subjects/');
 `;
 
-export const MIGRATIONS = [V1, V2, V3, V4, V5, V6, V7, V8];
+// Version 9: the app runs ingest in the background. Each run keeps its status and its progress.
+// The mode "fetch" is for the download of an online book (milestone 17).
+const V9 = `
+CREATE TABLE ingests (
+  id         INTEGER PRIMARY KEY,
+  subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  book       TEXT NOT NULL,
+  file       TEXT NOT NULL,
+  title      TEXT NOT NULL,
+  mode       TEXT NOT NULL CHECK (mode IN ('preview', 'save', 'fetch')),
+  chapters   TEXT NOT NULL DEFAULT '[]',
+  status     TEXT NOT NULL CHECK (status IN ('running', 'done', 'stopped', 'failed')),
+  done       INTEGER NOT NULL DEFAULT 0,
+  total      INTEGER NOT NULL DEFAULT 0,
+  step       TEXT NOT NULL DEFAULT '',
+  result     TEXT,
+  error      TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+`;
+
+// Version 10: the modules follow the book order. A module takes the place of its first source: the book (in the order
+// of ingest), then the chapter and the section. Before, a module got the next number when ingest made it, so a chapter
+// from a later run came after the other chapters. After this version, each save puts the modules in the book order.
+const V10 = `
+UPDATE modules SET position = (
+  SELECT ranked.position FROM (
+    SELECT m.id, ROW_NUMBER() OVER (PARTITION BY m.subject_id ORDER BY p.place IS NULL, p.place, m.position, m.id) AS position
+    FROM modules m LEFT JOIN (
+      SELECT c.module_id, MIN(s.book_id * 1000000000000 + s.chapter * 1000000 + s.number) AS place
+      FROM concepts c JOIN concept_sources cs ON cs.concept_id = c.id JOIN sections s ON s.id = cs.section_id
+      GROUP BY c.module_id
+    ) p ON p.module_id = m.id
+  ) ranked WHERE ranked.id = modules.id
+);
+`;
+
+export const MIGRATIONS = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10];
 // The version that renames the "themes" data folder to "subjects".
 export const SUBJECTS_VERSION = 8;
 export const SCHEMA_VERSION = MIGRATIONS.length;

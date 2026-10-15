@@ -1,8 +1,10 @@
+import { useRef, useState } from "react";
 import type { ModuleSummary, StatusCounts, SubjectDetail } from "../../server/api-types";
-import { useApi } from "../api";
+import { postFile, useApi } from "../api";
 import { InlineCode } from "../components/InlineCode";
 import { Layout, Notice } from "../components/Layout";
 import { knownShare, ProgressBar, ProgressLegend } from "../components/Progress";
+import { Spinner } from "../components/Spinner";
 import { href } from "../router";
 
 const n = (value: number) => value.toLocaleString("en-US");
@@ -25,6 +27,19 @@ export function Subject({ slug }: { slug: string }) {
 
 function SubjectView({ subject }: { subject: SubjectDetail }) {
   const { done, total } = knownShare(subject.progress);
+  // A new subject has no books. It shows only the books part, with the "Add a book" button.
+  if (subject.books === 0 && subject.concepts === 0) {
+    return (
+      <>
+        <h1>{subject.name}</h1>
+        <p className="lead">
+          This subject has no books yet. Add a book, and the tutor finds its concepts. You select the chapters, and you can add more chapters
+          later.
+        </p>
+        <Books subject={subject} />
+      </>
+    );
+  }
   return (
     <>
       <h1>{subject.name}</h1>
@@ -73,26 +88,108 @@ function SubjectView({ subject }: { subject: SubjectDetail }) {
         </ol>
       </section>
 
-      <section aria-labelledby="books-heading">
-        <h2 id="books-heading">Books</h2>
+      <Books subject={subject} />
+    </>
+  );
+}
+
+// The books of the subject, the ingest run in progress, the books that are not saved, and the "Add a book" button.
+function Books({ subject }: { subject: SubjectDetail }) {
+  const { slug, ingest } = subject;
+  return (
+    <section aria-labelledby="books-heading">
+      <h2 id="books-heading">Books</h2>
+      {ingest && (
+        <p className="run-note" role="status">
+          <Spinner />
+          {ingest.mode === "preview" ? "Preview" : "Ingest"} of "{ingest.title}": {ingest.step || "the tutor reads the book"}.{" "}
+          <a href={href.book(slug, ingest.book)}>Show the progress</a>
+        </p>
+      )}
+      {subject.bookList.length > 0 && (
         <ol className="contents">
           {subject.bookList.map((book) => (
             <li key={book.slug}>
-              <div className="contents-entry">
+              <a className="contents-entry" href={href.book(slug, book.slug)}>
                 <span className="contents-title">{book.title}</span>
                 <span className="leader" aria-hidden="true" />
                 <span className="contents-figure">{plural(book.concepts, "concept")}</span>
-              </div>
+              </a>
               <p className="contents-note">
                 {book.format.toUpperCase()} file, {plural(book.chapters, "chapter")}
                 {book.chaptersWithConcepts < book.chapters ? ` (${n(book.chaptersWithConcepts)} with concepts)` : ""},{" "}
                 {plural(book.sections, "section")}, {plural(book.words, "word")}
               </p>
+              {book.chaptersWithConcepts < book.chapters && (
+                <p className="book-actions">
+                  <a className="button small secondary" href={href.book(slug, book.slug, "plan")}>
+                    Add chapters
+                  </a>
+                  <span className="quiet small">{plural(book.chapters - book.chaptersWithConcepts, "chapter")} without concepts</span>
+                </p>
+              )}
             </li>
           ))}
         </ol>
-      </section>
-    </>
+      )}
+      {subject.unsavedBooks.length > 0 && (
+        <>
+          <h3 className="eyebrow unsaved-heading">Not saved yet</h3>
+          <ul className="plain-list">
+            {subject.unsavedBooks.map((book) => (
+              <li key={book.slug}>
+                <a href={href.book(slug, book.slug)}>{book.title}</a>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <AddBook slug={slug} main={subject.bookList.length === 0} />
+    </section>
+  );
+}
+
+// The browser sends the file to the server, and the server parses it. The parse uses no model, so it costs nothing.
+// It is the main button of a subject with no books. After the first book, "Add chapters" is more frequent, so it is a text link.
+function AddBook({ slug, main }: { slug: string; main: boolean }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const upload = async (file: File) => {
+    setBusy(file.name);
+    setError(null);
+    try {
+      const { book } = await postFile<{ book: string }>(`/api/subjects/${encodeURIComponent(slug)}/books?name=${encodeURIComponent(file.name)}`, file);
+      window.location.hash = href.book(slug, book, "plan");
+    } catch (problem) {
+      setError((problem as Error).message);
+      setBusy(null);
+    }
+  };
+  return (
+    <div className={main ? "add-book" : "add-book add-book-inline"}>
+      <input
+        ref={input}
+        type="file"
+        accept=".epub,.pdf,application/epub+zip,application/pdf"
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void upload(file);
+        }}
+      />
+      <button className={main ? "button" : "text-button strong"} onClick={() => input.current?.click()} disabled={busy !== null}>
+        {busy && <Spinner />}
+        {busy ? `Reading ${busy}` : "Add a book"}
+      </button>
+      <p className="quiet small">An EPUB file or a tagged PDF file. The tutor reads the chapters with no model, so this step costs nothing.</p>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 

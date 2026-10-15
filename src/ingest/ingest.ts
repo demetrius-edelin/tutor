@@ -6,7 +6,7 @@ import { selectSections } from "./core/book.js";
 import { slugify } from "./core/text.js";
 import type { ParsedBook, ParsedSection, ParseWarning } from "./core/types.js";
 import { sectionFileName, writeParsedBook } from "./core/write.js";
-import { emptyMap, loadMap, mapToMarkdown, saveMap, sourceDisplay, type ConceptMap } from "./map.js";
+import { emptyMap, loadMap, mapPreview, mapToMarkdown, saveMap, sectionPlace, sortMap, sourceDisplay, type ConceptMap } from "./map.js";
 import { containsQuote } from "../llm/references.js";
 import { chapterKey, digestChapter } from "./stages/digest.js";
 import { mergeChapter } from "./stages/merge.js";
@@ -30,7 +30,34 @@ export interface IngestOptions {
   fresh?: boolean;
   // Replace the book if the subject has it already. A run with some sections replaces only the sources of these sections.
   replace?: boolean;
+  // A problem with the images of the book, for the report.
+  imageWarning?: string | null;
   log?: (line: string) => void;
+  // Called before each model request of the extract, review, and merge stages. A chapter in the cache has no extract and review requests.
+  progress?: (step: IngestStep) => void;
+  // True if the user stopped the run. Then the run ends with IngestStopped before the next chapter or merge.
+  stopped?: () => boolean;
+}
+
+// A model request of a run, for the progress display.
+export interface IngestStep {
+  stage: "extract" | "review" | "merge";
+  // The place of the chapter in the run, from 0, and the number of chapters in the run.
+  index: number;
+  count: number;
+  chapter: number;
+  title: string;
+  // The group of sections, from 1, and the number of groups in the chapter. A merge has one part.
+  part: number;
+  parts: number;
+}
+
+// The user stopped the run. The finished chapters stay in the cache, and the database does not change.
+export class IngestStopped extends Error {
+  override name = "IngestStopped";
+  constructor() {
+    super("The run stopped.");
+  }
 }
 
 export interface ChapterReport {
@@ -52,6 +79,7 @@ export interface IngestReport {
   book: string;
   preview: boolean;
   parseWarnings: ParseWarning[];
+  imageWarning: string | null;
   chapters: ChapterReport[];
   modules: number;
   concepts: number;
@@ -161,6 +189,28 @@ function keptSections(
   return new Map(rows.map((row) => [`${bookSlug}#${row.chapter}.${row.number}`, row.id]));
 }
 
+// The path of the file of a section, relative to the data folder.
+function sectionPathIn(dataDir: string, dir: string) {
+  return (chapter: number, section: ParsedSection) => relative(dataDir, join(dir, "sections", sectionFileName(chapter, section.number, section.title)));
+}
+
+// The problem if the subject has the book already and its sections do not match the parse. Then a run cannot keep them.
+// The result is null if the sections match, or if the subject does not have the book.
+export function sectionMismatch(db: Db, dataDir: string, subjectName: string, book: ParsedBook): string | null {
+  const bookSlug = slugify(book.title);
+  const bookId = db
+    .prepare("SELECT b.id FROM books b JOIN subjects s ON s.id = b.subject_id WHERE s.slug = ? AND b.slug = ?")
+    .pluck()
+    .get(slugify(subjectName), bookSlug) as number | undefined;
+  if (bookId === undefined) return null;
+  try {
+    keptSections(db, bookId, book, bookSlug, sectionPathIn(dataDir, bookDir(dataDir, subjectName, book)));
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
 export async function ingestBook(options: IngestOptions): Promise<IngestReport> {
   const { llm, db, dataDir, subjectName, book } = options;
   const log = options.log ?? (() => {});
@@ -173,18 +223,16 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
     ? (db.prepare("SELECT id FROM books WHERE subject_id = ? AND slug = ?").get(subject.id, bookSlug) as { id: number } | undefined)
     : undefined;
   const dir = bookDir(dataDir, subjectName, book);
-  const sectionPath = (chapter: number, section: ParsedSection) =>
-    relative(dataDir, join(dir, "sections", sectionFileName(chapter, section.number, section.title)));
+  const sectionPath = sectionPathIn(dataDir, dir);
   const sectionInfo = new Map(book.chapters.flatMap((chapter) => chapter.sections.map((section) => [section.id, section])));
   const inputs = selectedInputs(book, options.chapters, options.sections);
   const keys = new Set(inputs.flatMap((input) => input.sections.map((section) => `${bookSlug}#${section.id}`)));
   const partial = keys.size < sectionInfo.size;
 
-  // A run with some sections of a book that the subject has already keeps the book and its sections.
+  // A run on a book that the subject has already keeps the book and its sections, except a replace of the full book.
   // The old lessons and questions keep their references, and the other sections keep their concepts.
-  const kept = existing && partial && !preview ? keptSections(db, existing.id, book, bookSlug, sectionPath) : null;
-  if (existing && !preview && !options.replace) {
-    if (!kept) throw new Error(`The subject "${subjectName}" has the book "${book.title}" already. To ingest it again, add --replace.`);
+  const kept = existing && !preview && (partial || !options.replace) ? keptSections(db, existing.id, book, bookSlug, sectionPath) : null;
+  if (existing && kept && !options.replace) {
     const used = new Set(
       db
         .prepare("SELECT DISTINCT section_id FROM concept_sources WHERE section_id IN (SELECT id FROM sections WHERE book_id = ?)")
@@ -211,9 +259,14 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
   if (options.fresh) {
     for (const file of readdirSync(workDir)) if (/^chapter-\d+(-[0-9a-f]+)?\.json$/.test(file)) rmSync(join(workDir, file));
   }
+  const stopCheck = () => {
+    if (options.stopped?.()) throw new IngestStopped();
+  };
   const digests: ChapterDigest[] = [];
-  for (const input of inputs) {
+  for (const [index, input] of inputs.entries()) {
     const chapter = book.chapters.find((item) => item.number === input.number)!;
+    stopCheck();
+    const step = { index, count: inputs.length, chapter: chapter.number, title: chapter.title };
     const part = input.sections.length < chapter.sections.length ? `, sections ${input.sections.map((section) => section.id).join(", ")}` : "";
     const cached = cachedDigest(workDir, book, input);
     if (cached) {
@@ -222,7 +275,9 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
       continue;
     }
     log(`Chapter ${chapter.number}: ${chapter.title}${part}`);
-    const digest = await digestChapter(llm, book.title, input, chapter.checklist, log);
+    const digest = await digestChapter(llm, book.title, input, chapter.checklist, log, (stage, group, groups) =>
+      options.progress?.({ ...step, stage, part: group, parts: groups }),
+    );
     writeFileSync(digestFile(workDir, book, input), `${JSON.stringify(digest, null, 2)}\n`);
     digests.push(digest);
   }
@@ -234,9 +289,14 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
     const replaced = (key: string) => (partial ? keys.has(key) : key.startsWith(`${bookSlug}#`));
     for (const concept of map.concepts) concept.sources = concept.sources.filter((source) => !replaced(source.key));
   }
+  // The place of the book in the book order. A book that the run saves as a new row comes after all books.
+  const nextBookId = (db.prepare("SELECT COALESCE(MAX(id), 0) + 1 FROM books").pluck().get() as number);
+  const bookId = existing && (kept || preview) ? existing.id : nextBookId;
   const stats = new Map<number, { added: number; joined: number }>();
-  for (const digest of digests) {
+  for (const [index, digest] of digests.entries()) {
     const chapter = book.chapters.find((item) => item.number === digest.chapter)!;
+    stopCheck();
+    options.progress?.({ stage: "merge", index, count: digests.length, chapter: chapter.number, title: chapter.title, part: 1, parts: 1 });
     log(`Merge chapter ${chapter.number}: ${digest.concepts.length} concepts`);
     stats.set(
       digest.chapter,
@@ -247,6 +307,7 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
           display: sourceDisplay(book.title, source.sectionId, section.title, section.page),
           quote: source.quote,
           quoteFound: source.quoteFound,
+          place: sectionPlace(bookId, chapter.number, section.number),
         };
       }),
     );
@@ -254,6 +315,8 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
 
   // A concept of a replaced book that the new run did not find again has no source now.
   map.concepts = map.concepts.filter((concept) => concept.sources.length > 0);
+  // The modules and the concepts follow the book order, also when the chapters come in a different order of runs.
+  sortMap(map);
 
   // Save the book, its sections, and the map in one transaction. A preview saves nothing.
   if (!preview) {
@@ -309,12 +372,15 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
   });
   const conceptMapFile = preview ? join(dir, "concept-map.preview.md") : join(subjectDir(dataDir, subjectName), "concept-map.md");
   writeFileSync(conceptMapFile, mapToMarkdown(preview ? `${subjectName} (preview of ${book.title})` : subjectName, map));
+  // The app shows the preview concept map from data.
+  if (preview) writeFileSync(join(dir, "concept-map.preview.json"), `${JSON.stringify(mapPreview(map, keys), null, 2)}\n`);
   const reportFile = join(dir, preview ? "ingest-report.preview.json" : "ingest-report.json");
   const report: IngestReport = {
     subject: subjectName,
     book: book.title,
     preview,
     parseWarnings: book.warnings,
+    imageWarning: options.imageWarning ?? null,
     chapters: chapterReports,
     modules: map.modules.filter((module) => map.concepts.some((concept) => concept.module === module.name)).length,
     concepts: map.concepts.length,

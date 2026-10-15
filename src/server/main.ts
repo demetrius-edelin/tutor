@@ -10,17 +10,19 @@ const db = openDb("data/tutor.db");
 loadEnvFile();
 let llm: LlmClient | null = null;
 let llmError: string | undefined;
+let modelName: string | undefined;
 try {
   const config = modelConfig();
   llm = createClient(config);
   setModelLog((line) => console.log(line));
   console.log(`Model: ${describeModel(config)}`);
+  modelName = `${describeModel(config)}${config.reasoning ? `, reasoning ${config.reasoning}` : ""}`;
 } catch (error) {
   llmError = error instanceof Error ? error.message : String(error);
   console.log(`No model: ${llmError}`);
 }
 
-const app = buildServer({ db, dataDir: "data", appDir: "dist/app", llm, ...(llmError ? { llmError } : {}) });
+const app = buildServer({ db, dataDir: "data", appDir: "dist/app", llm, ...(llmError ? { llmError } : {}), ...(modelName ? { modelName } : {}) });
 
 // The tutor is for one person on one computer, so the server listens only on localhost.
 await app.listen({ host: "127.0.0.1", port });

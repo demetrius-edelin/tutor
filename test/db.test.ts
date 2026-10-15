@@ -187,4 +187,34 @@ describe("migrations", () => {
 
     expect(() => openDb(join(dataDir, "tutor.db"))).toThrow(/both exist/);
   });
+
+  it("numbers the modules of a version 9 database in the book order", async () => {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const Database = (await import("better-sqlite3")).default;
+    const { MIGRATIONS } = await import("../src/db/schema.js");
+    const dataDir = mkdtempSync(join(tmpdir(), "tutor-db-"));
+    const old = new Database(join(dataDir, "tutor.db"));
+    for (const migration of MIGRATIONS.slice(0, 9)) old.exec(migration);
+    old.pragma("user_version = 9");
+    old.exec(`
+      INSERT INTO subjects (id, slug, name) VALUES (1, 'sql', 'SQL');
+      INSERT INTO books (id, subject_id, slug, title, file, status) VALUES (1, 1, 'b', 'B', 'b.epub', 'ready');
+      INSERT INTO sections (id, book_id, chapter, number, chapter_title, title, path, words) VALUES
+        (1, 1, 1, 1, 'One', 'A', 'a.md', 10), (2, 1, 2, 1, 'Two', 'B', 'b.md', 10);
+      -- A run on chapter 2 made "Joins". A later run on chapter 1 made "Basics". "Old" has a concept with no source.
+      INSERT INTO modules (id, subject_id, position, name) VALUES (1, 1, 1, 'Joins'), (2, 1, 2, 'Old'), (3, 1, 3, 'Basics');
+      INSERT INTO concepts (id, subject_id, module_id, slug, name, objective, kind, level) VALUES
+        (1, 1, 1, 'join', 'Join', 'o', 'knowledge', 'basic'),
+        (2, 1, 2, 'old', 'Old', 'o', 'knowledge', 'basic'),
+        (3, 1, 3, 'select', 'Select', 'o', 'knowledge', 'basic');
+      INSERT INTO concept_sources (concept_id, section_id, quote) VALUES (1, 2, 'q'), (3, 1, 'q');
+    `);
+    old.close();
+
+    const db = openDb(join(dataDir, "tutor.db"));
+    expect(db.prepare("SELECT name FROM modules ORDER BY position").pluck().all()).toEqual(["Basics", "Joins", "Old"]);
+    expect(db.prepare("SELECT position FROM modules ORDER BY position").pluck().all()).toEqual([1, 2, 3]);
+  });
 });

@@ -5,8 +5,10 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { openDb, type Db } from "../src/db/index.js";
 import type { ParsedBook } from "../src/ingest/core/types.js";
 import { ingestBook } from "../src/ingest/ingest.js";
-import { emptyMap, type ConceptMap, type MapSource } from "../src/ingest/map.js";
+import { emptyMap, mapPreview, type ConceptMap, type MapSource } from "../src/ingest/map.js";
+import { conceptMap } from "../src/server/queries.js";
 import { parseEpub } from "../src/ingest/parse.js";
+import { loadBook, runIngest, type RunProgress } from "../src/ingest/run.js";
 import { digestChapter } from "../src/ingest/stages/digest.js";
 import { extractGroup, groupSections } from "../src/ingest/stages/extract.js";
 import { mergeChapter } from "../src/ingest/stages/merge.js";
@@ -98,6 +100,7 @@ describe("mergeChapter", () => {
     display: source.sectionId,
     quote: source.quote,
     quoteFound: source.quoteFound,
+    place: 0,
   });
 
   it("joins the same idea, adds new concepts to modules, and sets prerequisites", async () => {
@@ -261,5 +264,116 @@ describe("ingestBook", () => {
     const after = db.prepare("SELECT id, slug FROM concepts ORDER BY id").all();
     expect(after).toEqual(before);
     expect(db.prepare("SELECT COUNT(*) FROM books").pluck().get()).toBe(1);
+  });
+});
+
+describe("runIngest", () => {
+  it("tells the progress before each model request, with the estimate of the requests as the total", async () => {
+    const data = await buildEpub(mainFixture());
+    const dataDir = mkdtempSync(join(tmpdir(), "tutor-run-"));
+    const bookFile = join(dataDir, "fixture.epub");
+    writeFileSync(bookFile, data);
+    const loaded = await loadBook(dataDir, "Progress", data, bookFile);
+    const steps: RunProgress[] = [];
+    const llm = new FakeLlm();
+    const run = () =>
+      runIngest({ llm, db: openDb(":memory:"), dataDir, subjectName: "Progress", bookFile, loaded, chapters: [1, 2], preview: true, progress: (step) => steps.push(step) });
+
+    await run();
+    expect(steps.map((step) => step.done)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(steps.every((step) => step.total === 6)).toBe(true);
+    expect(steps.map((step) => step.text)).toEqual([
+      'Finding the concepts in chapter 1 of 2, "Getting Started".',
+      'Checking the concepts of chapter 1 of 2, "Getting Started" against its key terms.',
+      'Finding the concepts in chapter 2 of 2, "Branching".',
+      'Checking the concepts of chapter 2 of 2, "Branching" against its key terms.',
+      'Adding the concepts of chapter 1 of 2, "Getting Started" to the concept map.',
+      'Adding the concepts of chapter 2 of 2, "Branching" to the concept map.',
+    ]);
+
+    // The chapters in the cache need only the merge requests.
+    steps.length = 0;
+    await run();
+    expect(steps.map((step) => [step.done, step.total])).toEqual([
+      [0, 2],
+      [1, 2],
+    ]);
+  });
+});
+
+describe("mapPreview", () => {
+  it("keeps only the concepts with a source in the run, and marks the concepts on the map", () => {
+    const source = (key: string): MapSource => ({ key, display: key, quote: "q", quoteFound: true, place: 0 });
+    const concept = (slug: string, module: string, keys: string[], rowId: number | null) => ({
+      slug,
+      name: slug,
+      objective: `Explain ${slug}.`,
+      kind: "knowledge" as const,
+      level: "basic" as const,
+      module,
+      sources: keys.map(source),
+      prerequisites: [],
+      rowId,
+    });
+    const map: ConceptMap = {
+      modules: [
+        { name: "Later", position: 2, rowId: 2 },
+        { name: "First", position: 1, rowId: 1 },
+        { name: "Old", position: 3, rowId: 3 },
+      ],
+      concepts: [
+        concept("joined", "First", ["book#1.1", "book#2.1"], 10),
+        concept("new", "Later", ["book#2.2"], null),
+        concept("saved", "Old", ["book#1.2"], 11),
+      ],
+    };
+    const preview = mapPreview(map, new Set(["book#2.1", "book#2.2"]));
+    expect(preview.map((module) => [module.position, module.name, module.concepts.map((item) => [item.name, item.onMap])])).toEqual([
+      [1, "First", [["joined", true]]],
+      [2, "Later", [["new", false]]],
+    ]);
+  });
+});
+
+describe("Book order of the concept map", () => {
+  // A fake merge that puts the concepts of each chapter into a module with the name of the chapter, or into one shared module.
+  const mergeInto = (shared: boolean) =>
+    new FakeLlm({
+      merge: (ids, prompt) => {
+        const module = shared ? "Shared" : /The new concepts of the chapter "(.+)":/.exec(prompt)![1]!;
+        return {
+          newModules: [module],
+          concepts: ids.map((id) => ({ id, action: "add", joinWith: null, module, level: "basic", prerequisites: [] })),
+        };
+      },
+    });
+
+  const saveInOrder = async (shared: boolean, ...runs: number[][]) => {
+    const data = await buildEpub(mainFixture());
+    const book = await parseEpub(data);
+    const dataDir = mkdtempSync(join(tmpdir(), "tutor-order-"));
+    const bookFile = join(dataDir, "fixture.epub");
+    writeFileSync(bookFile, data);
+    const db = openDb(":memory:");
+    for (const chapters of runs) await ingestBook({ llm: mergeInto(shared), db, dataDir, subjectName: "Order", bookFile, book, chapters });
+    return { db, map: conceptMap(db, "order")!, markdown: readFileSync(join(dataDir, "subjects", "order", "concept-map.md"), "utf8") };
+  };
+
+  it("numbers the modules in the book order, also after a save of a later chapter first", async () => {
+    const { db, map, markdown } = await saveInOrder(false, [2], [1]);
+    expect(map.modules.map((module) => [module.position, module.name])).toEqual([
+      [1, "Getting Started"],
+      [2, "Branching"],
+    ]);
+    expect(db.prepare("SELECT position FROM modules ORDER BY id").pluck().all()).toEqual([2, 1]);
+    expect(markdown.indexOf("Getting Started")).toBeLessThan(markdown.indexOf("Branching"));
+  });
+
+  it("puts the concepts of a module in the order of their sections", async () => {
+    const { map } = await saveInOrder(true, [2], [1]);
+    const refs = map.modules[0]!.concepts.map((concept) => concept.sources[0]!.ref);
+    expect(refs[0]!.startsWith("1.")).toBe(true);
+    const place = (ref: string) => ref.split(".").map(Number) as [number, number];
+    expect(refs.map(place)).toEqual([...refs.map(place)].sort((a, b) => a[0] - b[0] || a[1] - b[1]));
   });
 });

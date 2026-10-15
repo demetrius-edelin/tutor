@@ -105,6 +105,10 @@ export interface ReadImagesOptions {
   chapters?: number[];
   sections?: string[];
   log?: (line: string) => void;
+  // Called after each image that the model tried to read, with the number of tried images.
+  onImage?: (tried: number) => void;
+  // True if the user stopped the run. Then no new image starts.
+  stopped?: () => boolean;
 }
 
 // The model reads the images of the chapters that are not in the cache. The cache file gets each result at once,
@@ -122,10 +126,12 @@ export async function readImages(llm: LlmClient, book: ParsedBook, cacheFile: st
   };
 
   let read = 0;
+  let tried = 0;
   let failuresInARow = 0;
   let firstError: string | null = null;
+  const go = () => failuresInARow < MAX_FAILURES_IN_A_ROW && !options.stopped?.();
   const worker = async () => {
-    for (let id = queue.shift(); id !== undefined && failuresInARow < MAX_FAILURES_IN_A_ROW; id = queue.shift()) {
+    for (let id = go() ? queue.shift() : undefined; id !== undefined; id = go() ? queue.shift() : undefined) {
       try {
         const reading = await llm.object({ system: IMAGE_SYSTEM, images: [book.images.get(id)!], prompt: IMAGE_PROMPT, schema: readingSchema });
         cache[id] = reading;
@@ -137,6 +143,7 @@ export async function readImages(llm: LlmClient, book: ParsedBook, cacheFile: st
         failuresInARow++;
         firstError ??= error instanceof Error ? error.message : String(error);
       }
+      options.onImage?.(++tried);
     }
   };
   await Promise.all(Array.from({ length: PARALLEL_CALLS }, worker));
@@ -144,7 +151,7 @@ export async function readImages(llm: LlmClient, book: ParsedBook, cacheFile: st
   const problems: string[] = [];
   const unread = todo.length - tooLarge.length - read;
   if (unread > 0) {
-    problems.push(`The model did not read ${unread} images. The first error: ${firstError} To try again, run the command again.`);
+    problems.push(`The model did not read ${unread} images. The first error: ${firstError} A later run tries these images again.`);
   }
   if (tooLarge.length > 0) problems.push(`${tooLarge.length} images are too large for the model.`);
   if (problems.length > 0) problems.push("The sections keep the alternative text of these images.");

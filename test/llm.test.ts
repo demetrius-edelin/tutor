@@ -22,15 +22,20 @@ function anthropicConfig(model = "claude-haiku-4-5", reasoning: ModelConfig["rea
 // A fake SDK that records the requests and returns the answers in order.
 function fakeAnthropic(answers: unknown[]) {
   const requests: { kind: string; params: Record<string, unknown> }[] = [];
-  const answer = (kind: string) => async (params: Record<string, unknown>) => {
+  // A stream gives its answer in finalMessage, as the SDK does.
+  const stream = (kind: string) => (params: Record<string, unknown>) => {
     requests.push({ kind, params });
     const next = answers.shift();
-    if (next instanceof Error) throw next;
-    return next;
+    return {
+      finalMessage: async () => {
+        if (next instanceof Error) throw next;
+        return next;
+      },
+    };
   };
   const sdk = {
-    messages: { parse: answer("parse"), create: answer("create") },
-    beta: { messages: { parse: answer("beta.parse"), create: answer("beta.create") } },
+    messages: { stream: stream("stream") },
+    beta: { messages: { stream: stream("beta.stream") } },
   };
   return { sdk: sdk as unknown as ConstructorParameters<typeof AnthropicClient>[1], requests };
 }
@@ -80,8 +85,9 @@ describe("AnthropicClient", () => {
     expect(await client.object({ system: "s", sources: [source], prompt: "p", schema })).toEqual({ facts: ["a"] });
 
     const { kind, params } = requests[0]!;
-    expect(kind).toBe("parse");
+    expect(kind).toBe("stream");
     expect(params.model).toBe("claude-haiku-4-5");
+    expect(params.max_tokens).toBe(64000);
     expect(params.output_config).toMatchObject({ effort: "high", format: { type: "json_schema" } });
     const content = (params.messages as { content: { text: string; cache_control?: unknown }[] }[])[0]!.content;
     expect(content[0]!.text).toContain('<source id="3.2" title="Indexes">');
@@ -99,12 +105,32 @@ describe("AnthropicClient", () => {
     expect((requests[1]!.params.messages as unknown[]).length).toBe(3);
   });
 
+  it("checks the stop reason before the JSON, and gives the output tokens of an answer that is too long", async () => {
+    const { sdk, requests } = fakeAnthropic([
+      { stop_reason: "max_tokens", content: [{ type: "text", text: '{"facts":["a", "b' }], usage: { output_tokens: 64000 } },
+    ]);
+    await expect(new AnthropicClient(anthropicConfig(), sdk).object({ system: "s", prompt: "p", schema })).rejects.toThrow(
+      /too long and stopped before the end \(64000 output tokens\).*LLM_REASONING/,
+    );
+    // The SDK must not parse the answer: its parse function throws on an incomplete answer.
+    expect((requests[0]!.params.output_config as { format: object }).format).not.toHaveProperty("parse");
+  });
+
+  it("asks again after an incomplete JSON answer", async () => {
+    const { sdk, requests } = fakeAnthropic([
+      { stop_reason: "end_turn", content: [{ type: "text", text: '{"facts":["a"' }] },
+      { stop_reason: "end_turn", content: [{ type: "text", text: '{"facts":["a"]}' }] },
+    ]);
+    expect(await new AnthropicClient(anthropicConfig(), sdk).object({ system: "s", prompt: "p", schema })).toEqual({ facts: ["a"] });
+    expect(requests).toHaveLength(2);
+  });
+
   it("uses the server-side fallback for the models that support it", async () => {
     const { sdk, requests } = fakeAnthropic([
-      { stop_reason: "end_turn", content: [{ type: "text", text: "x" }], parsed_output: { facts: [] } },
+      { stop_reason: "end_turn", content: [{ type: "text", text: '{"facts":[]}' }] },
     ]);
     await new AnthropicClient(anthropicConfig("claude-opus-5-5"), sdk).object({ system: "s", prompt: "p", schema });
-    expect(requests[0]!.kind).toBe("beta.parse");
+    expect(requests[0]!.kind).toBe("beta.stream");
     expect(requests[0]!.params).toMatchObject({ betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" });
   });
 

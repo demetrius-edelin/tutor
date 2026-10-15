@@ -22,6 +22,12 @@ describe("router", () => {
     expect(parseHash("#/subjects/sql/map?module=x")).toMatchObject({ module: null });
   });
 
+  it("opens the book page, also with the plan for a new run", () => {
+    expect(parseHash(href.book("sql", "pro-git"))).toEqual({ name: "book", slug: "sql", book: "pro-git", view: null });
+    expect(parseHash(href.book("sql", "pro-git", "plan"))).toEqual({ name: "book", slug: "sql", book: "pro-git", view: "plan" });
+    expect(parseHash("#/subjects/sql/books/pro-git?view=other")).toMatchObject({ view: null });
+  });
+
   it("writes the filters into the address, and reads the same filters back", () => {
     const filters = { show: "learned", starred: true, find: "index " } as const;
     const hash = href.board("sql", filters);

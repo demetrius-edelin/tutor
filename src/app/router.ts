@@ -19,6 +19,8 @@ export type Route =
   | { name: "map"; slug: string; concept: string | null; module: number | null }
   | { name: "queue"; slug: string }
   | ({ name: "board"; slug: string } & BoardFilters)
+  // The book page. The view "plan" shows the chapters for a new run, also after a finished run.
+  | { name: "book"; slug: string; book: string; view: "plan" | null }
   | { name: "lesson"; conceptId: number }
   | { name: "session"; id: number }
   | { name: "not-found" };
@@ -34,6 +36,9 @@ export function parseHash(hash: string): Route {
     return { name: "map", slug: parts[1], concept: params.get("concept"), module: Number.isInteger(module) && module > 0 ? module : null };
   }
   if (parts[0] === "subjects" && parts[1] && parts[2] === "queue" && parts.length === 3) return { name: "queue", slug: parts[1] };
+  if (parts[0] === "subjects" && parts[1] && parts[2] === "books" && parts[3] && parts.length === 4) {
+    return { name: "book", slug: parts[1], book: parts[3], view: new URLSearchParams(query).get("view") === "plan" ? "plan" : null };
+  }
   if (parts[0] === "subjects" && parts[1] && parts[2] === "board" && parts.length === 3) {
     const params = new URLSearchParams(query);
     const show = params.get("show");
@@ -67,6 +72,8 @@ export const href = {
     const query = params.toString();
     return `#/subjects/${encodeURIComponent(slug)}/board${query ? `?${query}` : ""}`;
   },
+  book: (slug: string, book: string, view?: "plan") =>
+    `#/subjects/${encodeURIComponent(slug)}/books/${encodeURIComponent(book)}${view ? `?view=${view}` : ""}`,
   session: (id: number) => `#/sessions/${id}`,
   lesson: (conceptId: number) => `#/lessons/${conceptId}`,
 };

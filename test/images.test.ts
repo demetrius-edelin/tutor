@@ -173,10 +173,27 @@ describe("readImages", () => {
     expect(report.read).toBe(2);
     expect(llm.count("image")).toBeLessThan(9);
     expect(report.warning).toBe(
-      "The model did not read 7 images. The first error: The model does not accept images. To try again, run the command again. " +
+      "The model did not read 7 images. The first error: The model does not accept images. A later run tries these images again. " +
         "The sections keep the alternative text of these images.",
     );
     expect(imagesToRead(book, cacheFile)).toHaveLength(7);
+  });
+
+  it("starts no new image after a stop, and tells the progress after each image", async () => {
+    const book = bookWithImages(9);
+    const tried: number[] = [];
+    let stop = false;
+    const llm = new FakeLlm({
+      image: (_images, call) => {
+        if (call === 2) stop = true;
+        return { kind: "other", language: "", text: "A photo." };
+      },
+    });
+    const report = await readImages(llm, book, cacheFile, { stopped: () => stop, onImage: (count) => tried.push(count) });
+    // Four calls run at the same time. The calls that started before the stop finish.
+    expect(report.read).toBeLessThan(9);
+    expect(tried).toEqual(Array.from({ length: report.read }, (_, i) => i + 1));
+    expect(imagesToRead(book, cacheFile)).toHaveLength(9 - report.read);
   });
 });
 

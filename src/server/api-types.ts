@@ -32,6 +32,113 @@ export interface SubjectDetail extends SubjectSummary {
   moduleList: ModuleSummary[];
   // The first concept of the study queue, or null if the queue is empty.
   nextToLearn: { conceptId: number; name: string; objective: string; status: Status; module: { position: number; name: string } } | null;
+  // The ingest run in progress in the subject, or null.
+  ingest: IngestView | null;
+  // The books with a run in the app that the subject did not save, for example after a preview.
+  unsavedBooks: { slug: string; title: string }[];
+}
+
+// Ingest in the app
+
+export type IngestMode = "preview" | "save";
+
+export interface IngestView {
+  id: number;
+  // The slug of the subject, and the folder name of the book.
+  subject: string;
+  book: string;
+  title: string;
+  mode: IngestMode | "fetch";
+  chapters: number[];
+  status: "running" | "done" | "stopped" | "failed";
+  // The finished steps and all steps. A step is one model request. The total is an estimate.
+  done: number;
+  total: number;
+  // The text of the current step, for example: Finding the concepts in chapter 4 of 12, "Joins".
+  step: string;
+  error: string | null;
+  // True after a click on "Stop", until the run ends.
+  stopping: boolean;
+}
+
+export interface ChapterPlan {
+  number: number;
+  title: string;
+  sections: number;
+  words: number;
+  // The images that the model did not read yet.
+  images: number;
+  // The model requests of a run on this chapter. It is an estimate.
+  requests: number;
+  // True if the cache has the result of the extract and review stages.
+  cached: boolean;
+  // True if the chapter has concepts in the database. A run cannot select it.
+  hasConcepts: boolean;
+}
+
+export interface ChapterReportView {
+  number: number;
+  title: string;
+  sections: number;
+  concepts: number;
+  added: number;
+  joined: number;
+  emptySections: { sectionId: string; title: string; reason: string }[];
+  // The sections with no answer from the model.
+  missingSections: { sectionId: string; title: string }[];
+  minorItems: { term: string; reason: string }[];
+  quoteWarnings: { concept: string; sectionId: string; quote: string }[];
+}
+
+export interface IngestReportView {
+  preview: boolean;
+  // The modules and the concepts of the concept map after the run.
+  modules: number;
+  concepts: number;
+  parseWarnings: string[];
+  imageWarning: string | null;
+  chapters: ChapterReportView[];
+  // The concept map of a preview. It is null after a save.
+  conceptMap: PreviewModule[] | null;
+}
+
+// A module of the preview concept map, with the concepts that have a source in the chapters of the preview.
+export interface PreviewModule {
+  // The number of the module on the concept map.
+  position: number;
+  name: string;
+  concepts: {
+    name: string;
+    objective: string;
+    kind: "knowledge" | "skill";
+    level: "basic" | "intermediate" | "advanced";
+    // A source for people to read, for example "Pro Git, 3.2 Branches in a Nutshell, p. 45".
+    sources: { text: string; quoteFound: boolean }[];
+    // The names of the prerequisites.
+    needs: string[];
+    // True for a concept that is on the concept map already. The preview joins its own concept to it.
+    onMap: boolean;
+  }[];
+}
+
+// The book page: the plan of a run, the last run, and its report.
+export interface BookView {
+  subject: { slug: string; name: string };
+  slug: string;
+  title: string;
+  format: "epub" | "pdf";
+  // True if the subject has the book in the database.
+  saved: boolean;
+  // The model from .env, or the reason that there is no model.
+  model: string | null;
+  modelError: string | null;
+  // A problem that stops each run, for example a book that the parser cannot read. Then the plan has no chapters.
+  problem: string | null;
+  warnings: string[];
+  chapters: ChapterPlan[];
+  // The last run of the book in the app, and its report if it finished.
+  run: IngestView | null;
+  report: IngestReportView | null;
 }
 
 // A module of a subject, with the number of its concepts in each status.

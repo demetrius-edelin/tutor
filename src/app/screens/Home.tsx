@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import type { SubjectSummary } from "../../server/api-types";
-import { deleteJson, useApi } from "../api";
+import { deleteJson, postJson, useApi } from "../api";
 import { Layout, Notice } from "../components/Layout";
 import { knownShare } from "../components/Progress";
 import { Spinner } from "../components/Spinner";
@@ -20,9 +20,8 @@ export function Home() {
       {subjects.state === "error" && <Notice title="The subjects did not load">{<p>{subjects.message}</p>}</Notice>}
       {subjects.state === "ready" && list.length === 0 && (
         <Notice title="No subjects yet">
-          <p>A subject is an area of study with its own books. To make one, add a book from the terminal:</p>
-          <pre className="command">npm run ingest -- SQL /path/to/book.epub --chapters 1</pre>
-          <p>Then open this page again.</p>
+          <p>A subject is an area of study with its own books, for example "SQL". Make a subject, then add books to it.</p>
+          <NewSubject />
         </Notice>
       )}
       {list.length > 0 && (
@@ -63,9 +62,47 @@ export function Home() {
               );
             })}
           </ol>
+          <h2>New subject</h2>
+          <NewSubject />
         </>
       )}
     </Layout>
+  );
+}
+
+// A new subject has no books. Its subject screen opens with the "Add a book" button.
+function NewSubject() {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const create = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const subject = await postJson<{ slug: string }>("/api/subjects", { name });
+      window.location.hash = href.subject(subject.slug);
+    } catch (problem) {
+      setError((problem as Error).message);
+      setBusy(false);
+    }
+  };
+  return (
+    <form className="new-subject" onSubmit={create}>
+      <label htmlFor="new-subject-name">Name of the subject</label>
+      <div className="new-subject-row">
+        <input id="new-subject-name" type="text" value={name} onChange={(event) => setName(event.target.value)} maxLength={100} />
+        <button className="button" type="submit" disabled={busy || !name.trim()}>
+          {busy && <Spinner />}
+          Create
+        </button>
+      </div>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </form>
   );
 }
 
