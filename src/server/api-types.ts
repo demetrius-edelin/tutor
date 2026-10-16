@@ -59,18 +59,17 @@ export interface IngestView {
   error: string | null;
   // True after a click on "Stop", until the run ends.
   stopping: boolean;
+  // True for the download of a YouTube video or playlist.
+  video: boolean;
   // The result of a finished download, or null for an ingest run.
   download: DownloadView | null;
 }
 
-// The result of the download of an online book.
-export interface DownloadView {
-  pages: number;
-  words: number;
-  images: number;
-  // The pages and the images that the download skipped, with the reason.
-  skipped: { url: string; reason: string }[];
-}
+// The result of a download: the pages and the images of an online book, or the transcripts of videos.
+// The skipped items are the pages, images, or videos that the download did not get, with the reason.
+export type DownloadView =
+  | { kind: "web"; pages: number; words: number; images: number; skipped: { url: string; reason: string }[] }
+  | { kind: "video"; videos: number; words: number; requests: number; cost: number | null; skipped: { url: string; reason: string }[] };
 
 // The table of contents of an online book. The server keeps no state between the two requests of a download,
 // so the app sends the table of contents back with the selected chapters.
@@ -86,10 +85,47 @@ export interface OnlineToc {
   chapters: { title: string; pages: { title: string; url: string }[] }[];
 }
 
-export interface OnlineTocView {
-  toc: OnlineToc;
-  // The time of one page, for the estimate of the download time.
-  secondsPerPage: number;
+// The answer for an address: the table of contents of an online book, or the facts of a YouTube video or playlist.
+export type OnlineTocView =
+  | {
+      kind: "web";
+      toc: OnlineToc;
+      // The time of one page, for the estimate of the download time.
+      secondsPerPage: number;
+    }
+  | { kind: "video"; video: VideoToc };
+
+// The facts of a YouTube video or playlist. The app sends them back with the selected videos, as for an online book.
+export interface VideoToc {
+  kind: "video" | "playlist";
+  // The id of the video or of the playlist, and its address.
+  id: string;
+  source: string;
+  // The address of a playlist, if the address of one video also names a playlist.
+  playlist: string | null;
+  title: string;
+  channel: string;
+  // The videos of the playlist, or the one video.
+  videos: VideoEntry[];
+  // The YouTube chapters of one video. A playlist and a video with no chapters have none.
+  chapters: { title: string; start: number }[];
+  // The longest video that the tutor can transcribe, in seconds.
+  maxSeconds: number;
+  // The video model from .env, or the reason that there is no video model.
+  model: string | null;
+  modelError: string | null;
+  // The estimated cost of one second of video in dollars. If it is null, the note tells why.
+  dollarsPerSecond: number | null;
+  costNote: string | null;
+}
+
+export interface VideoEntry {
+  id: string;
+  title: string;
+  // The length in seconds, or null if the playlist does not give it.
+  duration: number | null;
+  // True if the cache has the transcript, so that the video costs nothing.
+  cached: boolean;
 }
 
 // The answer to the start of a download: the new run, or the EPUB file in data/web/ with the same title.

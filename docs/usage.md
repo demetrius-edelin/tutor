@@ -53,11 +53,19 @@ The terminal shows one line for each model call: the time, the finish reason, th
 
 A subject is an area of study, for example "SQL". Each subject has its own books and its own concept map.
 
+A book can come from three places:
+
+- A book file: an EPUB file or a tagged PDF file. See [Add a book file](#add-a-book-file).
+- An online book or online documentation. See [Add an online book](#add-an-online-book).
+- A YouTube video or playlist. See [Add a YouTube video or playlist](#add-a-youtube-video-or-playlist).
+
+After you add a book, all three kinds work in the same way: you select the chapters, make a preview, and save the chapters.
+
 ### Make a subject
 
 On the list of subjects, type a name in the "New subject" field. Then click "Create". The screen of the new subject opens.
 
-### Add a book
+### Add a book file
 
 1. On the subject screen, click "Add a book".
 2. Select an EPUB file or a tagged PDF file. The file can have a size of up to 200 MB.
@@ -67,6 +75,69 @@ The browser sends the file to the tutor. The tutor reads the chapters and keeps 
 If the tutor cannot read the file, the app shows the reason. For example, the tutor cannot read an untagged or a scanned PDF file.
 
 If the subject has the book already, the page of that book opens. Then you can add more chapters to it.
+
+### Add an online book
+
+The tutor can teach from an online book or from online documentation, for example `https://doc.rust-lang.org/book/`. The tutor downloads the pages into an EPUB file in `data/web/`. Then you study the book as a book file.
+
+1. On the subject screen, click "Add an online book or video".
+2. In "Address of the book or video", type the address of the start page.
+3. Click "Find the chapters".
+
+The tutor looks for an `llms.txt` file first. Many documentation sites have this file, and it lists the pages of the site. If the site has no `llms.txt` file, the model finds the table of contents in the links of the start page. This is one small request.
+
+The page then shows the title of the book and its chapters, with the number of pages in each chapter. All the chapters start selected.
+
+4. Clear the checkboxes of the chapters that you do not want.
+5. Click "Download".
+
+The download uses no model. The tutor downloads one page at a time and waits one second between two pages. It obeys the `robots.txt` file of the site. The bar at the bottom of the page shows the estimated time.
+
+The book page shows the progress of the download. You can leave the page, because the download continues on the server. "Stop" ends the download after the current page or image. A stopped download writes no EPUB file.
+
+After the download, the book page shows the chapters, as for a book file. Then select the chapters for a preview or a save. See [Select the chapters](#select-the-chapters). Above the chapters, the page shows the number of pages, words, and images. "Skipped pages and images" lists the pages that the tutor did not download, with the reason.
+
+The start address sets the part of the site to download. The tutor keeps only the pages in the folder of the start address. For a different part of a large documentation site, start from a page in that part.
+
+If the tutor does not find all the chapters, type the address of a page with the full list of pages in "Table of contents". Then click "Find the chapters" again. The tutor then reads the links of that page.
+
+If you select only some chapters, the title of the book also names the chapters. For example, "The Rust Programming Language - chapters 1-5". The title gives the name of the EPUB file.
+
+If `data/web/` has an EPUB file with the same title from an earlier download, the page shows two buttons:
+
+- "Use the downloaded file": the tutor adds the file to the subject with no new download.
+- "Download again": the tutor downloads the pages again and replaces the file.
+
+The tutor cannot read pages behind a login, or pages that show their text only after JavaScript runs. To download an online book in the terminal, see [Download an online book](commands.md#download-an-online-book).
+
+### Add a YouTube video or playlist
+
+The tutor can teach from a YouTube video or playlist. The tutor does not download the video. It sends the YouTube address to a video model, which hears the speech and sees the screen. Thus, the transcript also contains the code, the commands, and the tables on the screen.
+
+First, set the video model in `.env`. The video model must be a Gemini model, so you need an OpenRouter key or a Gemini key from Google AI Studio. An Anthropic key or an OpenAI key alone does not work for videos. See [Which video model to use](../README.md#which-video-model-to-use).
+
+1. On the subject screen, click "Add an online book or video".
+2. In "Address of the book or video", type the address of a YouTube video or playlist.
+3. Click "Find the videos".
+
+At the first use, the tutor downloads the yt-dlp program into `data/bin/`, so you install nothing. yt-dlp reads the facts of the video: the title, the channel, the length, and the YouTube chapters.
+
+For one video, the page shows its YouTube chapters. Each YouTube chapter becomes a chapter of the book. You cannot select the chapters of one video, because each request contains the full video.
+
+For a playlist, the page shows its videos with their lengths. Each video becomes a chapter of the book, and its YouTube chapters become its sections. All the videos start selected. A video longer than 90 minutes shows "Too long" and has no checkbox. "In the cache" marks a video with a transcript from an earlier download. Such a video costs nothing.
+
+4. For a playlist, clear the checkboxes of the videos that you do not want.
+5. Click "Download".
+
+The bar at the bottom of the page shows the total length. For OpenRouter, it also shows the estimated cost. If `.env` has no video model, the bar shows the message about the video model, and the page has no "Download" button.
+
+The book page shows the progress. Each video is one request to the video model, and a long video can take some minutes. "Stop" ends the download after the current video. The finished transcripts stay in the cache, so a new download does not pay for them again. A stopped download writes no EPUB file.
+
+After the download, the book page shows the chapters, as for a book file. Above the chapters, the page shows the number of videos, the words, the requests, and the cost. "Videos with no transcript" lists the videos that the tutor skipped, with the reason. For example, the tutor skips a video after two transcripts that stop early.
+
+Each paragraph of the transcript starts with a link to its time in the video. In "Read the section", a click on the link opens the video at that point.
+
+The terms of YouTube do not allow downloads with other tools. You run your own copy of the tutor, so you take the responsibility for the videos and the transcripts that you use. To get a transcript in the terminal, see [Download a YouTube video or playlist](commands.md#download-a-youtube-video-or-playlist).
 
 ### Select the chapters
 
@@ -134,50 +205,6 @@ On the subject screen, click "Add chapters" below the book. The book page opens 
 The new chapters do not change the other chapters. Your concepts, your progress, and your lessons stay.
 
 The concept map follows the order of the book. A concept takes the place of its first section, and a module takes the place of its first concept. Thus, the order in which you add the chapters does not matter.
-
-### Add an online book
-
-The tutor can also teach from an online book or from online documentation, for example `https://doc.rust-lang.org/book/`. The tutor downloads the pages into an EPUB file in `data/web/`. Then you study the book as a book file.
-
-1. On the subject screen, click "Add an online book".
-2. In "Address of the book", type the address of the start page.
-3. Click "Find the chapters".
-
-The tutor looks for an `llms.txt` file first. Many documentation sites have this file, and it lists the pages of the site. If the site has no `llms.txt` file, the model finds the table of contents in the links of the start page. This is one small request.
-
-The page then shows the title of the book and its chapters, with the number of pages in each chapter. All the chapters start selected.
-
-4. Clear the checkboxes of the chapters that you do not want.
-5. Click "Download".
-
-The download uses no model. The tutor downloads one page at a time and waits one second between two pages. It obeys the `robots.txt` file of the site. The bar at the bottom of the page shows the estimated time.
-
-The book page shows the progress of the download. You can leave the page, because the download continues on the server. "Stop" ends the download after the current page or image. A stopped download writes no EPUB file.
-
-After the download, the book page shows the chapters, as for a book file. Then select the chapters for a preview or a save. See [Select the chapters](#select-the-chapters). Above the chapters, the page shows the number of pages, words, and images. "Skipped pages and images" lists the pages that the tutor did not download, with the reason.
-
-The start address sets the part of the site to download. The tutor keeps only the pages in the folder of the start address. For a different part of a large documentation site, start from a page in that part.
-
-If the tutor does not find all the chapters, type the address of a page with the full list of pages in "Table of contents". Then click "Find the chapters" again. The tutor then reads the links of that page.
-
-If you select only some chapters, the title of the book also names the chapters. For example, "The Rust Programming Language - chapters 1-5". The title gives the name of the EPUB file.
-
-If `data/web/` has an EPUB file with the same title from an earlier download, the page shows two buttons:
-
-- "Use the downloaded file": the tutor adds the file to the subject with no new download.
-- "Download again": the tutor downloads the pages again and replaces the file.
-
-The tutor cannot read pages behind a login, or pages that show their text only after JavaScript runs. To download an online book in the terminal, see [Download an online book](commands.md#download-an-online-book).
-
-### Add a YouTube video or playlist
-
-The app cannot get the transcript of a video yet. First, set the video model in `.env`. Then get the transcript into an EPUB file with the `fetch` command:
-
-```
-npm run fetch -- "https://www.youtube.com/watch?v=ahCwqrYpIuM"
-```
-
-Then click "Add a book" and select the EPUB file in the `data/web/` folder of the tutor. See [Download a YouTube video or playlist](commands.md#download-a-youtube-video-or-playlist).
 
 ### The files of a book
 

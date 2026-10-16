@@ -8,7 +8,7 @@ The tutor helps one user learn from books that the user owns. The user groups th
 
 The tutor is a learning tool. It is not a job-search tool.
 
-The tutor uses one large language model (LLM) from Anthropic, OpenAI, or OpenRouter. The text in this file calls the LLM "the model".
+The tutor uses one large language model (LLM) from Anthropic, OpenAI, OpenRouter, or Google. The text in this file calls the LLM "the model".
 
 ## Decisions
 
@@ -458,7 +458,7 @@ The commands stay. The app and the commands use the same ingest code. Milestone 
 
 ### Create a subject
 
-The home screen has a field to create a subject. The user types a name, and the tutor creates an empty subject. Then the subject screen opens. A subject with no books shows only the "Add a book" and "Add an online book" buttons.
+The home screen has a field to create a subject. The user types a name, and the tutor creates an empty subject. Then the subject screen opens. A subject with no books shows only the "Add a book" and "Add an online book or video" buttons.
 
 ### The book page
 
@@ -562,7 +562,7 @@ The app does not offer a full replace of a saved book. A replace removes the boo
 
 `npm run fetch` downloads an online book into an EPUB file. Milestone 18 adds the same function to the app. The user adds an online book in this order:
 
-1. On the subject screen, the user clicks "Add an online book". The page "Add an online book" opens, and the user types the address.
+1. On the subject screen, the user clicks "Add an online book or video". The page "Add an online book or video" opens, and the user types the address.
 2. The server finds the table of contents. For a site with no `llms.txt` file, this needs one model request. The app waits for the answer, as for a new lesson.
 3. The app shows the title, the chapters with their number of pages, and the estimated time. Each chapter has a checkbox. All chapters start selected, as in the command.
 4. The user clicks "Download". The download is a run in the background, with the progress and the "Stop" button.
@@ -610,7 +610,7 @@ Now only Google Gemini models read YouTube addresses. The user selects one of tw
 - `openrouter`: OpenRouter passes YouTube addresses to Gemini. The user needs no Google account, and one key serves the main model and the video model. The model name has the form `google/<model>`, for example `google/gemini-3.8-flash`.
 - `google`: the Gemini API of Google, with a Gemini key from Google AI Studio. The model name has no prefix, for example `gemini-3.8-flash`.
 
-The video model is a second model, in addition to `LLM_MODEL`. The Claude models and most other models do not accept audio or video, so the main model cannot do this work.
+The video model is a second model, in addition to `LLM_MODEL`. The Claude models and most other models do not accept audio or video, so the main model often cannot do this work. With `LLM_PROVIDER=google`, the main model is a Gemini model too. The tutor still uses `VIDEO_MODEL` for videos, and one `GEMINI_API_KEY` serves the two models.
 
 ```
 VIDEO_PROVIDER=      # openrouter or google
@@ -698,9 +698,12 @@ Then ingest costs the same as for a book of the same size. One hour of speech gi
 
 Milestone 19 adds videos to the "Add an online book" form of milestone 18. The button becomes "Add an online book or video".
 
-- For a YouTube address, the server reads the facts with yt-dlp, not a table of contents.
+- For a YouTube address, the server reads the facts with yt-dlp, not a table of contents. The field for a table of contents does not apply.
+- The facts need no video model. With no video model, the page shows the facts and the message about the video model, and no "Download" button.
 - For a playlist, the app shows the videos with checkboxes, their lengths, and the cost estimate. For one video, it shows the chapters with no checkboxes.
-- The download is a run with the mode `fetch`, as for an online book. Each video is one step. "Stop" ends the run after the current video.
+- The server sends the cost of one second of video. The app multiplies it by the length of the selected videos that are not in the cache.
+- The download is a run with the mode `fetch`, as for an online book. Each video is one step, for example "Transcribing video 2 of 5". "Stop" ends the run after the current video.
+- At the start of the run, yt-dlp reads each selected video again, for its chapters and its length. A playlist does not always give the length. The report shows a video that yt-dlp cannot read, or a video that is too long, with the reason.
 - The finished transcripts stay in the cache. A stopped run writes no EPUB file.
 - Then the server continues as for an online book: the parse, the copy in the folder of the book, and the plan.
 
@@ -848,11 +851,11 @@ Some requests wait for the model, for example a new lesson. A book upload can al
 
 - Home: the list of subjects, with the progress of each subject. A field to create a new subject (phase 3).
 - Subject: the books of the subject and the progress. The "Next to learn" card opens the lesson of the first concept in the queue. In phase 3, the screen also has these parts:
-  - The "Add a book" and "Add an online book" buttons.
+  - The "Add a book" and "Add an online book or video" buttons.
   - The "Add chapters" button of each book with chapters without concepts.
   - One line for a run in progress, with a link to the book page.
 - Book (phase 3): the plan, the progress of a run, and the ingest report of one book. See "The book page".
-- Online book (phase 3): the form for the address, and the chapters of the table of contents with their checkboxes. See "Online books".
+- Online book or video (phase 3): the form for the address, and the chapters of the table of contents or the videos of a playlist, with their checkboxes. See "Online books" and "Videos in the app".
 - Map: the modules and concepts, with the status, the star, and the sources of each concept. Inside a module, a small heading starts the concepts of each chapter. Mark one concept with its buttons, or select many concepts and mark them in one step. Undo a skip here. A module on the subject screen opens the map at that module.
 - Diagnosis: the questions one at a time. Then the results, with the "Learn" and "Skip" choices.
 - Queue: the study queue, with drag and drop and the queue buttons.
@@ -871,7 +874,7 @@ Some requests wait for the model, for example a new lesson. A book upload can al
     ├──► [Tutor loop]: select, diagnose, queue, teach, test, board
     │         │
     │         ├──► [Grader]
-    │         └──► [Model client] ──► Anthropic, OpenAI, or OpenRouter
+    │         └──► [Model client] ──► Anthropic, OpenAI, OpenRouter, or Google
     │
     └──► SQLite: subjects, books, concept map, progress
 ```
@@ -890,7 +893,7 @@ questions        (id, concept_id, purpose, kind, text, choices, answer, key_poin
 attempts         (id, question_id, answer, score, feedback, disputed, created_at)
 lessons          (id, concept_id, round, text, refs, created_at)
 lesson_messages  (id, lesson_id, role, text, created_at)
-ingests          (id, subject_id, book, file, title, mode, chapters, status, done, total, step, result, error, created_at)
+ingests          (id, subject_id, book, file, title, mode, chapters, status, done, total, step, result, error, created_at, source)
 ```
 
 - `books.status`: `ingesting`, `ready`, or `failed`. The tutor saves a book only at the end of a save run, so a saved book is `ready`.
@@ -909,7 +912,8 @@ ingests          (id, subject_id, book, file, title, mode, chapters, status, don
 - `ingests.status`: `running`, `done`, `stopped`, or `failed`.
 - `ingests.done` and `ingests.total`: the finished steps and all steps of the run. A step is one model request, or one page of a download.
 - `ingests.step`: the text of the current step, for example: Finding the concepts in chapter 4 of 12, "Joins".
-- `ingests.result`: for a download, the counts and the skipped pages, as JSON. An ingest keeps its result in the report file.
+- `ingests.result`: for a download, the counts and the skipped pages or videos, as JSON. An ingest keeps its result in the report file.
+- `ingests.source`: the start address of a download, for example a YouTube address. The book page shows a video download with its own texts.
 - `ingests.error`: the message of a failed run.
 
 The concept map is in SQLite, because the merge step changes it for each new book. The section text stays in Markdown files.
@@ -929,14 +933,17 @@ The design has no Telegram bot, no job queue, no vector database, and no cloud s
 
 ## Model
 
-The tutor uses one model for all of its work. Videos are the only exception: they use a second model, `VIDEO_MODEL`. See "Videos (phase 3)". The user selects the model in the `.env` file, from one of three providers:
+The tutor uses one model for all of its work. Videos are the only exception: they use a second model, `VIDEO_MODEL`. See "Videos (phase 3)". The user selects the model in the `.env` file, from one of four providers:
 
 - Anthropic: Claude models, through the Anthropic TypeScript SDK.
 - OpenAI: OpenAI models, through the OpenAI TypeScript SDK.
 - OpenRouter: models from many vendors, through the OpenAI TypeScript SDK. The OpenRouter API is compatible with the OpenAI API, so the client only changes the base URL to `https://openrouter.ai/api/v1`.
+- Google: Gemini models, through the OpenAI TypeScript SDK. The Gemini API has an OpenAI-compatible endpoint, so the client only changes the base URL to `https://generativelanguage.googleapis.com/v1beta/openai/`.
+
+An OpenRouter key or a Gemini key serves the main model and the video model. Thus, the user of one of these two providers needs only one key.
 
 ```
-LLM_PROVIDER=        # anthropic, openai, or openrouter
+LLM_PROVIDER=        # anthropic, openai, openrouter, or google
 LLM_MODEL=           # the model name, exactly as the provider writes it
 LLM_REASONING=       # none, minimal, low, medium, high, xhigh, or max. Empty: the default of the model.
 OPENROUTER_PROVIDERS= # OpenRouter only: the providers that can serve the model, in order. Empty: OpenRouter selects.
@@ -945,7 +952,7 @@ VIDEO_MODEL=         # videos only: a Gemini model, in the form of the video pro
 ANTHROPIC_API_KEY=
 OPENAI_API_KEY=
 OPENROUTER_API_KEY=
-GEMINI_API_KEY=      # videos only, for the video provider google
+GEMINI_API_KEY=      # the Gemini API, for LLM_PROVIDER=google and for VIDEO_PROVIDER=google
 ```
 
 OpenRouter sends each request to one of several providers that serve the model. The providers differ in speed, price, and quality. With `OPENROUTER_PROVIDERS`, the user selects the providers. The tutor sends them as the `order` list with `allow_fallbacks: false`, so no other provider gets the request.
@@ -988,16 +995,16 @@ interface LlmClient {
 Two classes implement the interface:
 
 - `AnthropicClient` for Anthropic.
-- `OpenAiClient` for OpenAI and OpenRouter.
+- `OpenAiClient` for OpenAI, OpenRouter, and Google.
 
 The two classes do the same work in different ways:
 
 - JSON output: each client sends the zod schema as a JSON schema. If a model does not accept a JSON schema, the client asks for JSON in the prompt. The client checks each result with zod. If the check fails, the client tries one more time.
 - References: `AnthropicClient` uses the citations of the Anthropic API. `OpenAiClient` tells the model to cite with markers, for example `[S3: "exact quote"]`. Each client returns the same `Reference` list.
 - Prompt cache: each client puts the sources at the start of the prompt, in the same order for each call. `AnthropicClient` adds a cache marker after the sources. OpenAI caches long prompt prefixes without a marker.
-- Reasoning level: `OpenAiClient` sends `reasoning_effort` to OpenAI. OpenRouter uses a different format, so the client sends `reasoning: { effort }` to OpenRouter.
+- Reasoning level: `OpenAiClient` sends `reasoning_effort` to OpenAI. OpenRouter uses a different format, so the client sends `reasoning: { effort }` to OpenRouter. The Gemini API accepts `none` (only for 2.5 models), `minimal`, `low`, `medium`, and `high`, so the client sends `high` for `xhigh` and `max`.
 - Empty answers: some reasoning models on OpenRouter sometimes return an empty answer with a normal finish. The text is then only in the reasoning field. After an empty answer, `OpenAiClient` asks one more time. After a second empty answer, it shows an error with the finish reason, the token counts, and the provider. The tutor never saves an empty lesson or an empty chat answer.
-- Images: `AnthropicClient` sends each image as a base64 image block. `OpenAiClient` sends each image as a data URL. OpenRouter accepts the same format.
+- Images: `AnthropicClient` sends each image as a base64 image block. `OpenAiClient` sends each image as a data URL. OpenRouter and the Gemini API accept the same format.
 - Log: each client writes one line for each model call, with the time and the result. The server and `npm run llm:check` print the lines. The tests print nothing.
 
 For each provider, the tutor checks that each quote is in the text of its source. If a quote is not in the source, the tutor removes the reference. If a lesson has no valid reference, the tutor shows a warning on the lesson.

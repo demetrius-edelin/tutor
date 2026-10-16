@@ -2255,6 +2255,11 @@ button.button {
   width: 2rem;
 }
 
+/* The YouTube chapters of a video: the start time, then the title. */
+.time-table td:first-child {
+  width: 5rem;
+}
+
 .chapter-table input {
   width: 1.1rem;
   height: 1.1rem;

@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { ModelConfig } from "../src/config.js";
 import { AnthropicClient } from "../src/llm/anthropic.js";
 import { LlmError, setModelLog, type Source } from "../src/llm/index.js";
-import { OPENROUTER_URL, OpenAiClient, openAiOptions, strictJsonSchema } from "../src/llm/openai.js";
+import { GEMINI_OPENAI_URL, OPENROUTER_URL, OpenAiClient, openAiOptions, strictJsonSchema } from "../src/llm/openai.js";
 import { checkReferences, containsQuote } from "../src/llm/references.js";
 
 const source: Source = {
@@ -277,9 +277,25 @@ describe("OpenAiClient", () => {
     expect(lines[1]).not.toContain("empty answer");
   });
 
-  it("uses the OpenRouter URL for OpenRouter", () => {
+  it("uses the OpenRouter URL for OpenRouter, and the OpenAI-compatible URL of the Gemini API for Google", () => {
     expect(openAiOptions({ ...config, provider: "openrouter" })).toMatchObject({ baseURL: OPENROUTER_URL });
+    expect(openAiOptions({ ...config, provider: "google" })).toEqual({ apiKey: "key", baseURL: GEMINI_OPENAI_URL });
     expect(openAiOptions(config)).not.toHaveProperty("baseURL");
+  });
+
+  it("sends a reasoning level that the Gemini API accepts", async () => {
+    const { sdk, requests } = fakeOpenAi([chat('{"facts":["a"]}'), chat('{"facts":["b"]}')]);
+    await new OpenAiClient({ ...config, provider: "google", reasoning: "max" }, sdk).object({ system: "s", prompt: "p", schema });
+    await new OpenAiClient({ ...config, provider: "google", reasoning: "minimal" }, sdk).object({ system: "s", prompt: "p", schema });
+    expect(requests.map((request) => request.reasoning_effort)).toEqual(["high", "minimal"]);
+    expect(requests[0]).toMatchObject({ response_format: { type: "json_schema" } });
+  });
+
+  it("asks for JSON in the prompt if the Gemini API rejects the schema", async () => {
+    const rejected = new OpenAI.BadRequestError(400, undefined, "Invalid value at 'generation_config.response_schema'", new Headers());
+    const { sdk, requests } = fakeOpenAi([rejected, chat('{"facts":["c"]}')]);
+    expect(await new OpenAiClient({ ...config, provider: "google" }, sdk).object({ system: "s", prompt: "p", schema })).toEqual({ facts: ["c"] });
+    expect(requests[1]!.response_format).toBeUndefined();
   });
 });
 

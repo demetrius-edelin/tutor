@@ -8,15 +8,18 @@ import { checkReferences, ReferenceList } from "./references.js";
 import { LlmError, type LlmClient, type ObjectRequest, type TextRequest, type TextResult } from "./types.js";
 
 export const OPENROUTER_URL = "https://openrouter.ai/api/v1";
+// The OpenAI-compatible endpoint of the Gemini API.
+export const GEMINI_OPENAI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
 
 type Sdk = Pick<OpenAI, "chat">;
 type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 
-// The options for the OpenAI SDK. OpenRouter uses the same API at a different URL.
+// The options for the OpenAI SDK. OpenRouter and the Gemini API use the same API at a different URL.
 export function openAiOptions(config: ModelConfig): ConstructorParameters<typeof OpenAI>[0] {
   if (config.provider === "openrouter") {
     return { apiKey: config.apiKey, baseURL: OPENROUTER_URL, defaultHeaders: { "X-Title": "Tutor" } };
   }
+  if (config.provider === "google") return { apiKey: config.apiKey, baseURL: GEMINI_OPENAI_URL };
   return { apiKey: config.apiKey };
 }
 
@@ -40,9 +43,12 @@ export function strictJsonSchema(schema: z.ZodType): Record<string, unknown> {
 }
 
 // The reasoning level. OpenRouter takes it in its own format: a "reasoning" object with "effort".
+// The Gemini API accepts none (only for 2.5 models), minimal, low, medium, and high, so a higher level becomes high.
 export function reasoningParams(config: ModelConfig): Record<string, unknown> {
   if (!config.reasoning) return {};
-  return config.provider === "openrouter" ? { reasoning: { effort: config.reasoning } } : { reasoning_effort: config.reasoning };
+  if (config.provider === "openrouter") return { reasoning: { effort: config.reasoning } };
+  if (config.provider === "google" && (config.reasoning === "xhigh" || config.reasoning === "max")) return { reasoning_effort: "high" };
+  return { reasoning_effort: config.reasoning };
 }
 
 // The providers of OpenRouter that can serve the model, in order. No other provider gets the request.
@@ -67,8 +73,9 @@ function answerDetails(response: OpenAI.Chat.Completions.ChatCompletion): string
 }
 
 // A 400 error about the response format means that the model does not accept a JSON schema.
+// The Gemini API names the schema "response_schema" in its errors.
 function isSchemaUnsupported(error: unknown): boolean {
-  return error instanceof OpenAI.BadRequestError && /response_format|json_schema|structured output/i.test(error.message);
+  return error instanceof OpenAI.BadRequestError && /response_format|response_schema|json_schema|structured output/i.test(error.message);
 }
 
 export class OpenAiClient implements LlmClient {

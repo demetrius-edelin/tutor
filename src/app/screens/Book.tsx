@@ -69,7 +69,11 @@ function BookBody({ data, view, url, onRun }: { data: BookView; view: "plan" | n
     <>
       <h1>{data.title}</h1>
       {data.run?.mode === "fetch" && data.chapters.length === 0 ? (
-        <p className="lead">An online book. The tutor downloads its pages into an EPUB file in data/web/.</p>
+        <p className="lead">
+          {data.run.video
+            ? "A YouTube video or playlist. The video model writes the transcripts into an EPUB file in data/web/."
+            : "An online book. The tutor downloads its pages into an EPUB file in data/web/."}
+        </p>
       ) : (
         <p className="lead">
           {data.format.toUpperCase()} file
@@ -106,28 +110,37 @@ function LastRun({ run, hasFile = true }: { run: IngestView | null; hasFile?: bo
   return null;
 }
 
-// The result of the download of an online book, with the pages and the images that the download skipped.
+// The result of the download of an online book or of videos, with the items that the download skipped.
 // A download that did not finish writes no EPUB file. A book with an earlier file keeps that file.
+// The finished transcripts of videos stay in the cache.
 function LastDownload({ run, hasFile }: { run: IngestView; hasFile: boolean }) {
   if (run.status === "stopped") {
     return (
       <p className="run-note">
         The download stopped. A stopped download writes no EPUB file{hasFile ? ", so the book keeps its earlier file" : ""}.
+        {run.video && " The finished transcripts stay in the cache, so a new download does not pay for them again."}
       </p>
     );
   }
   if (run.status === "failed") return <p className="run-note error">The download failed: {run.error}</p>;
   const result = run.download;
   if (!result) return null;
+  const video = result.kind === "video";
+  const cost = video && result.cost !== null ? `, for $${result.cost.toFixed(3)}` : "";
   return (
     <>
       <p className="run-note">
-        The download got {plural(result.pages, "page")} with {plural(result.words, "word")}, and {plural(result.images, "image")}.
-        {result.skipped.length > 0 && ` It skipped ${plural(result.skipped.length, "page or image", "pages or images")}.`}
+        {video
+          ? `The tutor got the transcripts of ${plural(result.videos, "video")} with ${plural(result.words, "word")}. The download made ${plural(result.requests, "request")} to the video model${cost}.`
+          : `The download got ${plural(result.pages, "page")} with ${plural(result.words, "word")}, and ${plural(result.images, "image")}.`}
+        {result.skipped.length > 0 &&
+          (video
+            ? ` ${plural(result.skipped.length, "video")} got no transcript.`
+            : ` It skipped ${plural(result.skipped.length, "page or image", "pages or images")}.`)}
       </p>
       {result.skipped.length > 0 && (
         <Details
-          title={`Skipped pages and images (${n(result.skipped.length)})`}
+          title={`${video ? "Videos with no transcript" : "Skipped pages and images"} (${n(result.skipped.length)})`}
           items={result.skipped.map((item) => `${item.url}: ${item.reason}`)}
         />
       )}
@@ -155,7 +168,7 @@ function PlanView({ data, url, onRun }: { data: BookView; url: string; onRun: (r
         <LastRun run={data.run} hasFile={false} />
         <p>
           <a className="button" href={href.online(data.subject.slug)}>
-            Add the online book again
+            {data.run.video ? "Add the video again" : "Add the online book again"}
           </a>
         </p>
       </>
@@ -309,10 +322,17 @@ const RUN_TEXT = {
     steps: (run: IngestView) => `${n(run.done)} of ${n(run.total)} pages and images are done.`,
     stop: "A stopped download writes no EPUB file.",
   },
+  // A step is one video. One request contains the full video, so a step can take some minutes.
+  video: {
+    first: "Reading the facts of the videos.",
+    stopping: "The download stops after the current video.",
+    steps: (run: IngestView) => `${n(run.done)} of ${plural(run.total, "video")} are done.`,
+    stop: "The finished transcripts stay in the cache. A stopped download writes no EPUB file.",
+  },
 };
 
 function RunPanel({ run, onChange }: { run: IngestView; onChange: (run: IngestView) => void }) {
-  const text = RUN_TEXT[run.mode === "fetch" ? "fetch" : "ingest"];
+  const text = RUN_TEXT[run.mode !== "fetch" ? "ingest" : run.video ? "video" : "fetch"];
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const stop = async () => {
@@ -328,7 +348,7 @@ function RunPanel({ run, onChange }: { run: IngestView; onChange: (run: IngestVi
   return (
     <section className="run-panel" aria-labelledby="run-heading">
       <h2 id="run-heading" className="eyebrow">
-        {RUN_NAME[run.mode]} of {plural(run.chapters.length, "chapter")}
+        {run.video ? `Transcripts of ${plural(run.chapters.length, "video")}` : `${RUN_NAME[run.mode]} of ${plural(run.chapters.length, "chapter")}`}
       </h2>
       <p className="run-step" role="status">
         <Spinner />

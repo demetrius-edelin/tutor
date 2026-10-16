@@ -232,7 +232,13 @@ UPDATE modules SET position = (
 );
 `;
 
-export const MIGRATIONS = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10];
+// Version 11: a download keeps its start address, for example a YouTube address. The book page shows a video download
+// with its own texts.
+const V11 = `
+ALTER TABLE ingests ADD COLUMN source TEXT;
+`;
+
+export const MIGRATIONS = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11];
 // The version that renames the "themes" data folder to "subjects".
 export const SUBJECTS_VERSION = 8;
 export const SCHEMA_VERSION = MIGRATIONS.length;

@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import type { Db } from "../db/index.js";
 import { IngestStopped } from "../ingest/ingest.js";
+import { isYoutubeUrl } from "../ingest/video/youtube.js";
 import { loadBook, runIngest } from "../ingest/run.js";
 import type { LlmClient } from "../llm/index.js";
 import { TutorError } from "../tutor/diagnosis.js";
@@ -36,18 +37,22 @@ interface IngestRow {
   step: string;
   // The result of a download, as JSON.
   result: string | null;
+  // The start address of a download.
+  source: string | null;
   error: string | null;
 }
 
-const SELECT_INGEST = `SELECT i.id, s.slug AS subject, i.book, i.title, i.mode, i.chapters, i.status, i.done, i.total, i.step, i.result, i.error
+const SELECT_INGEST = `SELECT i.id, s.slug AS subject, i.book, i.title, i.mode, i.chapters, i.status, i.done, i.total, i.step, i.result, i.source, i.error
   FROM ingests i JOIN subjects s ON s.id = i.subject_id`;
 
-export function toIngestView({ result, ...row }: IngestRow, stopping: boolean): IngestView {
+export function toIngestView({ result, source, ...row }: IngestRow, stopping: boolean): IngestView {
   return {
     ...row,
     chapters: JSON.parse(row.chapters) as number[],
     stopping: stopping && row.status === "running",
-    download: row.mode === "fetch" && result ? (JSON.parse(result) as DownloadView) : null,
+    video: source !== null && isYoutubeUrl(source),
+    // A download from before the video downloads has no kind. It is an online book.
+    download: row.mode === "fetch" && result ? ({ kind: "web", ...JSON.parse(result) } as DownloadView) : null,
   };
 }
 
@@ -77,7 +82,7 @@ export function runningIngest(db: Db, subjectSlug?: string): IngestRow | undefin
 // A new server has no runs in progress. A run that is still "running" lost its job, for example after a restart.
 export function failInterruptedIngests(db: Db): void {
   db.prepare("UPDATE ingests SET status = 'failed', error = CASE mode WHEN 'fetch' THEN ? ELSE ? END WHERE status = 'running'").run(
-    "The tutor stopped during the download. Add the online book again.",
+    "The tutor stopped during the download. Start the download again.",
     "The tutor stopped during the run. A new run takes the finished chapters from the cache.",
   );
 }

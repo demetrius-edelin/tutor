@@ -33,7 +33,7 @@ function SubjectView({ subject }: { subject: SubjectDetail }) {
       <>
         <h1>{subject.name}</h1>
         <p className="lead">
-          This subject has no books yet. Add a book file or an online book, and the tutor finds its concepts. You select the chapters, and you
+          This subject has no books yet. Add a book file, an online book, or a video, and the tutor finds its concepts. You select the chapters, and you
           can add more chapters later.
         </p>
         <Books subject={subject} />
@@ -157,7 +157,7 @@ function Books({ subject }: { subject: SubjectDetail }) {
 }
 
 // The browser sends the file to the server, and the server parses it. The parse uses no model, so it costs nothing.
-// "Add an online book" opens the form for the address. The two are the main buttons of a subject with no books.
+// "Add an online book or video" opens the form for the address. The two are the main buttons of a subject with no books.
 // After the first book, "Add chapters" is more frequent, so they are text links.
 function AddBook({ slug, main }: { slug: string; main: boolean }) {
   const input = useRef<HTMLInputElement>(null);
@@ -193,12 +193,12 @@ function AddBook({ slug, main }: { slug: string; main: boolean }) {
           {busy ? `Reading ${busy}` : "Add a book"}
         </button>
         <a className={main ? "button secondary" : "text-button strong"} href={href.online(slug)}>
-          Add an online book
+          Add an online book or video
         </a>
       </span>
       <p className="quiet small">
         A book file: an EPUB file or a tagged PDF file. The tutor reads the chapters with no model, so this step costs nothing. An online book: the
-        tutor downloads its pages into an EPUB file.
+        tutor downloads its pages into an EPUB file. A YouTube video or playlist: the video model writes the transcript.
       </p>
       {error && (
         <p className="error" role="alert">

@@ -1,13 +1,15 @@
 import { existsSync, readFileSync } from "node:fs";
 import { parseEnv } from "node:util";
 
-export const PROVIDERS = ["anthropic", "openai", "openrouter"] as const;
+// "google" is the Gemini API. Its key also serves the video model, so one Gemini key serves the whole tutor.
+export const PROVIDERS = ["anthropic", "openai", "openrouter", "google"] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
 export const KEY_NAMES: Record<Provider, string> = {
   anthropic: "ANTHROPIC_API_KEY",
   openai: "OPENAI_API_KEY",
   openrouter: "OPENROUTER_API_KEY",
+  google: "GEMINI_API_KEY",
 };
 
 export const REASONING_LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
@@ -46,10 +48,10 @@ export function loadEnvFile(path = ".env", env: NodeJS.ProcessEnv = process.env)
 export function modelConfig(env: NodeJS.ProcessEnv = process.env): ModelConfig {
   const provider = (env.LLM_PROVIDER ?? "").trim().toLowerCase();
   if (!provider) {
-    throw new ConfigError("No provider is selected. In .env, set LLM_PROVIDER to anthropic, openai, or openrouter.");
+    throw new ConfigError("No provider is selected. In .env, set LLM_PROVIDER to anthropic, openai, openrouter, or google.");
   }
   if (!(PROVIDERS as readonly string[]).includes(provider)) {
-    throw new ConfigError(`LLM_PROVIDER "${provider}" is not valid. Use anthropic, openai, or openrouter.`);
+    throw new ConfigError(`LLM_PROVIDER "${provider}" is not valid. Use anthropic, openai, openrouter, or google.`);
   }
   const model = (env.LLM_MODEL ?? "").trim();
   if (!model) {

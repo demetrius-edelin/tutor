@@ -3,6 +3,9 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Db } from "../db/index.js";
+import { join } from "node:path";
+import { createVideoClient, openRouterPrices } from "../ingest/video/client.js";
+import { ensureYtDlp, ytDlpRunner, type YtDlpRunner } from "../ingest/video/ytdlp.js";
 import { httpFetcher, type Fetcher } from "../ingest/web/http.js";
 import type { LlmClient } from "../llm/index.js";
 import {
@@ -34,6 +37,7 @@ import type { AfterTestAction, Choice, Mark } from "./api-types.js";
 import { addBook, addWebBook, bookView, createSubject, MAX_UPLOAD_BYTES } from "./books.js";
 import { failInterruptedIngests, findBook, ingestRow, runningIngest, runText, startIngest, toIngestView } from "./ingests.js";
 import { findOnlineToc, startFetch } from "./online.js";
+import type { VideoAccess } from "./videos.js";
 import { conceptMap, deleteSubject, listSubjects, section, subjectDetail } from "./queries.js";
 
 export interface ServerOptions {
@@ -49,6 +53,8 @@ export interface ServerOptions {
   // The function that gets a web page, and the pause between two requests to a site. The tests use a fake site with no pause.
   fetcher?: Fetcher;
   fetchPauseMs?: number;
+  // The video model from .env, and the parts of a video download. The tests use a fake yt-dlp and a fake video model.
+  video?: Partial<VideoAccess>;
 }
 
 export interface TutorServer extends FastifyInstance {
@@ -56,9 +62,25 @@ export interface TutorServer extends FastifyInstance {
   idle(): Promise<void>;
 }
 
-export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelName, fetcher, fetchPauseMs }: ServerOptions): TutorServer {
+export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelName, fetcher, fetchPauseMs, video }: ServerOptions): TutorServer {
   const app = Fastify({ logger: false }) as unknown as TutorServer;
-  const web = { fetcher: fetcher ?? httpFetcher, pauseMs: fetchPauseMs ?? 1000 };
+  // Two requests at the same time use one install or update of yt-dlp.
+  let ytDlpReady: Promise<YtDlpRunner> | null = null;
+  const online = {
+    dataDir,
+    web: { fetcher: fetcher ?? httpFetcher, pauseMs: fetchPauseMs ?? 1000 },
+    video: {
+      config: null,
+      error: null,
+      ytDlp: () =>
+        (ytDlpReady ??= ensureYtDlp({ dir: join(dataDir, "bin"), ...(video?.log ? { log: video.log } : {}) })
+          .then((program) => ytDlpRunner(program))
+          .finally(() => (ytDlpReady = null))),
+      client: createVideoClient,
+      prices: (model: string) => openRouterPrices(model),
+      ...video,
+    },
+  };
   const jobs = new Set<Promise<void>>();
   // The ingest runs that the user stopped. A run ends before its next step.
   const stops = new Set<number>();
@@ -147,14 +169,19 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelNa
   // Online books
 
   // Find the table of contents of an online book. For a site with no llms.txt file, this needs one model request.
-  app.post<{ Body: { url?: unknown; toc?: unknown } }>("/api/fetch/toc", async (request) => findOnlineToc(web, requireModel, request.body ?? {}));
+  // For a YouTube address, yt-dlp reads the facts of the video or of the playlist.
+  app.post<{ Body: { url?: unknown; toc?: unknown } }>("/api/fetch/toc", async (request) => findOnlineToc(online, requireModel, request.body ?? {}));
 
-  // Start the download of some chapters of an online book, or give the EPUB file of an earlier download with the same title.
-  app.post<{ Params: { slug: string }; Body: { toc?: unknown; chapters?: unknown; again?: unknown } }>("/api/subjects/:slug/fetch", async (request) => {
-    const { view, job } = startFetch({ db, dataDir, web, subjectSlug: request.params.slug, body: request.body ?? {}, stops });
-    if (job) runInBackground(job);
-    return view;
-  });
+  // Start the download of some chapters of an online book or of the transcripts of videos.
+  // If data/web/ has an EPUB file with the same title, the answer gives the file and no run starts.
+  app.post<{ Params: { slug: string }; Body: { toc?: unknown; video?: unknown; chapters?: unknown; again?: unknown } }>(
+    "/api/subjects/:slug/fetch",
+    async (request) => {
+      const { view, job } = startFetch({ db, access: online, subjectSlug: request.params.slug, body: request.body ?? {}, stops });
+      if (job) runInBackground(job);
+      return view;
+    },
+  );
 
   // Add an EPUB file from data/web/ as a book, for example the file of an earlier download.
   app.post<{ Params: { slug: string }; Body: { file?: unknown } }>("/api/subjects/:slug/books/web", async (request) =>
@@ -166,7 +193,7 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelNa
     return row ? toIngestView(row, stops.has(row.id)) : reply.code(404).send({ error: `The run ${request.params.id} does not exist.` });
   });
 
-  // Stop a run. It ends after the current image, chapter, or merge. A download ends after the current page or image.
+  // Stop a run. It ends after the current image, chapter, or merge. A download ends after the current page, image, or video.
   app.post<{ Params: { id: string } }>("/api/ingests/:id/stop", async (request, reply) => {
     const row = ingestRow(db, Number(request.params.id));
     if (!row) return reply.code(404).send({ error: `The run ${request.params.id} does not exist.` });

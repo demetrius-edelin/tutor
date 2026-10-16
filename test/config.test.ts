@@ -28,6 +28,12 @@ describe("modelConfig", () => {
     expect(() => modelConfig({ LLM_PROVIDER: "openai" })).toThrow(/LLM_MODEL/);
   });
 
+  it("reads the Gemini key for the provider google", () => {
+    const config = modelConfig({ LLM_PROVIDER: "google", LLM_MODEL: "gemini-3.8-flash", GEMINI_API_KEY: "key-3" });
+    expect(config).toMatchObject({ provider: "google", model: "gemini-3.8-flash", apiKey: "key-3" });
+    expect(() => modelConfig({ LLM_PROVIDER: "google", LLM_MODEL: "m", OPENROUTER_API_KEY: "k" })).toThrow(/GEMINI_API_KEY/);
+  });
+
   it("rejects an unknown provider", () => {
     expect(() => modelConfig({ LLM_PROVIDER: "other", LLM_MODEL: "x" })).toThrow(/not valid/);
   });

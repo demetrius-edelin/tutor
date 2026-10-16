@@ -58,7 +58,20 @@ afterEach(async () => {
 function start(fetcher: Fetcher, llm: LlmClient | null = new FakeLlm()) {
   dataDir = mkdtempSync(join(tmpdir(), "tutor-online-"));
   db = openDb(":memory:");
-  app = buildServer({ db, dataDir, llm, fetcher, fetchPauseMs: 0, ...(llm ? { modelName: "fake model" } : { llmError: "No model is selected." }) });
+  app = buildServer({
+    db,
+    dataDir,
+    llm,
+    fetcher,
+    fetchPauseMs: 0,
+    // The tests of online books never run yt-dlp.
+    video: {
+      ytDlp: async () => {
+        throw new Error("The tests do not run yt-dlp.");
+      },
+    },
+    ...(llm ? { modelName: "fake model" } : { llmError: "No model is selected." }),
+  });
 }
 
 const get = async <T>(url: string) => {
@@ -71,7 +84,8 @@ const post = async <T>(url: string, payload: object = {}) => {
   return { status: response.statusCode, body: response.json() as T & { error?: string } };
 };
 
-const findChapters = (url: string, toc?: string) => post<OnlineTocView>("/api/fetch/toc", { url, ...(toc ? { toc } : {}) });
+type WebTocView = Extract<OnlineTocView, { kind: "web" }>;
+const findChapters = (url: string, toc?: string) => post<WebTocView>("/api/fetch/toc", { url, ...(toc ? { toc } : {}) });
 
 async function docsToc() {
   const { status, body } = await findChapters("https://site.test/docs/");
@@ -85,6 +99,7 @@ describe("Find the table of contents", () => {
     const { status, body } = await findChapters("site.test/docs/");
     expect(status).toBe(200);
     expect(body.secondsPerPage).toBe(0);
+    expect(body.kind).toBe("web");
     expect(body.toc).toMatchObject({ title: "Help Center", source: "llms.txt", scope: "https://site.test/docs/" });
     expect(body.toc.chapters.map((chapter) => [chapter.title, chapter.pages.length])).toEqual([
       ["Start", 2],
@@ -119,12 +134,14 @@ describe("Find the table of contents", () => {
     );
   });
 
-  it("refuses an address that is not a web page, and a YouTube address", async () => {
+  it("refuses an address that is not a web page, and a table of contents for a YouTube address", async () => {
     start(docsSite());
     expect((await findChapters("")).status).toBe(400);
     expect((await findChapters("ftp://site.test/docs/")).body.error).toMatch(/is not a web address/);
     expect((await findChapters("https://site.test/docs/", "not an address")).body.error).toMatch(/is not a web address/);
-    expect((await findChapters("https://www.youtube.com/watch?v=ahCwqrYpIuM")).body.error).toMatch(/cannot add a YouTube video yet/);
+    expect((await findChapters("https://www.youtube.com/watch?v=ahCwqrYpIuM", "https://site.test/toc")).body.error).toMatch(
+      /does not apply to a YouTube address/,
+    );
   });
 
   it("gives the reason if the site does not answer", async () => {
@@ -152,7 +169,9 @@ describe("Download an online book", () => {
 
     const run = (await get<IngestView>(`/api/ingests/${started.body.run!.id}`)).body;
     expect(run).toMatchObject({ status: "done", step: "", error: null });
+    expect(run).toMatchObject({ video: false });
     expect(run.download).toEqual({
+      kind: "web",
       pages: 3,
       words: expect.any(Number),
       images: 0,
@@ -265,7 +284,7 @@ describe("Download an online book", () => {
     const restarted = buildServer({ db, dataDir });
     expect(db.prepare("SELECT status, error FROM ingests").get()).toEqual({
       status: "failed",
-      error: "The tutor stopped during the download. Add the online book again.",
+      error: "The tutor stopped during the download. Start the download again.",
     });
     await restarted.close();
   });

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeEpub, type EpubChapter, type EpubPage } from "../web/epub.js";
-import { formatList } from "../web/fetch.js";
+import { FetchStopped, formatList, type FetchProgress } from "../web/fetch.js";
 import { cleanMarkdownPage } from "../web/page.js";
 import type { VideoClient } from "./client.js";
 import { checkTranscript, maxTokensFor, paragraphMarkdown, parseTranscript, transcriptPrompt, type TranscriptParagraph } from "./transcript.js";
@@ -27,6 +27,11 @@ export interface FetchVideosOptions {
   cacheDir: string;
   date?: Date;
   log?: (line: string) => void;
+  // Called before each video and before the EPUB file. A step is one video.
+  progress?: (progress: FetchProgress) => void;
+  // True if the user stopped the download. Then fetchVideos ends with FetchStopped before the next video.
+  // The finished transcripts stay in the cache.
+  stopped?: () => boolean;
 }
 
 export interface FetchVideosResult {
@@ -99,13 +104,17 @@ export function splitByParts(paragraphs: TranscriptParagraph[], parts: VideoChap
 
 export async function fetchVideos(options: FetchVideosOptions): Promise<FetchVideosResult> {
   const log = options.log ?? (() => {});
+  const progress = options.progress ?? (() => {});
+  const count = options.videos.length;
   const skipped: FetchVideosResult["skipped"] = [];
   const transcripts = new Map<string, TranscriptParagraph[]>();
   let requests = 0;
   let cost: number | null = null;
 
   for (const [i, video] of options.videos.entries()) {
-    log(`[${i + 1}/${options.videos.length}] ${video.title} (${formatLength(video.duration)})`);
+    if (options.stopped?.()) throw new FetchStopped();
+    progress({ text: `Transcribing video ${i + 1} of ${count}, "${video.title}".`, done: i, total: count });
+    log(`[${i + 1}/${count}] ${video.title} (${formatLength(video.duration)})`);
     const cached = cachedParagraphs(options.cacheDir, video);
     if (cached) {
       log("  From the cache.");
@@ -170,7 +179,9 @@ export async function fetchVideos(options: FetchVideosOptions): Promise<FetchVid
       chapters.push({ title: video.title, pages });
     }
   }
-  if (chapters.length === 0) throw new Error("No video has a complete transcript, so the command writes no EPUB file.");
+  if (chapters.length === 0) throw new Error("No video has a complete transcript, so the tutor writes no EPUB file.");
+  if (options.stopped?.()) throw new FetchStopped();
+  progress({ text: "Writing the EPUB file.", done: count, total: count });
 
   const epub = await writeEpub({
     title: options.title,

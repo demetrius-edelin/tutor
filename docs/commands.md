@@ -17,7 +17,7 @@ The app does the main work of the tutor: you add books, preview and save chapter
 | `npm start` | Each time that you want to study. It starts the app. | Yes, for ingest, the diagnosis, the lessons, and the tests. | Your books and your progress. |
 | `npm run llm:check` | Optional. After a change to `.env`. | Yes, 3 small requests. | Nothing. |
 | `npm run parse -- <book>` | Optional. To check a book at no cost, and to find the section ids for `--sections`. | No. | A report in `data/parse/<book>/`, for you to read. |
-| `npm run fetch -- <url>` | To download an online book or online documentation in the terminal. The app can also do this. For a YouTube video or playlist, only the command can do it now. Then add the EPUB file in the app. | For a site with no `llms.txt` file: one small request. For YouTube: one request of the video model for each video. | An EPUB file in `data/web/`. For YouTube, also the transcripts in `data/web/transcripts/`. |
+| `npm run fetch -- <url>` | To download an online book, online documentation, or the transcript of a YouTube video or playlist in the terminal. The app can also do this. Then add the EPUB file in the app. | For a site with no `llms.txt` file: one small request. For YouTube: one request of the video model for each video. | An EPUB file in `data/web/`. For YouTube, also the transcripts in `data/web/transcripts/`. |
 | `npm run ingest -- <subject> <book> [options]` | For the options that the app does not have: `--sections`, `--fresh`, and `--replace`. | Yes. | The folder of the book and the database. |
 | `npm run refresh -- <subject> <book>` | Only after an update of the tutor that changes the parser. | Only for new images. | The section files of the book. |
 
@@ -107,7 +107,7 @@ No other command and no part of the app reads these files. You can delete `data/
 
 ## Download an online book
 
-The tutor can also teach from an online book or from online documentation, for example `https://doc.rust-lang.org/book/`. The app can download the book. See [Add an online book](usage.md#add-an-online-book). The `fetch` command does the same download in the terminal, and it has more options. It writes the pages into an EPUB file. Then you add the EPUB file in the app, the same as other books.
+The tutor can teach from an online book or from online documentation, for example `https://doc.rust-lang.org/book/`. The app can download the book. See [Add an online book](usage.md#add-an-online-book). The `fetch` command does the same download in the terminal, and it has more options. It writes the pages into an EPUB file. Then you add the EPUB file in the app, the same as other books.
 
 1. Download the book:
 
@@ -148,7 +148,7 @@ The tutor cannot update a downloaded book yet. If the site changes and you want 
 
 ## Download a YouTube video or playlist
 
-The tutor can also teach from a YouTube video or a YouTube playlist. The `fetch` command writes the transcript into an EPUB file. Then you add the EPUB file in the app, the same as other books.
+The tutor can teach from a YouTube video or a YouTube playlist. The app can get the transcript. See [Add a YouTube video or playlist](usage.md#add-a-youtube-video-or-playlist). The `fetch` command does the same in the terminal, and it has more options. It writes the transcript into an EPUB file. Then you add the EPUB file in the app, the same as other books.
 
 The tutor does not download the video. It sends the YouTube address to a video model, which hears the speech and sees the screen. Thus, the transcript also contains the code, the commands, and the tables on the screen.
 
