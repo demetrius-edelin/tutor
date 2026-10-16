@@ -14,6 +14,7 @@ import {
   type SubjectSummary,
 } from "./api-types.js";
 import { CONCEPT_PLACE } from "../ingest/map.js";
+import { videoMoment } from "../ingest/video/youtube.js";
 import { runningIngest, toIngestView } from "./ingests.js";
 
 interface SubjectRow {
@@ -136,7 +137,20 @@ function moduleList(db: Db, subjectId: number): ModuleSummary[] {
   });
 }
 
-export function conceptMap(db: Db, slug: string): ConceptMapView | undefined {
+// The text of a section file, or null if the file is outside the data folder or does not exist.
+function sectionMarkdown(dataDir: string, path: string): string | null {
+  // The path comes from the database. It must stay inside the data folder.
+  const root = resolve(dataDir);
+  const file = resolve(root, path);
+  if (!file.startsWith(root + sep)) return null;
+  try {
+    return readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+export function conceptMap(db: Db, dataDir: string, slug: string): ConceptMapView | undefined {
   const subject = findSubject(db, slug);
   if (!subject) return undefined;
   const modules = db.prepare("SELECT id, position, name FROM modules WHERE subject_id = ? ORDER BY position").all(subject.id) as {
@@ -159,7 +173,7 @@ export function conceptMap(db: Db, slug: string): ConceptMapView | undefined {
     .all(subject.id) as { concept_id: number; slug: string; name: string }[];
   const sources = db
     .prepare(
-      `SELECT cs.concept_id, s.id AS sectionId, s.chapter, s.number, s.chapter_title, s.title, s.page, cs.quote, b.title AS book
+      `SELECT cs.concept_id, s.id AS sectionId, s.chapter, s.number, s.chapter_title, s.title, s.page, s.path, cs.quote, b.title AS book
        FROM concept_sources cs JOIN sections s ON s.id = cs.section_id JOIN books b ON b.id = s.book_id
        WHERE b.subject_id = ? ORDER BY b.id, s.chapter, s.number`,
     )
@@ -171,9 +185,17 @@ export function conceptMap(db: Db, slug: string): ConceptMapView | undefined {
     chapter_title: string;
     title: string;
     page: string | null;
+    path: string;
     quote: string;
     book: string;
   }[];
+  // A source from a video gets the point in the video of its quote. Each section file is read one time.
+  const texts = new Map<string, string | null>();
+  const moment = (path: string, quote: string) => {
+    if (!texts.has(path)) texts.set(path, sectionMarkdown(dataDir, path));
+    const text = texts.get(path);
+    return text ? videoMoment(text, quote) : null;
+  };
 
   return {
     subject: { slug: subject.slug, name: subject.name },
@@ -198,6 +220,7 @@ export function conceptMap(db: Db, slug: string): ConceptMapView | undefined {
               title: source.title,
               page: source.page,
               quote: source.quote,
+              video: moment(source.path, source.quote),
             })),
         })),
     })),
@@ -214,10 +237,8 @@ export function section(db: Db, dataDir: string, id: number): SectionView | unde
     | { id: number; chapter: number; number: number; chapter_title: string; title: string; page: string | null; path: string; book: string }
     | undefined;
   if (!row) return undefined;
-  // The path comes from the database. It must stay inside the data folder.
-  const root = resolve(dataDir);
-  const file = resolve(root, row.path);
-  if (!file.startsWith(root + sep)) return undefined;
+  const markdown = sectionMarkdown(dataDir, row.path);
+  if (markdown === null) return undefined;
   return {
     id: row.id,
     book: row.book,
@@ -225,6 +246,7 @@ export function section(db: Db, dataDir: string, id: number): SectionView | unde
     ref: `${row.chapter}.${row.number}`,
     title: row.title,
     page: row.page,
-    markdown: readFileSync(file, "utf8"),
+    markdown,
+    video: videoMoment(markdown),
   };
 }

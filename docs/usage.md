@@ -135,7 +135,13 @@ The book page shows the progress. Each video is one request to the video model, 
 
 After the download, the book page shows the chapters, as for a book file. Above the chapters, the page shows the number of videos, the words, the requests, and the cost. "Videos with no transcript" lists the videos that the tutor skipped, with the reason. For example, the tutor skips a video after two transcripts that stop early.
 
-Each paragraph of the transcript starts with a link to its time in the video. In "Read the section", a click on the link opens the video at that point.
+You watch the video in the app, at the point of each reference:
+
+- "Read the section" shows the YouTube player above the text, at the paragraph of the quote.
+- Each paragraph of the transcript starts with a link to its time in the video. In "Read the section", a click on the link moves the player to that time.
+- On the concept map and in the references of a lesson, "Watch from 4:05" opens the player under the quote. Only one player plays at a time.
+
+Some video owners do not allow the player in other apps. Then use the link "Open the video on YouTube" under the player.
 
 The terms of YouTube do not allow downloads with other tools. You run your own copy of the tutor, so you take the responsibility for the videos and the transcripts that you use. To get a transcript in the terminal, see [Download a YouTube video or playlist](commands.md#download-a-youtube-video-or-playlist).
 

@@ -175,7 +175,7 @@ The book has these parts:
 - One video: each YouTube chapter is a chapter of the book.
 - A playlist: each video is a chapter, and the YouTube chapters of a video are its sections.
 - A video with no YouTube chapters is one chapter. The parser splits it into sections by size.
-- Each paragraph starts with a link to its time in the video. In "Read the section", a click on the link opens the video at that point.
+- Each paragraph starts with a link to its time in the video. In the app, "Read the section" shows the player at the paragraph of the quote. A click on a time link moves the player to that time.
 - Before each code block and each table, a note tells you that the tutor read it from the video. The model can make an error in the code. The lesson model sees the note and can correct a small error.
 
 The command checks each transcript. If a transcript stops early, or has a gap of more than 3 minutes, the command tries one more time. After a second bad transcript, it skips the video and shows the reason.

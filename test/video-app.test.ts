@@ -5,8 +5,20 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { VideoConfig } from "../src/config.js";
 import { openDb, type Db } from "../src/db/index.js";
 import { estimateCost, type TranscribeRequest, type TranscribeResult, type VideoClient } from "../src/ingest/video/client.js";
+import type { LlmClient } from "../src/llm/index.js";
+import { checkReferences } from "../src/llm/references.js";
 import type { YtDlpRunner } from "../src/ingest/video/ytdlp.js";
-import type { BookView, FetchStartView, IngestView, OnlineTocView, SubjectDetail, VideoToc } from "../src/server/api-types.js";
+import type {
+  BookView,
+  ConceptMapView,
+  FetchStartView,
+  IngestView,
+  LessonView,
+  OnlineTocView,
+  SectionView,
+  SubjectDetail,
+  VideoToc,
+} from "../src/server/api-types.js";
 import { buildServer, type TutorServer } from "../src/server/app.js";
 import type { VideoAccess } from "../src/server/videos.js";
 import { FakeLlm } from "./fakes/llm.js";
@@ -95,11 +107,11 @@ afterEach(async () => {
   await app.close();
 });
 
-function start(video: Partial<VideoAccess>) {
+function start(video: Partial<VideoAccess>, llm: LlmClient = new FakeLlm()) {
   dataDir = mkdtempSync(join(tmpdir(), "tutor-video-app-"));
   db = openDb(":memory:");
   const ytDlp = fakeYtDlp();
-  app = buildServer({ db, dataDir, llm: new FakeLlm(), modelName: "fake model", video: { ytDlp: async () => ytDlp, prices: async () => PRICES, ...video } });
+  app = buildServer({ db, dataDir, llm, modelName: "fake model", video: { ytDlp: async () => ytDlp, prices: async () => PRICES, ...video } });
   return ytDlp;
 }
 
@@ -278,5 +290,29 @@ describe("Download the transcripts of a playlist", () => {
     const none = (await post<FetchStartView>("/api/subjects/videos/fetch", { video: playlist, chapters: [5] })).body.run!;
     await app.idle();
     expect((await get<IngestView>(`/api/ingests/${none.id}`)).body.error).toMatch(/^The tutor cannot transcribe the selected videos\./);
+  });
+});
+
+describe("Watch the video at a reference", () => {
+  it("gives the point in the video for the sources, the section, and the references of a lesson", async () => {
+    // The lesson quotes the paragraph at 2:00 of the chapter "Types".
+    const llm = new FakeLlm({
+      text: (request) => checkReferences("The concept [1].", [{ number: 1, sourceId: request.sources[0]!.id, quote: "more3 more4 more5" }], request.sources),
+    });
+    start({ config: CONFIG, client: () => fakeClient().client }, llm);
+    await post("/api/subjects", { name: "Videos" });
+    await post("/api/subjects/videos/fetch", { video: await findVideo("https://www.youtube.com/watch?v=aaaaaaaaaaa") });
+    await app.idle();
+    await post("/api/subjects/videos/books/one/ingest", { mode: "save", chapters: [2] });
+    await app.idle();
+
+    const concept = (await get<ConceptMapView>("/api/subjects/videos/map")).body.modules[0]!.concepts[0]!;
+    // The quote of the fake model is not in the text, so the source starts at the first paragraph of the section.
+    expect(concept.sources[0]!.video).toEqual({ id: "aaaaaaaaaaa", start: 30 });
+    expect((await get<SectionView>(`/api/sections/${concept.sources[0]!.sectionId}`)).body.video).toEqual({ id: "aaaaaaaaaaa", start: 30 });
+
+    const lesson = (await post<LessonView>(`/api/concepts/${concept.id}/lesson`)).body;
+    expect(lesson.lesson!.references).toEqual([expect.objectContaining({ quote: "more3 more4 more5", video: { id: "aaaaaaaaaaa", start: 120 } })]);
+    expect((await get<LessonView>(`/api/concepts/${concept.id}/lesson`)).body.lesson!.references[0]!.video).toEqual({ id: "aaaaaaaaaaa", start: 120 });
   });
 });

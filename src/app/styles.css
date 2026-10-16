@@ -945,6 +945,37 @@ a.contents-entry:hover .contents-title {
   font-size: var(--step--1);
 }
 
+/* "Read the section" and "Watch from 4:05" on one line. The player of a reference opens below them. */
+.reference-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 1.25rem;
+}
+
+.reference-actions .video-player {
+  flex-basis: 100%;
+}
+
+/* The YouTube player of a section from a video. */
+.video-player {
+  max-width: 40rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.video-player iframe {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 0.4rem;
+  background: var(--ink);
+}
+
+.video-player p {
+  margin: 0.4rem 0 0;
+}
+
 .quote {
   margin: 0.35rem 0 0.4rem;
   font-family: var(--reading);

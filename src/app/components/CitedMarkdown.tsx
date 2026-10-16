@@ -1,6 +1,7 @@
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { LessonReference } from "../../server/api-types";
+import { WatchButton } from "./VideoPlayer";
 
 // Change each reference marker " [2]" into a link "ref:2", outside of code.
 export function linkReferences(markdown: string): string {
@@ -59,9 +60,12 @@ export function ReferenceList(props: { references: LessonReference[]; onOpen: (r
           <blockquote className="quote">
             <span>{reference.quote}</span>
           </blockquote>
-          <button className="text-button" onClick={() => props.onOpen(reference)}>
-            Read the section
-          </button>
+          <div className="reference-actions">
+            <button className="text-button" onClick={() => props.onOpen(reference)}>
+              Read the section
+            </button>
+            {reference.video && <WatchButton moment={reference.video} />}
+          </div>
         </li>
       ))}
     </ol>

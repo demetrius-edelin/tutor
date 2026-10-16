@@ -220,6 +220,12 @@ export interface ModuleSummary {
   progress: StatusCounts;
 }
 
+// A point in a YouTube video: the video id and the time in seconds.
+export interface VideoMoment {
+  id: string;
+  start: number;
+}
+
 export interface SourceRef {
   sectionId: number;
   // The section number in the book, for example "2.3".
@@ -231,6 +237,8 @@ export interface SourceRef {
   title: string;
   page: string | null;
   quote: string;
+  // For a book from a video: the point in the video of the quote. Null for a book file or an online book.
+  video: VideoMoment | null;
 }
 
 export interface ConceptView {
@@ -267,6 +275,8 @@ export interface SectionView {
   title: string;
   page: string | null;
   markdown: string;
+  // For a section from a video: the point in the video of its first paragraph. Null for other books.
+  video: VideoMoment | null;
 }
 
 // Diagnosis
@@ -397,6 +407,8 @@ export interface SourceInfo {
 export interface LessonReference extends SourceInfo {
   number: number;
   quote: string;
+  // For a book from a video: the point in the video of the quote. The database keeps the references without it.
+  video: VideoMoment | null;
 }
 
 export interface LessonMessage {

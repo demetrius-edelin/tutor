@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import type { ConceptMapView, ConceptView, Mark, SelectionResult, Status } from "../../server/api-types";
+import type { ConceptMapView, ConceptView, Mark, SelectionResult, SourceRef, Status } from "../../server/api-types";
 import { postJson, useApi } from "../api";
 import { InlineCode } from "../components/InlineCode";
 import { Layout, Notice } from "../components/Layout";
 import { SectionPanel } from "../components/SectionPanel";
 import { StarButton } from "../components/StarButton";
+import { WatchButton } from "../components/VideoPlayer";
 import { STATUS_INFO, StatusMark } from "../components/StatusMark";
 import { href } from "../router";
 
@@ -73,7 +74,8 @@ function MapView({ map: loaded, focus, focusModule }: { map: ConceptMapView; foc
   const [map, setMap] = useState(loaded);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<Set<string>>(() => new Set(focus ? [focus] : []));
-  const [section, setSection] = useState<number | null>(null);
+  // The source of the section panel. The panel shows its quote, and the video at the quote for a book from a video.
+  const [section, setSection] = useState<SourceRef | null>(null);
   const [showGoals, setShowGoals] = useState(readShowGoals);
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const total = map.modules.reduce((sum, module) => sum + module.concepts.length, 0);
@@ -228,7 +230,9 @@ function MapView({ map: loaded, focus, focusModule }: { map: ConceptMapView; foc
         />
       )}
 
-      {section !== null && <SectionPanel sectionId={section} onClose={() => setSection(null)} />}
+      {section !== null && (
+        <SectionPanel sectionId={section.sectionId} quote={section.quote} video={section.video} onClose={() => setSection(null)} />
+      )}
     </>
   );
 }
@@ -292,7 +296,7 @@ function ConceptRow(props: {
   selected: boolean;
   onToggle: () => void;
   onSelect: (checked: boolean) => void;
-  onRead: (sectionId: number) => void;
+  onRead: (source: SourceRef) => void;
   onStatus: (status: Status) => void;
   onStar: (starred: boolean) => void;
   showGoal: boolean;
@@ -366,9 +370,12 @@ function ConceptRow(props: {
                   <blockquote className="quote">
                     <span>{source.quote}</span>
                   </blockquote>
-                  <button className="text-button" onClick={() => props.onRead(source.sectionId)}>
-                    Read the section
-                  </button>
+                  <div className="reference-actions">
+                    <button className="text-button" onClick={() => props.onRead(source)}>
+                      Read the section
+                    </button>
+                    {source.video && <WatchButton moment={source.video} />}
+                  </div>
                 </li>
               ))}
             </ul>

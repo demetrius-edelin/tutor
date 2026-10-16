@@ -18,7 +18,16 @@ import {
 } from "../src/ingest/video/client.js";
 import { addNotes, checkTranscript, CODE_NOTE, maxTokensFor, parseTranscript, TABLE_NOTE } from "../src/ingest/video/transcript.js";
 import { ensureYtDlp, readPlaylist, readVideo, ytDlpAsset, ytDlpRunner } from "../src/ingest/video/ytdlp.js";
-import { formatLength, formatTime, parseYoutubeUrl, playlistFacts, timeUrl, videoFacts, type VideoFacts } from "../src/ingest/video/youtube.js";
+import {
+  formatLength,
+  formatTime,
+  parseYoutubeUrl,
+  playlistFacts,
+  timeUrl,
+  videoFacts,
+  videoMoment,
+  type VideoFacts,
+} from "../src/ingest/video/youtube.js";
 import { LlmError } from "../src/llm/types.js";
 
 // Text with different words, for example "value0 value1 value2".
@@ -55,6 +64,39 @@ describe("YouTube addresses", () => {
     expect(formatLength(721)).toBe("12 min");
     expect(formatLength(3900)).toBe("1 h 05 min");
     expect(timeUrl("ahCwqrYpIuM", 754.6)).toBe("https://www.youtube.com/watch?v=ahCwqrYpIuM&t=754s");
+  });
+});
+
+describe("The point in the video of a quote", () => {
+  const link = (seconds: number) => `[${formatTime(seconds)}](${timeUrl("aaaaaaaaaaa", seconds)})`;
+  const section = `### Types\n\n${link(30)} A **type annotation** tells the compiler the type.\n\n${link(120)} Use an interface for the shape of an object.\n\n_The tutor read this code from the video:_\n\n\`\`\`ts\ninterface User { name: string }\n\`\`\`\n\n${link(200)} A union type allows two types.`;
+
+  it("gives the time of the paragraph with the quote, or of the first paragraph", () => {
+    expect(videoMoment(section)).toEqual({ id: "aaaaaaaaaaa", start: 30 });
+    expect(videoMoment(section, "an interface for the shape")).toEqual({ id: "aaaaaaaaaaa", start: 120 });
+    // The code after a paragraph belongs to the time of that paragraph.
+    expect(videoMoment(section, "interface User")).toEqual({ id: "aaaaaaaaaaa", start: 120 });
+    expect(videoMoment(section, "A union type allows two types, also null")).toEqual({ id: "aaaaaaaaaaa", start: 200 });
+    expect(videoMoment(section, "words that are not in the text")).toEqual({ id: "aaaaaaaaaaa", start: 30 });
+  });
+
+  it("finds the paragraph where a quote across a code block starts, also if each code block has the same note", () => {
+    const note = "_The tutor read this code from the video:_";
+    const text = [
+      `${link(10)} First words of the video.`,
+      note,
+      "```ts\nlet a = 1;\n```",
+      `${link(20)} Second words of the video.`,
+      note,
+      "```ts\nlet b = 2;\n```",
+      `${link(30)} Third words of the video.`,
+    ].join("\n\n");
+    const quote = `${note} \`\`\`ts let b = 2; \`\`\` ${link(30)} Third words`;
+    expect(videoMoment(text, quote)).toEqual({ id: "aaaaaaaaaaa", start: 20 });
+  });
+
+  it("gives no point for a section of a book file", () => {
+    expect(videoMoment("## Joins\n\nA join combines [two tables](https://example.com/joins).", "two tables")).toBeNull();
   });
 });
 

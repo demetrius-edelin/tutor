@@ -223,7 +223,7 @@ See [Add an online book](docs/usage.md#add-an-online-book).
 - On the subject screen, click "Add an online book or video" and type the address of a video or of a playlist.
 - The tutor does not download the video. It sends the address to a video model, which hears the speech and sees the screen. Thus, the transcript also contains the code, the commands, and the tables on the screen.
 - For one video, each YouTube chapter becomes a chapter of the book. For a playlist, each video becomes a chapter, and you select the videos.
-- Each paragraph starts with a link to its time in the video. In "Read the section", a click on the link opens the video at that point.
+- You watch the video in the app, at the point of each reference. "Read the section" shows the player at the paragraph of the quote, and the concept map and the lessons have "Watch from 4:05".
 - The tutor keeps each transcript, so you pay for a video only one time. See [Cost](#cost).
 - A video can be 90 minutes long at most. The video model reads only public videos.
 
@@ -239,7 +239,7 @@ See [Add a YouTube video or playlist](docs/usage.md#add-a-youtube-video-or-playl
 - **In which order does the concept map show the concepts?** In the order of the books, the chapters, and the sections. The order in which you add the chapters does not change it.
 - **Can I move or delete the book file after I add it?** Yes. The tutor keeps a copy of the book file in the folder of the book.
 - **Can the tutor teach from online documentation?** Yes. On the subject screen, click "Add an online book or video" and type the address. See [Add an online book](docs/usage.md#add-an-online-book).
-- **Can the tutor teach from a YouTube course?** Yes. Set the video model in `.env`. On the subject screen, click "Add an online book or video" and type the address of the video or of the playlist. A link before each paragraph opens the video at that point. See [Add a YouTube video or playlist](docs/usage.md#add-a-youtube-video-or-playlist).
+- **Can the tutor teach from a YouTube course?** Yes. Set the video model in `.env`. On the subject screen, click "Add an online book or video" and type the address of the video or of the playlist. The concept map and the lessons show the video at the point of each reference. See [Add a YouTube video or playlist](docs/usage.md#add-a-youtube-video-or-playlist).
 - **How do I add a second book to a subject?** On the subject screen, click "Add a book" or "Add an online book or video". The tutor adds the concepts of the new book to the concept map of the subject.
 - **How do I make a new subject?** On the list of subjects, type a name in the "New subject" field. Then click "Create".
 - **How do I delete a subject?** On the list of subjects, click "Delete" below the subject. Then click the red button in the panel that opens. The tutor deletes the books, the concepts, your progress, and the folder of the subject. You cannot undo this.

@@ -4,6 +4,7 @@ import { postJson, useApi } from "../api";
 import { Layout, Notice } from "../components/Layout";
 import { Spinner } from "../components/Spinner";
 import { href } from "../router";
+import { formatLength, formatTime } from "../video";
 
 const n = (value: number) => value.toLocaleString("en-US");
 const plural = (count: number, word: string) => `${n(count)} ${word}${count === 1 ? "" : "s"}`;
@@ -12,21 +13,6 @@ const plural = (count: number, word: string) => `${n(count)} ${word}${count === 
 function duration(seconds: number): string {
   const minutes = Math.ceil(seconds / 60);
   return minutes <= 1 ? "about 1 minute" : `about ${n(minutes)} minutes`;
-}
-
-// The same formats as the command: 754 gives "12:34", and a length is "12 min" or "1 h 05 min".
-function formatTime(seconds: number): string {
-  const total = Math.floor(seconds);
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = String(total % 60).padStart(2, "0");
-  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
-}
-
-function formatLength(seconds: number): string {
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} min`;
-  return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")} min`;
 }
 
 const isYoutube = (text: string) => /(^|[/.])(youtube\.com|youtu\.be)(\/|$)/i.test(text.trim());

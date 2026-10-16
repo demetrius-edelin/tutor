@@ -134,7 +134,7 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelNa
   });
 
   app.get<{ Params: { slug: string } }>("/api/subjects/:slug/map", async (request, reply) => {
-    const map = conceptMap(db, request.params.slug);
+    const map = conceptMap(db, dataDir, request.params.slug);
     return map ?? reply.code(404).send({ error: `The subject "${request.params.slug}" does not exist.` });
   });
 
@@ -266,7 +266,7 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelNa
 
   // Lessons
 
-  app.get<{ Params: { id: string } }>("/api/concepts/:id/lesson", async (request) => lessonView(db, Number(request.params.id)));
+  app.get<{ Params: { id: string } }>("/api/concepts/:id/lesson", async (request) => lessonView(db, dataDir, Number(request.params.id)));
 
   // Start the lesson. With again, the tutor writes a new lesson round.
   app.post<{ Params: { id: string }; Body: { again?: boolean } }>("/api/concepts/:id/lesson", async (request) =>
@@ -308,7 +308,7 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelNa
   });
 
   // Skip the test: the concept becomes mastered.
-  app.post<{ Params: { id: string } }>("/api/concepts/:id/skip-test", async (request) => skipTest(db, Number(request.params.id)));
+  app.post<{ Params: { id: string } }>("/api/concepts/:id/skip-test", async (request) => skipTest(db, dataDir, Number(request.params.id)));
 
   app.post<{ Params: { id: string }; Body: { action: AfterTestAction } }>("/api/concepts/:id/after-test", async (request) => {
     afterTest(db, Number(request.params.id), request.body?.action);

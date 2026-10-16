@@ -1,3 +1,5 @@
+import { containsQuote } from "../../llm/references.js";
+
 // YouTube addresses, and the facts about videos and playlists that the tutor needs.
 
 export type YoutubeTarget =
@@ -78,6 +80,41 @@ export function playlistUrl(id: string): string {
 // The address of a point in a video.
 export function timeUrl(id: string, seconds: number): string {
   return `${videoUrl(id)}&t=${Math.floor(seconds)}s`;
+}
+
+// The time link at the start of a transcript paragraph, from timeUrl: "[4:05](https://www.youtube.com/watch?v=<id>&t=245s)".
+const TIME_LINK = /\]\(https:\/\/www\.youtube\.com\/watch\?v=([\w-]{11})&t=(\d+)s\)/;
+
+// A quote can go across some paragraphs, for example a code block and the next paragraph.
+const QUOTE_PARAGRAPHS = 6;
+
+// The point in the video of a section from a transcript: the paragraph where the quote starts, or else the first paragraph.
+// If the full quote is in no paragraph, for example after a change by the model, its first words find the paragraph.
+// A section of a book file has no time links, so the result is null.
+export function videoMoment(markdown: string, quote?: string): { id: string; start: number } | null {
+  const paragraphs: { text: string; moment: { id: string; start: number } | null }[] = [];
+  let current: { id: string; start: number } | null = null;
+  for (const text of markdown.split(/\n\s*\n/)) {
+    const link = TIME_LINK.exec(text);
+    if (link) current = { id: link[1]!, start: Number(link[2]) };
+    paragraphs.push({ text, moment: current });
+  }
+  const first = paragraphs.find((paragraph) => paragraph.moment)?.moment ?? null;
+  if (!first || !quote?.trim()) return first;
+
+  // The quote starts in a paragraph if the text from that paragraph has the quote, and the text from the next paragraph does not.
+  // Thus, a note before a code block, which repeats at each code block, does not give the wrong paragraph.
+  const from = (i: number) =>
+    paragraphs
+      .slice(i, i + QUOTE_PARAGRAPHS)
+      .map((paragraph) => paragraph.text)
+      .join("\n\n");
+  for (let i = 0; i < paragraphs.length; i++) {
+    if (paragraphs[i]!.moment && containsQuote(from(i), quote) && !containsQuote(from(i + 1), quote)) return paragraphs[i]!.moment;
+  }
+  // The first words lose the punctuation at their end, for example the comma in "two types, also null".
+  const words = quote.split(/\.{3}|…/)[0]!.trim().split(/\s+/).slice(0, 6).join(" ").replace(/[^\p{L}\p{N}]+$/u, "");
+  return paragraphs.find((paragraph) => paragraph.moment && containsQuote(paragraph.text, words))?.moment ?? first;
 }
 
 // 754 gives "12:34", and 3845 gives "1:04:05".

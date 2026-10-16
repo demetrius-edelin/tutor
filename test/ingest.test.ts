@@ -356,7 +356,7 @@ describe("Book order of the concept map", () => {
     writeFileSync(bookFile, data);
     const db = openDb(":memory:");
     for (const chapters of runs) await ingestBook({ llm: mergeInto(shared), db, dataDir, subjectName: "Order", bookFile, book, chapters });
-    return { db, map: conceptMap(db, "order")!, markdown: readFileSync(join(dataDir, "subjects", "order", "concept-map.md"), "utf8") };
+    return { db, map: conceptMap(db, dataDir, "order")!, markdown: readFileSync(join(dataDir, "subjects", "order", "concept-map.md"), "utf8") };
   };
 
   it("numbers the modules in the book order, also after a save of a later chapter first", async () => {

@@ -377,6 +377,7 @@ function LessonBody({ view, onChange }: { view: LessonView; onChange: (view: Les
         <SectionPanel
           sectionId={open.sectionId}
           quote={open.quote}
+          video={open.video}
           onClose={() => {
             setOpen(null);
             setListOpen(false);

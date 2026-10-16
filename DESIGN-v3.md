@@ -664,7 +664,7 @@ A transcript costs money. The tutor keeps each transcript that passes the checks
 ### The EPUB file
 
 - Each chapter is one XHTML file, and each section is a `<section>` with an `<h2>` heading, as for an online book.
-- Each paragraph starts with a link to its time in the video, for example `[12:34](https://www.youtube.com/watch?v=<id>&t=754s)`. In "Read the section", a click on the link opens the video at that time, in a new tab.
+- Each paragraph starts with a link to its time in the video, for example `[12:34](https://www.youtube.com/watch?v=<id>&t=754s)`. See "Watch the video at a reference".
 - `dc:source` keeps the address of the video or of the playlist. `dc:date` keeps the date of the download.
 - The title gives the file name, as for an online book.
 
@@ -706,6 +706,17 @@ Milestone 19 adds videos to the "Add an online book" form of milestone 18. The b
 - At the start of the run, yt-dlp reads each selected video again, for its chapters and its length. A playlist does not always give the length. The report shows a video that yt-dlp cannot read, or a video that is too long, with the reason.
 - The finished transcripts stay in the cache. A stopped run writes no EPUB file.
 - Then the server continues as for an online book: the parse, the copy in the folder of the book, and the plan.
+
+### Watch the video at a reference
+
+The app shows the YouTube player at the point of each reference to a book from a video. The time links of the transcript give the video and the time, so the tutor needs no new data.
+
+- The server finds the paragraph where the quote of a reference starts, and sends the video id and the time of that paragraph. The concept map, the lesson, and the section get this point. A source of a book file or of an online book has no point.
+- A quote can go across some paragraphs, for example a code block and the next paragraph. The note before each code block is the same, so the server looks for the full quote, not only its first words.
+- "Read the section" shows the player above the text. A click on a time link in the text moves the player to that time.
+- On the concept map and in the references of a lesson, "Watch from 4:05" opens the player under the quote. The player loads only after the click, so that a page with many references stays fast. Only one player plays at a time.
+- The player comes from `youtube-nocookie.com`, which sets no cookies before the user plays the video. The terms of YouTube allow this player.
+- Some owners do not allow the player in other apps. The link "Open the video on YouTube" stays under the player.
 
 ### Limits of the first version
 

@@ -1,4 +1,5 @@
 import type { Db } from "../db/index.js";
+import { videoMoment } from "../ingest/video/youtube.js";
 import type { LlmClient, Message, Reference, Source } from "../llm/index.js";
 import type { AfterTestAction, LessonMessage, LessonReference, LessonView, SourceInfo, Status } from "../server/api-types.js";
 import { applyMarks, createSession, enqueue, failedTests, readSection, TutorError } from "./diagnosis.js";
@@ -98,7 +99,10 @@ function toSources(dataDir: string, sources: (SourceInfo & { path: string })[]):
   }));
 }
 
-function toReferences(references: Reference[], sources: SourceInfo[]): LessonReference[] {
+// The database keeps the references without the point in the video. The view adds it from the section text.
+type StoredReference = Omit<LessonReference, "video">;
+
+function toReferences(references: Reference[], sources: SourceInfo[]): StoredReference[] {
   return references.flatMap((reference) => {
     const source = sources.find((item) => String(item.sectionId) === reference.sourceId);
     return source ? [{ ...source, number: reference.number, quote: reference.quote }] : [];
@@ -147,9 +151,33 @@ interface LessonRow {
   created_at: string;
 }
 
-export function lessonView(db: Db, conceptId: number): LessonView {
+// A reference to a section from a video gets the point in the video of its quote. Each section file is read one time.
+function withVideo(dataDir: string, sources: (SourceInfo & { path: string })[]): (references: StoredReference[]) => LessonReference[] {
+  const texts = new Map<number, string | null>();
+  const text = (sectionId: number) => {
+    if (!texts.has(sectionId)) {
+      const source = sources.find((item) => item.sectionId === sectionId);
+      let markdown: string | null = null;
+      try {
+        markdown = source ? readSection(dataDir, source.path) : null;
+      } catch {
+        // A missing section file gives no video.
+      }
+      texts.set(sectionId, markdown);
+    }
+    return texts.get(sectionId) ?? null;
+  };
+  return (references) =>
+    references.map((reference) => {
+      const markdown = text(reference.sectionId);
+      return { ...reference, video: markdown ? videoMoment(markdown, reference.quote) : null };
+    });
+}
+
+export function lessonView(db: Db, dataDir: string, conceptId: number): LessonView {
   const concept = conceptRow(db, conceptId);
   const sources = sourcesOf(db, conceptId);
+  const addVideo = withVideo(dataDir, sources);
   const lesson = db
     .prepare(
       "SELECT id, round, text, refs, created_at FROM lessons WHERE concept_id = ? ORDER BY round DESC, id DESC LIMIT 1",
@@ -183,7 +211,7 @@ export function lessonView(db: Db, conceptId: number): LessonView {
           id: lesson.id,
           round: lesson.round,
           text: lesson.text,
-          references: JSON.parse(lesson.refs) as LessonReference[],
+          references: addVideo(JSON.parse(lesson.refs) as StoredReference[]),
           createdAt: lesson.created_at,
         }
       : null,
@@ -191,7 +219,7 @@ export function lessonView(db: Db, conceptId: number): LessonView {
       id: message.id,
       role: message.role,
       text: message.text,
-      references: JSON.parse(message.refs) as LessonReference[],
+      references: addVideo(JSON.parse(message.refs) as StoredReference[]),
     })),
     sources: sources.map(({ path: _path, ...source }) => source),
     missingPrerequisites: missing,
@@ -282,10 +310,10 @@ export function startTest(db: Db, conceptId: number, again = false): { sessionId
 
 // The learner skips the test after a lesson, for example for a simple concept.
 // As after a pass, the concept becomes mastered and leaves the queue.
-export function skipTest(db: Db, conceptId: number): LessonView {
+export function skipTest(db: Db, dataDir: string, conceptId: number): LessonView {
   conceptRow(db, conceptId);
   db.prepare("UPDATE concepts SET status = 'mastered', queue_pos = NULL WHERE id = ?").run(conceptId);
-  return lessonView(db, conceptId);
+  return lessonView(db, dataDir, conceptId);
 }
 
 // The first concept in the study queue of the subject, without the concept of the lesson.
@@ -341,7 +369,7 @@ export function startLesson(db: Db, llm: LlmClient | null, dataDir: string, conc
   const existing = db.prepare("SELECT MAX(round) FROM lessons WHERE concept_id = ?").pluck().get(conceptId) as number | null;
   if (existing !== null && !again) {
     markLearning(db, concept);
-    return Promise.resolve(lessonView(db, conceptId));
+    return Promise.resolve(lessonView(db, dataDir, conceptId));
   }
   if (!llm) throw new TutorError("No model is set. Set the model in .env and start the tutor again.", 503);
   const running = writing.get(conceptId);
@@ -366,7 +394,7 @@ export function startLesson(db: Db, llm: LlmClient | null, dataDir: string, conc
       );
       markLearning(db, conceptRow(db, conceptId));
     })();
-    return lessonView(db, conceptId);
+    return lessonView(db, dataDir, conceptId);
   })().finally(() => writing.delete(conceptId));
   writing.set(conceptId, job);
   return job;
@@ -409,7 +437,7 @@ export async function askAboutLesson(db: Db, llm: LlmClient | null, dataDir: str
     insert.run(lessonId, "user", question.trim(), "[]");
     insert.run(lessonId, "assistant", result.text, JSON.stringify(toReferences(result.references, sources)));
   })();
-  return lessonView(db, lesson.concept_id);
+  return lessonView(db, dataDir, lesson.concept_id);
 }
 
 // Put a concept at the top of the study queue. A concept that is not in the queue goes into it.
