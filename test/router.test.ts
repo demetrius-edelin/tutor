@@ -28,6 +28,11 @@ describe("router", () => {
     expect(parseHash("#/subjects/sql/books/pro-git?view=other")).toMatchObject({ view: null });
   });
 
+  it("opens the form for an online book", () => {
+    expect(parseHash(href.online("sql"))).toEqual({ name: "online", slug: "sql" });
+    expect(parseHash("#/subjects/sql/online/other")).toEqual({ name: "not-found" });
+  });
+
   it("writes the filters into the address, and reads the same filters back", () => {
     const filters = { show: "learned", starred: true, find: "index " } as const;
     const hash = href.board("sql", filters);

@@ -137,13 +137,37 @@ The concept map follows the order of the book. A concept takes the place of its 
 
 ### Add an online book
 
-The app cannot download an online book yet. First, download the book into an EPUB file with the `fetch` command:
+The tutor can also teach from an online book or from online documentation, for example `https://doc.rust-lang.org/book/`. The tutor downloads the pages into an EPUB file in `data/web/`. Then you study the book as a book file.
 
-```
-npm run fetch -- https://doc.rust-lang.org/book/
-```
+1. On the subject screen, click "Add an online book".
+2. In "Address of the book", type the address of the start page.
+3. Click "Find the chapters".
 
-Then click "Add a book" and select the EPUB file in the `data/web/` folder of the tutor. See [Download an online book](commands.md#download-an-online-book).
+The tutor looks for an `llms.txt` file first. Many documentation sites have this file, and it lists the pages of the site. If the site has no `llms.txt` file, the model finds the table of contents in the links of the start page. This is one small request.
+
+The page then shows the title of the book and its chapters, with the number of pages in each chapter. All the chapters start selected.
+
+4. Clear the checkboxes of the chapters that you do not want.
+5. Click "Download".
+
+The download uses no model. The tutor downloads one page at a time and waits one second between two pages. It obeys the `robots.txt` file of the site. The bar at the bottom of the page shows the estimated time.
+
+The book page shows the progress of the download. You can leave the page, because the download continues on the server. "Stop" ends the download after the current page or image. A stopped download writes no EPUB file.
+
+After the download, the book page shows the chapters, as for a book file. Then select the chapters for a preview or a save. See [Select the chapters](#select-the-chapters). Above the chapters, the page shows the number of pages, words, and images. "Skipped pages and images" lists the pages that the tutor did not download, with the reason.
+
+The start address sets the part of the site to download. The tutor keeps only the pages in the folder of the start address. For a different part of a large documentation site, start from a page in that part.
+
+If the tutor does not find all the chapters, type the address of a page with the full list of pages in "Table of contents". Then click "Find the chapters" again. The tutor then reads the links of that page.
+
+If you select only some chapters, the title of the book also names the chapters. For example, "The Rust Programming Language - chapters 1-5". The title gives the name of the EPUB file.
+
+If `data/web/` has an EPUB file with the same title from an earlier download, the page shows two buttons:
+
+- "Use the downloaded file": the tutor adds the file to the subject with no new download.
+- "Download again": the tutor downloads the pages again and replaces the file.
+
+The tutor cannot read pages behind a login, or pages that show their text only after JavaScript runs. To download an online book in the terminal, see [Download an online book](commands.md#download-an-online-book).
 
 ### Add a YouTube video or playlist
 

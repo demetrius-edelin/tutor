@@ -7,8 +7,10 @@ import { Spinner } from "../components/Spinner";
 import { href, replaceHash } from "../router";
 
 const n = (value: number) => value.toLocaleString("en-US");
-const plural = (count: number, word: string) => `${n(count)} ${word}${count === 1 ? "" : "s"}`;
+const plural = (count: number, word: string, many = `${word}s`) => `${n(count)} ${count === 1 ? word : many}`;
 const sum = (chapters: ChapterPlan[]) => chapters.reduce((total, chapter) => total + chapter.requests, 0);
+
+const RUN_NAME: Record<IngestView["mode"], string> = { preview: "Preview", save: "Save", fetch: "Download" };
 
 // The book page: the plan of a run, the progress of a run, and the report of the last run.
 export function Book({ slug, book, view }: { slug: string; book: string; view: "plan" | null }) {
@@ -35,6 +37,8 @@ export function Book({ slug, book, view }: { slug: string; book: string; view: "
       getJson<IngestView>(`/api/ingests/${run.id}`)
         .then((next) => {
           if (next.status === "running") setData((current) => current && { ...current, run: next });
+          // The folder name of a downloaded book comes from the title in the EPUB file.
+          else if (next.book !== book) replaceHash(href.book(slug, next.book));
           else load();
         })
         .catch(() => {
@@ -42,7 +46,7 @@ export function Book({ slug, book, view }: { slug: string; book: string; view: "
         });
     }, 2000);
     return () => window.clearInterval(timer);
-  }, [run?.id, run?.status, load]);
+  }, [run?.id, run?.status, load, slug, book]);
 
   const name = data?.subject.name ?? slug;
   const setRun = (next: IngestView) => setData((current) => current && { ...current, run: next, report: null });
@@ -64,13 +68,17 @@ function BookBody({ data, view, url, onRun }: { data: BookView; view: "plan" | n
   return (
     <>
       <h1>{data.title}</h1>
-      <p className="lead">
-        {data.format.toUpperCase()} file
-        {data.chapters.length > 0 && `, ${plural(data.chapters.length, "chapter")}`}.{" "}
-        {data.saved
-          ? `${n(withConcepts)} of ${plural(data.chapters.length, "chapter")} ${withConcepts === 1 ? "has" : "have"} concepts on the concept map.`
-          : "This book is not saved yet."}
-      </p>
+      {data.run?.mode === "fetch" && data.chapters.length === 0 ? (
+        <p className="lead">An online book. The tutor downloads its pages into an EPUB file in data/web/.</p>
+      ) : (
+        <p className="lead">
+          {data.format.toUpperCase()} file
+          {data.chapters.length > 0 && `, ${plural(data.chapters.length, "chapter")}`}.{" "}
+          {data.saved
+            ? `${n(withConcepts)} of ${plural(data.chapters.length, "chapter")} ${withConcepts === 1 ? "has" : "have"} concepts on the concept map.`
+            : "This book is not saved yet."}
+        </p>
+      )}
       {state === "run" && <RunPanel run={data.run!} onChange={onRun} />}
       {state === "report" && <ReportView data={data} report={data.report!} url={url} onRun={onRun} />}
       {state === "plan" && <PlanView data={data} url={url} onRun={onRun} />}
@@ -89,12 +97,42 @@ function firstSelection(data: BookView): number[] {
   return run.chapters.filter((number) => open.includes(number));
 }
 
-function LastRun({ run }: { run: IngestView | null }) {
+function LastRun({ run, hasFile = true }: { run: IngestView | null; hasFile?: boolean }) {
+  if (run?.mode === "fetch") return <LastDownload run={run} hasFile={hasFile} />;
   if (run?.status === "stopped") {
     return <p className="run-note">The last run stopped. Its finished chapters are in the cache, so a new run does not pay for them again.</p>;
   }
   if (run?.status === "failed") return <p className="run-note error">The last run failed: {run.error}</p>;
   return null;
+}
+
+// The result of the download of an online book, with the pages and the images that the download skipped.
+// A download that did not finish writes no EPUB file. A book with an earlier file keeps that file.
+function LastDownload({ run, hasFile }: { run: IngestView; hasFile: boolean }) {
+  if (run.status === "stopped") {
+    return (
+      <p className="run-note">
+        The download stopped. A stopped download writes no EPUB file{hasFile ? ", so the book keeps its earlier file" : ""}.
+      </p>
+    );
+  }
+  if (run.status === "failed") return <p className="run-note error">The download failed: {run.error}</p>;
+  const result = run.download;
+  if (!result) return null;
+  return (
+    <>
+      <p className="run-note">
+        The download got {plural(result.pages, "page")} with {plural(result.words, "word")}, and {plural(result.images, "image")}.
+        {result.skipped.length > 0 && ` It skipped ${plural(result.skipped.length, "page or image", "pages or images")}.`}
+      </p>
+      {result.skipped.length > 0 && (
+        <Details
+          title={`Skipped pages and images (${n(result.skipped.length)})`}
+          items={result.skipped.map((item) => `${item.url}: ${item.reason}`)}
+        />
+      )}
+    </>
+  );
 }
 
 // Start a run and show its progress. The address loses "view=plan", so that the report shows at the end of the run.
@@ -110,6 +148,19 @@ function PlanView({ data, url, onRun }: { data: BookView; url: string; onRun: (r
   const [error, setError] = useState<string | null>(null);
   const open = openChapters(data);
 
+  // A download that did not finish has no book file. The note of the download tells why.
+  if (data.run?.mode === "fetch" && data.chapters.length === 0 && data.run.status !== "done") {
+    return (
+      <>
+        <LastRun run={data.run} hasFile={false} />
+        <p>
+          <a className="button" href={href.online(data.subject.slug)}>
+            Add the online book again
+          </a>
+        </p>
+      </>
+    );
+  }
   if (data.problem) {
     return (
       <>
@@ -243,7 +294,25 @@ function PlanView({ data, url, onRun }: { data: BookView; url: string; onRun: (r
   );
 }
 
+// The texts of the run panel. A download has no model requests and no cache.
+const RUN_TEXT = {
+  ingest: {
+    first: "Reading the book.",
+    stopping: "The run stops after the current step.",
+    steps: (run: IngestView) => `${n(run.done)} of about ${plural(run.total, "model request")} are done.`,
+    stop: "The finished chapters stay in the cache, so a new run does not pay for them again.",
+  },
+  fetch: {
+    first: "Starting the download.",
+    stopping: "The download stops after the current page or image.",
+    // The total grows by the number of images after the pages.
+    steps: (run: IngestView) => `${n(run.done)} of ${n(run.total)} pages and images are done.`,
+    stop: "A stopped download writes no EPUB file.",
+  },
+};
+
 function RunPanel({ run, onChange }: { run: IngestView; onChange: (run: IngestView) => void }) {
+  const text = RUN_TEXT[run.mode === "fetch" ? "fetch" : "ingest"];
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const stop = async () => {
@@ -259,25 +328,24 @@ function RunPanel({ run, onChange }: { run: IngestView; onChange: (run: IngestVi
   return (
     <section className="run-panel" aria-labelledby="run-heading">
       <h2 id="run-heading" className="eyebrow">
-        {run.mode === "preview" ? "Preview" : "Save"} of {plural(run.chapters.length, "chapter")}
+        {RUN_NAME[run.mode]} of {plural(run.chapters.length, "chapter")}
       </h2>
       <p className="run-step" role="status">
         <Spinner />
-        {run.stopping ? "The run stops after the current step." : run.step || "Reading the book."}
+        {run.stopping ? text.stopping : run.step || text.first}
       </p>
       <div className="progress-bar" aria-hidden="true">
         <span className="segment segment-mastered" style={{ flexGrow: run.done }} />
         <span className="segment segment-new" style={{ flexGrow: Math.max(0, run.total - run.done) || 0.0001 }} />
       </div>
       <p className="quiet small">
-        {run.total > 0 ? `${n(run.done)} of about ${plural(run.total, "model request")} are done. ` : ""}You can leave this page: the run
-        continues on the server.
+        {run.total > 0 ? `${text.steps(run)} ` : ""}You can leave this page: the run continues on the server.
       </p>
       <p className="button-row">
         <button className="button secondary small" onClick={stop} disabled={busy || run.stopping}>
           {run.stopping ? "Stopping" : "Stop"}
         </button>
-        <span className="quiet small">The finished chapters stay in the cache, so a new run does not pay for them again.</span>
+        <span className="quiet small">{text.stop}</span>
       </p>
       {error && <p className="error">{error}</p>}
     </section>

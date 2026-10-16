@@ -59,7 +59,41 @@ export interface IngestView {
   error: string | null;
   // True after a click on "Stop", until the run ends.
   stopping: boolean;
+  // The result of a finished download, or null for an ingest run.
+  download: DownloadView | null;
 }
+
+// The result of the download of an online book.
+export interface DownloadView {
+  pages: number;
+  words: number;
+  images: number;
+  // The pages and the images that the download skipped, with the reason.
+  skipped: { url: string; reason: string }[];
+}
+
+// The table of contents of an online book. The server keeps no state between the two requests of a download,
+// so the app sends the table of contents back with the selected chapters.
+export interface OnlineToc {
+  title: string;
+  language: string;
+  startUrl: string;
+  // Where the table of contents comes from: an llms.txt file, or the links of an HTML page.
+  source: "llms.txt" | "html";
+  tocUrl: string;
+  // The pages of the book are in this folder, for example "https://docs.cakemail.com/en/docs/".
+  scope: string;
+  chapters: { title: string; pages: { title: string; url: string }[] }[];
+}
+
+export interface OnlineTocView {
+  toc: OnlineToc;
+  // The time of one page, for the estimate of the download time.
+  secondsPerPage: number;
+}
+
+// The answer to the start of a download: the new run, or the EPUB file in data/web/ with the same title.
+export type FetchStartView = { run: IngestView; existing: null } | { run: null; existing: { file: string; title: string } };
 
 export interface ChapterPlan {
   number: number;

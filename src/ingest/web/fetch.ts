@@ -20,6 +20,23 @@ export interface FetchBookOptions {
   title?: string;
   date?: Date;
   log?: (line: string) => void;
+  // Called before each page, each image, and the EPUB file. A step is one page or one image.
+  progress?: (progress: FetchProgress) => void;
+  // True if the user stopped the download. Then fetchBook ends with FetchStopped before the next page or image.
+  stopped?: () => boolean;
+}
+
+export interface FetchProgress {
+  text: string;
+  done: number;
+  total: number;
+}
+
+export class FetchStopped extends Error {
+  override name = "FetchStopped";
+  constructor() {
+    super("The download stopped.");
+  }
 }
 
 export interface FetchBookResult {
@@ -89,6 +106,10 @@ function reason(error: unknown): string {
 export async function fetchBook(options: FetchBookOptions): Promise<FetchBookResult> {
   const { toc, download } = options;
   const log = options.log ?? (() => {});
+  const progress = options.progress ?? (() => {});
+  const checkStop = () => {
+    if (options.stopped?.()) throw new FetchStopped();
+  };
   const selected = options.chapters.map((number) => toc.chapters[number - 1]!);
   const total = selected.reduce((count, chapter) => count + chapter.pages.length, 0);
   const skipped: FetchBookResult["skipped"] = [];
@@ -99,7 +120,9 @@ export async function fetchBook(options: FetchBookOptions): Promise<FetchBookRes
   for (const chapter of selected) {
     const pages: (typeof chapters)[number]["pages"] = [];
     for (const [i, page] of chapter.pages.entries()) {
+      checkStop();
       pageNumber++;
+      progress({ text: `Downloading page ${pageNumber} of ${total}, "${page.title}".`, done: pageNumber - 1, total });
       log(`[${pageNumber}/${total}] ${chapter.title}${chapter.pages.length > 1 ? ` > ${page.title}` : ""}`);
       // The page of a chapter with one page, and the page of the chapter itself, need no heading of their own.
       const own = chapter.pages.length === 1 || (i === 0 && page.title.toLowerCase() === chapter.title.toLowerCase());
@@ -136,7 +159,10 @@ export async function fetchBook(options: FetchBookOptions): Promise<FetchBookRes
   const imageSrc = new Map<string, string>();
   const images: EpubImage[] = [];
   if (addresses.length > 0) log(`Images: ${addresses.length}`);
+  const steps = total + addresses.length;
   for (const [i, address] of addresses.entries()) {
+    checkStop();
+    progress({ text: `Downloading the images: ${i + 1} of ${addresses.length}.`, done: total + i, total: steps });
     if ((i + 1) % 10 === 0 || i + 1 === addresses.length) log(`  ${i + 1}/${addresses.length}`);
     try {
       const result = await download.get(address);
@@ -152,6 +178,8 @@ export async function fetchBook(options: FetchBookOptions): Promise<FetchBookRes
     }
   }
 
+  checkStop();
+  progress({ text: "Writing the EPUB file.", done: steps, total: steps });
   const epubChapters: EpubChapter[] = chapters.map((chapter) => ({
     title: chapter.title,
     pages: chapter.pages.map((page) => ({ id: page.id, heading: page.heading, xhtml: page.page.render(imageSrc) })),

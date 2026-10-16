@@ -93,6 +93,7 @@ describe("yt-dlp facts", () => {
         { id: "aaaaaaaaaaa", title: "One", duration: 300 },
         { id: "bbbbbbbbbbb", title: "[Private video]", duration: null },
         { id: "ccccccccccc", title: "Three" },
+        { id: "ddddddddddd", title: null, duration: null },
       ],
     });
     expect(facts.channel).toBe("Teacher");

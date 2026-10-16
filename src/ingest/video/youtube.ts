@@ -128,12 +128,12 @@ export function playlistFacts(json: Json): PlaylistFacts {
   const id = text(json.id);
   const videos = (Array.isArray(json.entries) ? (json.entries as Json[]) : [])
     .map((entry) => ({ id: text(entry.id), title: text(entry.title), duration: number(entry.duration) }))
-    // A private or deleted video has no length and a title in brackets, for example "[Private video]".
-    .filter((entry) => VIDEO_ID.test(entry.id) && !/^\[(private|deleted) video\]$/i.test(entry.title));
+    // A private or deleted video has no length, and it has no title or a title in brackets, for example "[Private video]".
+    .filter((entry) => VIDEO_ID.test(entry.id) && entry.title !== "" && !/^\[(private|deleted) video\]$/i.test(entry.title));
   return {
     id,
     title: text(json.title) || id,
     channel: text(json.channel) || text(json.uploader) || "YouTube",
-    videos: videos.map((entry) => ({ ...entry, title: entry.title || entry.id })),
+    videos,
   };
 }

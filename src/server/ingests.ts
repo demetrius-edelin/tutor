@@ -5,7 +5,7 @@ import { IngestStopped } from "../ingest/ingest.js";
 import { loadBook, runIngest } from "../ingest/run.js";
 import type { LlmClient } from "../llm/index.js";
 import { TutorError } from "../tutor/diagnosis.js";
-import type { IngestMode, IngestView } from "./api-types.js";
+import type { DownloadView, IngestMode, IngestView } from "./api-types.js";
 
 // Ingest in the app. A run works in the background, in the server process, and the table "ingests" keeps its progress.
 // Only one run works at a time, in all subjects, because two runs on one subject can overwrite the merge result of each other.
@@ -34,14 +34,21 @@ interface IngestRow {
   done: number;
   total: number;
   step: string;
+  // The result of a download, as JSON.
+  result: string | null;
   error: string | null;
 }
 
-const SELECT_INGEST = `SELECT i.id, s.slug AS subject, i.book, i.title, i.mode, i.chapters, i.status, i.done, i.total, i.step, i.error
+const SELECT_INGEST = `SELECT i.id, s.slug AS subject, i.book, i.title, i.mode, i.chapters, i.status, i.done, i.total, i.step, i.result, i.error
   FROM ingests i JOIN subjects s ON s.id = i.subject_id`;
 
-export function toIngestView(row: IngestRow, stopping: boolean): IngestView {
-  return { ...row, chapters: JSON.parse(row.chapters) as number[], stopping: stopping && row.status === "running" };
+export function toIngestView({ result, ...row }: IngestRow, stopping: boolean): IngestView {
+  return {
+    ...row,
+    chapters: JSON.parse(row.chapters) as number[],
+    stopping: stopping && row.status === "running",
+    download: row.mode === "fetch" && result ? (JSON.parse(result) as DownloadView) : null,
+  };
 }
 
 export function ingestRow(db: Db, id: number): IngestRow | undefined {
@@ -51,6 +58,11 @@ export function ingestRow(db: Db, id: number): IngestRow | undefined {
 // The last run of a book in the app.
 export function lastIngest(db: Db, subjectId: number, book: string): IngestRow | undefined {
   return db.prepare(`${SELECT_INGEST} WHERE i.subject_id = ? AND i.book = ? ORDER BY i.id DESC LIMIT 1`).get(subjectId, book) as IngestRow | undefined;
+}
+
+// What the run in progress does, for an error message: 'downloads "Title"' or 'runs ingest on "Title"'.
+export function runText(run: IngestRow): string {
+  return run.mode === "fetch" ? `downloads "${run.title}"` : `runs ingest on "${run.title}"`;
 }
 
 // The run in progress, in one subject or in all subjects.
@@ -64,7 +76,8 @@ export function runningIngest(db: Db, subjectSlug?: string): IngestRow | undefin
 
 // A new server has no runs in progress. A run that is still "running" lost its job, for example after a restart.
 export function failInterruptedIngests(db: Db): void {
-  db.prepare("UPDATE ingests SET status = 'failed', error = ? WHERE status = 'running'").run(
+  db.prepare("UPDATE ingests SET status = 'failed', error = CASE mode WHEN 'fetch' THEN ? ELSE ? END WHERE status = 'running'").run(
+    "The tutor stopped during the download. Add the online book again.",
     "The tutor stopped during the run. A new run takes the finished chapters from the cache.",
   );
 }
@@ -92,13 +105,16 @@ export function findBook(db: Db, dataDir: string, subjectSlug: string, bookSlug:
     const found = file.startsWith(root + sep) && existsSync(file) ? file : null;
     return { subject, slug: bookSlug, dir, row: { id: row.id, title: row.title }, file: found };
   }
-  if (!existsSync(dir)) return undefined;
   // The newest book file. An upload replaces the old file, but a preview of the command can leave a second file.
-  const files = readdirSync(dir)
-    .filter((name) => BOOK_FILE.test(name))
-    .map((name) => join(dir, name))
-    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
-  return files[0] ? { subject, slug: bookSlug, dir, row: null, file: files[0] } : undefined;
+  const files = existsSync(dir)
+    ? readdirSync(dir)
+        .filter((name) => BOOK_FILE.test(name))
+        .map((name) => join(dir, name))
+        .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
+    : [];
+  if (files[0]) return { subject, slug: bookSlug, dir, row: null, file: files[0] };
+  // A download in the app has a run before the book file exists.
+  return lastIngest(db, subject.id, bookSlug) ? { subject, slug: bookSlug, dir, row: null, file: null } : undefined;
 }
 
 export interface StartOptions {
@@ -120,7 +136,7 @@ export function startIngest({ db, llm, dataDir, book, mode, chapters, stops }: S
   }
   if (!book.file) throw new TutorError(`The folder ${book.dir} has no book file.`, 404);
   const running = runningIngest(db);
-  if (running) throw new TutorError(`The tutor runs ingest on "${running.title}" now. Only one run can work at a time.`, 409);
+  if (running) throw new TutorError(`The tutor ${runText(running)} now. Only one run can work at a time.`, 409);
   const selected = [...new Set(chapters as number[])].sort((a, b) => a - b);
   if (book.row) {
     const done = chaptersWithConcepts(db, book.row.id);

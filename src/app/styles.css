@@ -372,7 +372,7 @@ p {
 .reading pre {
   overflow-x: auto;
   padding: 0.75rem 1rem;
-  border-left: 3px solid var(--rule);
+  border-radius: 0.4rem;
   background: color-mix(in srgb, var(--rule) 25%, var(--paper));
   font-family: var(--code);
   font-size: 0.85rem;
@@ -441,7 +441,6 @@ a.contents-entry:hover .contents-title {
   margin: 0.75rem 0 0;
   padding: 0.9rem 1.25rem 1rem;
   border: 1px solid var(--rule);
-  border-left: 4px solid var(--margin-red);
   border-radius: 0.4rem;
   background: var(--panel);
 }
@@ -1211,8 +1210,10 @@ button.button {
 
 .feedback {
   margin-top: 1rem;
-  padding: 0.25rem 0 0.25rem 1rem;
-  border-left: 3px solid var(--highlight);
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.4rem;
+  background: var(--panel);
 }
 
 .verdict {
@@ -1299,7 +1300,6 @@ button.button {
   margin: 0 0 1rem;
   padding: 1.1rem 1.5rem 1.25rem;
   border: 1px solid var(--rule);
-  border-left: 4px solid var(--highlight);
   border-radius: 0.4rem;
   background: var(--panel);
   box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 8%, transparent);
@@ -1407,8 +1407,10 @@ button.button {
 .suggestion {
   max-width: var(--measure);
   margin-bottom: 1.5rem;
-  padding: 0.25rem 0 0.25rem 1rem;
-  border-left: 4px solid var(--highlight);
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.4rem;
+  background: var(--panel);
 }
 
 /* The two orders for the whole queue: two cards of the same size, side by side on a wide screen. */
@@ -1791,7 +1793,7 @@ button.button {
 .chat-answer pre {
   overflow-x: auto;
   padding: 0.75rem 1rem;
-  border-left: 3px solid var(--rule);
+  border-radius: 0.4rem;
   background: color-mix(in srgb, var(--rule) 25%, var(--paper));
   font-family: var(--code);
   font-size: 0.85rem;
@@ -1840,10 +1842,12 @@ button.button {
   max-width: var(--measure);
 }
 
+/* The question of the learner is a tinted box, so that it is different from the answer. */
 .chat-question {
   margin: 1.5rem 0 0.5rem;
-  padding-left: 0.75rem;
-  border-left: 3px solid var(--ink);
+  padding: 0.5rem 0.8rem;
+  border-radius: 0.4rem;
+  background: color-mix(in srgb, var(--rule) 35%, var(--paper));
   font-weight: 500;
 }
 
@@ -1979,10 +1983,10 @@ button.button {
   text-align: left;
 }
 
+/* A quote in a book is indented, as in print. */
 .reading blockquote {
-  margin: 1rem 0;
-  padding-left: 1rem;
-  border-left: 3px solid var(--highlight);
+  margin: 1rem 0 1rem 1.5rem;
+  color: var(--graphite);
 }
 
 @media (max-width: 40rem) {
@@ -2086,6 +2090,63 @@ button.button {
   margin-bottom: 0.4rem;
 }
 
+/* "Add a book" and "Add an online book" stay together on one line. */
+.add-book-buttons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 1rem;
+}
+
+/* The form of an online book: the address, and the optional address of a table of contents. */
+.online-form {
+  max-width: 36rem;
+  margin-bottom: 2rem;
+}
+
+.online-form .field {
+  margin-bottom: 1.1rem;
+}
+
+.online-form label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-weight: 500;
+}
+
+.online-form input {
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.3rem;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+}
+
+.field-note {
+  margin: 0.3rem 0 0;
+  color: var(--graphite);
+  font-size: var(--step--1);
+}
+
+/* The EPUB file of an earlier download, with the choice to use it or to download again. */
+.existing-file {
+  flex-basis: 100%;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.4rem;
+  background: var(--panel);
+}
+
+.existing-file p {
+  margin: 0 0 0.5rem;
+}
+
+.existing-file .button-row {
+  margin: 0;
+}
+
 .new-subject {
   max-width: 30rem;
 }
@@ -2120,19 +2181,19 @@ button.button {
 .run-note {
   max-width: var(--measure);
   padding: 0.6rem 0.9rem;
-  border-left: 3px solid var(--highlight);
+  border: 1px solid var(--rule);
+  border-radius: 0.4rem;
   background: var(--panel);
 }
 
 .run-note.error {
-  border-left-color: var(--margin-red);
+  border-color: color-mix(in srgb, var(--margin-red) 45%, var(--rule));
 }
 
 .run-panel {
   max-width: var(--measure);
   padding: 1.1rem 1.5rem 1.25rem;
   border: 1px solid var(--rule);
-  border-left: 4px solid var(--highlight);
   border-radius: 0.4rem;
   background: var(--panel);
   box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 8%, transparent);

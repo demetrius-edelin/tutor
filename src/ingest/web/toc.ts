@@ -292,7 +292,11 @@ export interface FindTocOptions {
   // The model client. The function throws an error if .env has no model. Only an HTML table of contents needs the model.
   llm: () => LlmClient;
   log?: (line: string) => void;
+  // The advice in an error about a missing table of contents. The command names --toc, and the app names its form field.
+  tocHint?: string;
 }
+
+const TOC_HINT = "Add --toc <url> with a page that lists the pages.";
 
 function isLlmsTxt(status: number, text: string): boolean {
   return status === 200 && !/^\s*</.test(text) && text.split(/\r?\n/).some((line) => LIST_LINK.test(line));
@@ -312,6 +316,7 @@ async function getText(download: Downloader, url: string): Promise<{ url: string
 export async function findToc(options: FindTocOptions): Promise<WebToc> {
   const { startUrl, download } = options;
   const log = options.log ?? (() => {});
+  const hint = options.tocHint ?? TOC_HINT;
 
   if (!options.tocUrl) {
     for (const url of llmsTxtUrls(startUrl)) {
@@ -345,14 +350,14 @@ export async function findToc(options: FindTocOptions): Promise<WebToc> {
   const scope = scopeOf(start, urls);
   const items = scopedItems(links.items, scope);
   if (!items.some((item) => item.url !== null)) {
-    throw new TocError(`${tocUrl} has no links to pages in ${scope}. Add --toc <url> with a page that lists the pages.`);
+    throw new TocError(`${tocUrl} has no links to pages in ${scope}. ${hint}`);
   }
 
   const llm = options.llm();
   log(`One model request finds the table of contents in ${items.length} links and group titles.`);
   const toc = await tocFromLinks(llm, { title: links.title, url: page.url }, items);
   if (toc.chapters.length === 0) {
-    throw new TocError(`The model found no table of contents in ${tocUrl}. Add --toc <url> with a page that lists the pages.`);
+    throw new TocError(`The model found no table of contents in ${tocUrl}. ${hint}`);
   }
   return { title: toc.title, language: links.language ?? "en", startUrl: start, source: "html", tocUrl: page.url, scope, chapters: toc.chapters };
 }

@@ -21,6 +21,8 @@ export type Route =
   | ({ name: "board"; slug: string } & BoardFilters)
   // The book page. The view "plan" shows the chapters for a new run, also after a finished run.
   | { name: "book"; slug: string; book: string; view: "plan" | null }
+  // The form that adds an online book to a subject.
+  | { name: "online"; slug: string }
   | { name: "lesson"; conceptId: number }
   | { name: "session"; id: number }
   | { name: "not-found" };
@@ -39,6 +41,7 @@ export function parseHash(hash: string): Route {
   if (parts[0] === "subjects" && parts[1] && parts[2] === "books" && parts[3] && parts.length === 4) {
     return { name: "book", slug: parts[1], book: parts[3], view: new URLSearchParams(query).get("view") === "plan" ? "plan" : null };
   }
+  if (parts[0] === "subjects" && parts[1] && parts[2] === "online" && parts.length === 3) return { name: "online", slug: parts[1] };
   if (parts[0] === "subjects" && parts[1] && parts[2] === "board" && parts.length === 3) {
     const params = new URLSearchParams(query);
     const show = params.get("show");
@@ -74,6 +77,7 @@ export const href = {
   },
   book: (slug: string, book: string, view?: "plan") =>
     `#/subjects/${encodeURIComponent(slug)}/books/${encodeURIComponent(book)}${view ? `?view=${view}` : ""}`,
+  online: (slug: string) => `#/subjects/${encodeURIComponent(slug)}/online`,
   session: (id: number) => `#/sessions/${id}`,
   lesson: (conceptId: number) => `#/lessons/${conceptId}`,
 };

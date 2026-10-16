@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { encodePng } from "../src/ingest/core/png.js";
 import { parseBook } from "../src/ingest/parse.js";
-import { bookTitle, fetchBook, formatList, shingles, similarity } from "../src/ingest/web/fetch.js";
-import { Downloader, robotsAllow, robotsRules, type Fetcher, type FetchResult } from "../src/ingest/web/http.js";
+import { bookTitle, fetchBook, FetchStopped, formatList, shingles, similarity } from "../src/ingest/web/fetch.js";
+import { Downloader, robotsAllow, robotsRules, type Fetcher } from "../src/ingest/web/http.js";
 import { cleanMarkdownPage, cleanPage, stripMdx } from "../src/ingest/web/page.js";
 import {
   collectLinks,
@@ -16,30 +16,12 @@ import {
   type WebToc,
 } from "../src/ingest/web/toc.js";
 import { FakeLlm } from "./fakes/llm.js";
-
-type FakePage = string | { status?: number; contentType?: string; body: string | Uint8Array };
-
-// A fake site. An address that is not in the map gives a 404 page.
-function fakeSite(pages: Record<string, FakePage>): Fetcher & { requested: string[] } {
-  const requested: string[] = [];
-  const fetcher = async (url: string): Promise<FetchResult> => {
-    requested.push(url);
-    const page = pages[url];
-    if (page === undefined) return { url, status: 404, contentType: "text/html", body: new TextEncoder().encode("<html><body>Not found</body></html>") };
-    const item = typeof page === "string" ? { body: page } : page;
-    const body = typeof item.body === "string" ? new TextEncoder().encode(item.body) : item.body;
-    return { url, status: item.status ?? 200, contentType: item.contentType ?? "text/html; charset=utf-8", body };
-  };
-  return Object.assign(fetcher, { requested });
-}
+import { fakeSite, html, prose } from "./fakes/site.js";
 
 const noModel = () => {
   throw new Error("No model is selected.");
 };
 
-const html = (body: string, title = "Site") => `<!doctype html><html lang="en"><head><title>${title}</title></head><body>${body}</body></html>`;
-// Text with different words, for example "value0 value1 value2".
-const prose = (topic: string, count: number) => Array.from({ length: count }, (_, i) => `${topic}${i}`).join(" ");
 const png = (value: number) => encodePng({ width: 2, height: 2, channels: 3, data: new Uint8Array(12).fill(value) });
 
 describe("robots.txt", () => {
@@ -452,6 +434,31 @@ describe("fetchBook", () => {
     expect(values.images).toHaveLength(1);
     expect(book.chapters[2]!.sections[0]!.markdown).toContain("tip0 tip1");
     expect(book.chapters[2]!.sections[0]!.markdown).not.toContain("Callout");
+  });
+
+  it("reports the progress of each page and image, and stops before the next page", async () => {
+    const steps: string[] = [];
+    await fetchBook({
+      toc,
+      chapters: [2],
+      download: new Downloader(site(), { pauseMs: 0 }),
+      progress: ({ text, done, total }) => steps.push(`${done}/${total} ${text}`),
+    });
+    expect(steps).toEqual([
+      '0/5 Downloading page 1 of 5, "1. Basics".',
+      '1/5 Downloading page 2 of 5, "1.1. Values".',
+      '2/5 Downloading page 3 of 5, "1.2. Values again".',
+      '3/5 Downloading page 4 of 5, "1.3. Missing".',
+      '4/5 Downloading page 5 of 5, "1.4. Secret".',
+      "5/6 Downloading the images: 1 of 1.",
+      "6/6 Writing the EPUB file.",
+    ]);
+
+    const fetcher = site();
+    let pages = 0;
+    const stopped = fetchBook({ toc, chapters: [2], download: new Downloader(fetcher, { pauseMs: 0 }), progress: () => pages++, stopped: () => pages >= 2 });
+    await expect(stopped).rejects.toBeInstanceOf(FetchStopped);
+    expect(fetcher.requested.filter((url) => url.endsWith(".html"))).toEqual(["https://site.test/book/basics.html", "https://site.test/book/values.html"]);
   });
 
   it("names a book with some chapters after the chapters", () => {

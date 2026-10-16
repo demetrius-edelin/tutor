@@ -66,7 +66,7 @@ flowchart LR
 
 1. [Set up the tutor](docs/usage.md#step-1-set-up-the-tutor). Do this one time.
 2. [Start the app](docs/usage.md#step-2-start-the-app).
-3. [Add a book to a subject](docs/usage.md#step-3-add-a-book-to-a-subject). Add the full book, or only the chapters that you want to study now. For an online book, [download it first with a command](docs/commands.md#download-an-online-book).
+3. [Add a book to a subject](docs/usage.md#step-3-add-a-book-to-a-subject). Add the full book, or only the chapters that you want to study now. For an online book, the app downloads the pages first.
 4. [Study](docs/usage.md#step-4-study). The app shows the next action at each stage.
 
 The [usage guide](docs/usage.md) explains each step in the app. The [command reference](docs/commands.md) explains the commands in the terminal.
@@ -75,7 +75,7 @@ The [usage guide](docs/usage.md) explains each step in the app. The [command ref
 
 In the app, you open a subject and go through these stages:
 
-- Books: add a book, or more chapters of a book. Select the chapters, make a preview, and save it. The concept map follows the order of the books.
+- Books: add a book file or an online book, or more chapters of a book. Select the chapters, make a preview, and save it. The concept map follows the order of the books.
 - Choose: on the concept map, test, learn, or skip each concept. To do this for many concepts in one step, select their checkboxes and use the bar at the bottom of the page.
 - Diagnosis: the tutor asks 2 questions about each concept that you selected for a test. To start it, click "Test it" next to a concept, or select concepts and click "Test them".
 - Study queue: the concepts to learn, in an order that you can change.
@@ -89,7 +89,7 @@ The model writes the questions and grades the open answers. If you think that a 
 The app does the main work. Use a command in the terminal for these tasks:
 
 - Check the model after a change to `.env`: `npm run llm:check`.
-- Download an online book or online documentation into an EPUB file: `npm run fetch`. Then add the EPUB file in the app.
+- Download an online book or online documentation into an EPUB file in the terminal: `npm run fetch`. The app can also do this, but the command has more options, for example `--title`.
 - Get the transcript of a YouTube video or playlist into an EPUB file: `npm run fetch` with the YouTube address. Then add the EPUB file in the app.
 - Check a book at no cost before you add it: `npm run parse`.
 - Ingest some sections of a very large chapter, or ingest a chapter again: `npm run ingest` with `--sections` or `--replace`.
@@ -172,7 +172,7 @@ PORT=8080 npm start
 - EPUB files work best. The parser reads the publisher CSS for headings, bold, and italic.
 - PDF files must be tagged. Word and many publishing tools make tagged PDF files. The parser stops with a clear message for an untagged or a scanned PDF.
 - Some books show code or tables as images. Ingest uses the model to read them. If the model does not accept images, the images stay as placeholders.
-- Online books and online documentation: `npm run fetch` downloads the pages into an EPUB file. Then you add the file in the app. The command cannot read pages behind a login, or pages that show their text only after JavaScript runs. See [Download an online book](docs/commands.md#download-an-online-book).
+- Online books and online documentation: the app downloads the pages into an EPUB file. Then you select the chapters, as for a book file. The tutor cannot read pages behind a login, or pages that show their text only after JavaScript runs. See [Add an online book](docs/usage.md#add-an-online-book).
 - YouTube videos and playlists: `npm run fetch` writes the transcript into an EPUB file. Each YouTube chapter of a video becomes a chapter of the book. For a playlist, each video becomes a chapter. The transcript also contains the code on the screen. See [Download a YouTube video or playlist](docs/commands.md#download-a-youtube-video-or-playlist).
 
 ## Common questions
@@ -184,7 +184,7 @@ PORT=8080 npm start
 - **What does "Stop" do?** The run ends after the current model request. The finished chapters stay in the cache, so a new run does not pay for them again. A stopped run does not change the concept map.
 - **In which order does the concept map show the concepts?** In the order of the books, the chapters, and the sections. The order in which you add the chapters does not change it.
 - **Can I move or delete the book file after I add it?** Yes. The tutor keeps a copy of the book file in the folder of the book.
-- **Can the tutor teach from online documentation?** Yes. Download it with `npm run fetch`, then add the EPUB file in the app. See [Download an online book](docs/commands.md#download-an-online-book).
+- **Can the tutor teach from online documentation?** Yes. On the subject screen, click "Add an online book" and type the address. See [Add an online book](docs/usage.md#add-an-online-book).
 - **Can the tutor teach from a YouTube course?** Yes. Set the video model in `.env`. Then get the transcript with `npm run fetch` and the YouTube address, and add the EPUB file in the app. A link before each paragraph opens the video at that point. See [Download a YouTube video or playlist](docs/commands.md#download-a-youtube-video-or-playlist).
 - **How do I add a second book to a subject?** On the subject screen, click "Add a book". The tutor adds the concepts of the new book to the concept map of the subject.
 - **How do I make a new subject?** On the list of subjects, type a name in the "New subject" field. Then click "Create".
@@ -198,8 +198,7 @@ The tutor is at version 0.1.0. All the app stages and the commands in this READM
 
 Planned:
 
-- Add an online book from the app. Now you download it with a command, then you add the EPUB file in the app.
-- Add a YouTube video or playlist from the app, in the same way.
+- Add a YouTube video or playlist from the app, in the same way as an online book. Now you get the transcript with a command, then you add the EPUB file in the app.
 - A container image, to run the tutor on your own server.
 
 ## Development

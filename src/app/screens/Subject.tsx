@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import type { ModuleSummary, StatusCounts, SubjectDetail } from "../../server/api-types";
+import type { IngestView, ModuleSummary, StatusCounts, SubjectDetail } from "../../server/api-types";
 import { postFile, useApi } from "../api";
 import { InlineCode } from "../components/InlineCode";
 import { Layout, Notice } from "../components/Layout";
@@ -27,14 +27,14 @@ export function Subject({ slug }: { slug: string }) {
 
 function SubjectView({ subject }: { subject: SubjectDetail }) {
   const { done, total } = knownShare(subject.progress);
-  // A new subject has no books. It shows only the books part, with the "Add a book" button.
+  // A new subject has no books. It shows only the books part, with the buttons that add a book.
   if (subject.books === 0 && subject.concepts === 0) {
     return (
       <>
         <h1>{subject.name}</h1>
         <p className="lead">
-          This subject has no books yet. Add a book, and the tutor finds its concepts. You select the chapters, and you can add more chapters
-          later.
+          This subject has no books yet. Add a book file or an online book, and the tutor finds its concepts. You select the chapters, and you
+          can add more chapters later.
         </p>
         <Books subject={subject} />
       </>
@@ -93,7 +93,14 @@ function SubjectView({ subject }: { subject: SubjectDetail }) {
   );
 }
 
-// The books of the subject, the ingest run in progress, the books that are not saved, and the "Add a book" button.
+const RUN_NAME: Record<IngestView["mode"], string> = { preview: "Preview", save: "Ingest", fetch: "Download" };
+
+// The current step of a run, without its last period, because the note adds its own period.
+function stepNote(run: IngestView): string {
+  return (run.step || (run.mode === "fetch" ? "the tutor downloads the pages" : "the tutor reads the book")).replace(/\.$/, "");
+}
+
+// The books of the subject, the run in progress, the books that are not saved, and the buttons that add a book.
 function Books({ subject }: { subject: SubjectDetail }) {
   const { slug, ingest } = subject;
   return (
@@ -102,7 +109,7 @@ function Books({ subject }: { subject: SubjectDetail }) {
       {ingest && (
         <p className="run-note" role="status">
           <Spinner />
-          {ingest.mode === "preview" ? "Preview" : "Ingest"} of "{ingest.title}": {ingest.step || "the tutor reads the book"}.{" "}
+          {RUN_NAME[ingest.mode]} of "{ingest.title}": {stepNote(ingest)}.{" "}
           <a href={href.book(slug, ingest.book)}>Show the progress</a>
         </p>
       )}
@@ -150,7 +157,8 @@ function Books({ subject }: { subject: SubjectDetail }) {
 }
 
 // The browser sends the file to the server, and the server parses it. The parse uses no model, so it costs nothing.
-// It is the main button of a subject with no books. After the first book, "Add chapters" is more frequent, so it is a text link.
+// "Add an online book" opens the form for the address. The two are the main buttons of a subject with no books.
+// After the first book, "Add chapters" is more frequent, so they are text links.
 function AddBook({ slug, main }: { slug: string; main: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -179,11 +187,19 @@ function AddBook({ slug, main }: { slug: string; main: boolean }) {
           if (file) void upload(file);
         }}
       />
-      <button className={main ? "button" : "text-button strong"} onClick={() => input.current?.click()} disabled={busy !== null}>
-        {busy && <Spinner />}
-        {busy ? `Reading ${busy}` : "Add a book"}
-      </button>
-      <p className="quiet small">An EPUB file or a tagged PDF file. The tutor reads the chapters with no model, so this step costs nothing.</p>
+      <span className="add-book-buttons">
+        <button className={main ? "button" : "text-button strong"} onClick={() => input.current?.click()} disabled={busy !== null}>
+          {busy && <Spinner />}
+          {busy ? `Reading ${busy}` : "Add a book"}
+        </button>
+        <a className={main ? "button secondary" : "text-button strong"} href={href.online(slug)}>
+          Add an online book
+        </a>
+      </span>
+      <p className="quiet small">
+        A book file: an EPUB file or a tagged PDF file. The tutor reads the chapters with no model, so this step costs nothing. An online book: the
+        tutor downloads its pages into an EPUB file.
+      </p>
       {error && (
         <p className="error" role="alert">
           {error}

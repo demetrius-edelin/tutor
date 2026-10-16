@@ -5,6 +5,7 @@ import { Book } from "./screens/Book";
 import { ConceptMap } from "./screens/ConceptMap";
 import { Home } from "./screens/Home";
 import { Lesson } from "./screens/Lesson";
+import { OnlineBook } from "./screens/OnlineBook";
 import { Queue } from "./screens/Queue";
 import { Session } from "./screens/Session";
 import { Subject } from "./screens/Subject";
@@ -24,6 +25,8 @@ export function App() {
       return <Board key={route.slug} slug={route.slug} filters={{ show: route.show, starred: route.starred, find: route.find }} />;
     case "book":
       return <Book key={`${route.slug}/${route.book}`} slug={route.slug} book={route.book} view={route.view} />;
+    case "online":
+      return <OnlineBook key={route.slug} slug={route.slug} />;
     case "lesson":
       return <Lesson key={route.conceptId} conceptId={route.conceptId} />;
     case "session":

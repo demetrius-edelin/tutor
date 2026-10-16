@@ -7,7 +7,9 @@ import { readBookSource } from "../ingest/parse.js";
 import { countRequests, loadBook } from "../ingest/run.js";
 import { TutorError } from "../tutor/diagnosis.js";
 import type { BookView, IngestReportView, PreviewModule } from "./api-types.js";
-import { BOOK_FILE, chaptersWithConcepts, lastIngest, runningIngest, toIngestView, type BookLocation } from "./ingests.js";
+import { BOOK_FILE, chaptersWithConcepts, lastIngest, runningIngest, runText, toIngestView, type BookLocation } from "./ingests.js";
+
+type SubjectRow = BookLocation["subject"];
 
 // Subjects and books in the app: a new subject, the upload of a book file, and the data of the book page.
 
@@ -29,16 +31,44 @@ export function createSubject(db: Db, value: unknown): { slug: string; name: str
   return { slug, name };
 }
 
-// Keep a book file in the folder of its book, as the command does. The result is the folder name of the book.
-// If the subject has the book already, the old file stays. A run then adds the chapters without concepts.
+// Keep an uploaded book file in the folder of its book. The result is the folder name of the book.
 export async function addBook(db: Db, dataDir: string, subjectSlug: string, fileName: unknown, data: unknown): Promise<{ book: string }> {
-  const subject = db.prepare("SELECT id, slug FROM subjects WHERE slug = ?").get(subjectSlug) as { id: number; slug: string } | undefined;
-  if (!subject) throw new TutorError(`The subject "${subjectSlug}" does not exist.`, 404);
+  const subject = findSubject(db, subjectSlug);
   if (!Buffer.isBuffer(data) || data.length === 0) throw new TutorError("The request has no book file.");
   // Only the name of the file, with no folder and no unusual characters.
   const name = basename(String(fileName ?? "").replace(/\\/g, "/")).replace(/[^\w.\- ()]+/g, "-");
   if (!BOOK_FILE.test(name)) throw new TutorError("Select an EPUB file or a PDF file.");
+  return storeBook(db, dataDir, subject, name, data);
+}
 
+// Add an EPUB file from data/web/ as a book, for example an online book from an earlier download.
+export async function addWebBook(db: Db, dataDir: string, subjectSlug: string, fileName: unknown): Promise<{ book: string }> {
+  const subject = findSubject(db, subjectSlug);
+  const name = typeof fileName === "string" ? fileName : "";
+  // Only a file name, with no folder, so that the file stays in data/web/.
+  if (!/\.epub$/i.test(name) || basename(name) !== name || name.includes("\\")) throw new TutorError("Select an EPUB file in data/web/.");
+  const file = join(dataDir, "web", name);
+  if (!existsSync(file)) throw new TutorError(`The folder data/web/ has no file ${name}.`, 404);
+  return storeBook(db, dataDir, subject, name, readFileSync(file));
+}
+
+export function findSubject(db: Db, slug: string): SubjectRow {
+  const subject = db.prepare("SELECT id, slug, name FROM subjects WHERE slug = ?").get(slug) as SubjectRow | undefined;
+  if (!subject) throw new TutorError(`The subject "${slug}" does not exist.`, 404);
+  return subject;
+}
+
+// Parse a book file and keep it in the folder of its book, as the command does. The result is the folder name of the book.
+// If the subject has the book already, the old file stays. A run then adds the chapters without concepts.
+// A download calls this function at its end. Its own run is not a run on the book, so ownRun gives its id.
+export async function storeBook(
+  db: Db,
+  dataDir: string,
+  subject: SubjectRow,
+  name: string,
+  data: Uint8Array,
+  ownRun?: number,
+): Promise<{ book: string }> {
   let title: string;
   try {
     title = (await readBookSource(data, name)).title;
@@ -48,9 +78,11 @@ export async function addBook(db: Db, dataDir: string, subjectSlug: string, file
   const slug = slugify(title);
   if (db.prepare("SELECT 1 FROM books WHERE subject_id = ? AND slug = ?").get(subject.id, slug)) return { book: slug };
   const running = runningIngest(db, subject.slug);
-  if (running?.book === slug) throw new TutorError(`The tutor runs ingest on "${running.title}" now. Wait for the end of the run.`, 409);
+  if (running && running.id !== ownRun && running.book === slug) {
+    throw new TutorError(`The tutor ${runText(running)} now. Wait for the end of the run.`, 409);
+  }
 
-  // A new upload of a book that is not saved replaces the old file. The cached results stay.
+  // A new file of a book that is not saved replaces the old file. The cached results stay.
   const dir = join(dataDir, "subjects", subject.slug, "books", slug);
   mkdirSync(dir, { recursive: true });
   for (const old of readdirSync(dir)) if (BOOK_FILE.test(old) && old !== name) rmSync(join(dir, old));
@@ -122,7 +154,14 @@ export async function bookView(db: Db, dataDir: string, book: BookLocation, mode
     run: run ? toIngestView(run, stopping(run.id)) : null,
     report: run?.status === "done" && run.mode !== "fetch" ? readReport(book.dir, run.mode === "preview") : null,
   };
-  if (!book.file) return { ...view, problem: `The folder ${book.dir} has no copy of the book file.` };
+  if (!book.file) {
+    // A download in the app writes the book file only at its end.
+    const problem =
+      run?.mode === "fetch"
+        ? "The tutor has no EPUB file of this book, because the download did not finish."
+        : `The folder ${book.dir} has no copy of the book file.`;
+    return { ...view, problem };
+  }
 
   let loaded;
   try {

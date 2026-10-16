@@ -562,7 +562,7 @@ The app does not offer a full replace of a saved book. A replace removes the boo
 
 `npm run fetch` downloads an online book into an EPUB file. Milestone 18 adds the same function to the app. The user adds an online book in this order:
 
-1. On the subject screen, the user clicks "Add an online book" and types the address.
+1. On the subject screen, the user clicks "Add an online book". The page "Add an online book" opens, and the user types the address.
 2. The server finds the table of contents. For a site with no `llms.txt` file, this needs one model request. The app waits for the answer, as for a new lesson.
 3. The app shows the title, the chapters with their number of pages, and the estimated time. Each chapter has a checkbox. All chapters start selected, as in the command.
 4. The user clicks "Download". The download is a run in the background, with the progress and the "Stop" button.
@@ -571,11 +571,13 @@ The app does not offer a full replace of a saved book. A replace removes the boo
 
 A second field of the form is optional. It takes the address of a page with the full table of contents, as `--toc` does.
 
+The form and the chapters have their own page, at `#/subjects/<subject>/online`. A large site has too many chapters for the subject screen, as a book has too many parts for its plan. The server keeps no state between the table of contents and the download, so the app sends the table of contents back with the selected chapters. The server checks that each page is in the scope.
+
 If `data/web/` has a file with the same title, the app offers two buttons: "Use the downloaded file" and "Download again".
 
 The download obeys the same rules as the command: one request at a time, a pause of 1 second, and `robots.txt`. A download is a run, so the rule of one run at a time applies to it too.
 
-"Stop" ends the download after the current page. A stopped download writes no EPUB file.
+"Stop" ends the download after the current page or image. A stopped download writes no EPUB file.
 
 The book page shows the skipped pages of the download above the plan.
 
@@ -850,6 +852,7 @@ Some requests wait for the model, for example a new lesson. A book upload can al
   - The "Add chapters" button of each book with chapters without concepts.
   - One line for a run in progress, with a link to the book page.
 - Book (phase 3): the plan, the progress of a run, and the ingest report of one book. See "The book page".
+- Online book (phase 3): the form for the address, and the chapters of the table of contents with their checkboxes. See "Online books".
 - Map: the modules and concepts, with the status, the star, and the sources of each concept. Inside a module, a small heading starts the concepts of each chapter. Mark one concept with its buttons, or select many concepts and mark them in one step. Undo a skip here. A module on the subject screen opens the map at that module.
 - Diagnosis: the questions one at a time. Then the results, with the "Learn" and "Skip" choices.
 - Queue: the study queue, with drag and drop and the queue buttons.

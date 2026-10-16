@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Db } from "../db/index.js";
+import { httpFetcher, type Fetcher } from "../ingest/web/http.js";
 import type { LlmClient } from "../llm/index.js";
 import {
   answerQuestion,
@@ -30,8 +31,9 @@ import {
 } from "../tutor/lesson.js";
 import { applyBookOrder, applySuggestedOrder, queueView, removeFromQueue, reorderQueue } from "../tutor/queue.js";
 import type { AfterTestAction, Choice, Mark } from "./api-types.js";
-import { addBook, bookView, createSubject, MAX_UPLOAD_BYTES } from "./books.js";
-import { failInterruptedIngests, findBook, ingestRow, runningIngest, startIngest, toIngestView } from "./ingests.js";
+import { addBook, addWebBook, bookView, createSubject, MAX_UPLOAD_BYTES } from "./books.js";
+import { failInterruptedIngests, findBook, ingestRow, runningIngest, runText, startIngest, toIngestView } from "./ingests.js";
+import { findOnlineToc, startFetch } from "./online.js";
 import { conceptMap, deleteSubject, listSubjects, section, subjectDetail } from "./queries.js";
 
 export interface ServerOptions {
@@ -44,6 +46,9 @@ export interface ServerOptions {
   llmError?: string;
   // The model in one line, for the book page.
   modelName?: string;
+  // The function that gets a web page, and the pause between two requests to a site. The tests use a fake site with no pause.
+  fetcher?: Fetcher;
+  fetchPauseMs?: number;
 }
 
 export interface TutorServer extends FastifyInstance {
@@ -51,8 +56,9 @@ export interface TutorServer extends FastifyInstance {
   idle(): Promise<void>;
 }
 
-export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelName }: ServerOptions): TutorServer {
+export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelName, fetcher, fetchPauseMs }: ServerOptions): TutorServer {
   const app = Fastify({ logger: false }) as unknown as TutorServer;
+  const web = { fetcher: fetcher ?? httpFetcher, pauseMs: fetchPauseMs ?? 1000 };
   const jobs = new Set<Promise<void>>();
   // The ingest runs that the user stopped. A run ends before its next step.
   const stops = new Set<number>();
@@ -98,7 +104,7 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelNa
   // Delete a subject with its books, its concepts, the progress of the learner, and its files.
   app.delete<{ Params: { slug: string } }>("/api/subjects/:slug", async (request, reply) => {
     const running = runningIngest(db, request.params.slug);
-    if (running) throw new TutorError(`The tutor runs ingest on "${running.title}" in this subject. Stop the run, or wait for its end.`, 409);
+    if (running) throw new TutorError(`The tutor ${runText(running)} in this subject. Stop the run, or wait for its end.`, 409);
     if (!deleteSubject(db, dataDir, request.params.slug)) {
       return reply.code(404).send({ error: `The subject "${request.params.slug}" does not exist.` });
     }
@@ -138,12 +144,29 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelNa
     },
   );
 
+  // Online books
+
+  // Find the table of contents of an online book. For a site with no llms.txt file, this needs one model request.
+  app.post<{ Body: { url?: unknown; toc?: unknown } }>("/api/fetch/toc", async (request) => findOnlineToc(web, requireModel, request.body ?? {}));
+
+  // Start the download of some chapters of an online book, or give the EPUB file of an earlier download with the same title.
+  app.post<{ Params: { slug: string }; Body: { toc?: unknown; chapters?: unknown; again?: unknown } }>("/api/subjects/:slug/fetch", async (request) => {
+    const { view, job } = startFetch({ db, dataDir, web, subjectSlug: request.params.slug, body: request.body ?? {}, stops });
+    if (job) runInBackground(job);
+    return view;
+  });
+
+  // Add an EPUB file from data/web/ as a book, for example the file of an earlier download.
+  app.post<{ Params: { slug: string }; Body: { file?: unknown } }>("/api/subjects/:slug/books/web", async (request) =>
+    addWebBook(db, dataDir, request.params.slug, request.body?.file),
+  );
+
   app.get<{ Params: { id: string } }>("/api/ingests/:id", async (request, reply) => {
     const row = ingestRow(db, Number(request.params.id));
     return row ? toIngestView(row, stops.has(row.id)) : reply.code(404).send({ error: `The run ${request.params.id} does not exist.` });
   });
 
-  // Stop a run. It ends after the current image, chapter, or merge.
+  // Stop a run. It ends after the current image, chapter, or merge. A download ends after the current page or image.
   app.post<{ Params: { id: string } }>("/api/ingests/:id/stop", async (request, reply) => {
     const row = ingestRow(db, Number(request.params.id));
     if (!row) return reply.code(404).send({ error: `The run ${request.params.id} does not exist.` });
