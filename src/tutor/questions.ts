@@ -2,8 +2,9 @@ import { randomInt } from "node:crypto";
 import { z } from "zod";
 import type { LlmClient, Source } from "../llm/index.js";
 
-// The model writes the diagnosis questions: for each concept, one multiple-choice question
-// and one open question. The open question is a short answer, or a small task for a skill.
+// The model writes the diagnosis questions: for each concept, one open question, and one multiple-choice question
+// if the concept needs two questions. The open question is a short answer, or a small task for a skill.
+// A simple concept gets only the open question, so that a guess cannot pass and the diagnosis stays short.
 
 export interface QuestionConcept {
   id: number;
@@ -29,13 +30,15 @@ const QuestionsSchema = z.object({
   concepts: z.array(
     z.object({
       conceptId: z.string(),
-      choice: z.object({
-        question: z.string(),
-        options: z.array(z.string()),
-        correctIndex: z.number().int(),
-        explanation: z.string(),
-        sectionId: z.string(),
-      }),
+      choice: z
+        .object({
+          question: z.string(),
+          options: z.array(z.string()),
+          correctIndex: z.number().int(),
+          explanation: z.string(),
+          sectionId: z.string(),
+        })
+        .nullable(),
       open: z.object({
         kind: z.enum(["short", "apply"]),
         question: z.string(),
@@ -54,13 +57,14 @@ const SHORT_ANSWER_RULES = `- Each open question asks one thing. Do not add "exp
 - keyPoints: the 1 or 2 points that show that the learner understands the concept. Do not add a point that the question does not ask for, for example a reason, an example, or a number. modelAnswer: the shortest correct answer.`;
 
 export const QUESTIONS_SYSTEM = `You write diagnosis questions. A diagnosis checks if a learner knows a concept already, before a lesson.
+Each concept gets an open question. A simple concept gets only the open question: set choice to null. A concept with more than one part to check also gets a multiple-choice question. Most concepts are simple.
 Rules:
 - Base each question on the sources. Test the understanding of the concept, not the memory of the book. Do not ask about the book, the author, the chapter, page numbers, or exact words.
 - The multiple-choice question has 4 options and exactly one correct option. The wrong options must look correct to a learner who does not know the concept. Do not use "all of the above" or "none of the above". The explanation tells in one or two sentences why the correct option is correct.
 - The open question: for a "knowledge" concept, use kind "short": the learner explains one idea in one or two sentences. For a "skill" concept, use kind "apply": a small task with a concrete case, for example write a query, predict a result, or choose a solution. The answer is the query, the result, or the choice.
 ${SHORT_ANSWER_RULES}
 - sectionId: the id of the source that the question uses.
-- The two questions of a concept must test different things.`;
+- If a concept has two questions, they must test different things.`;
 
 function questionsPrompt(concepts: QuestionConcept[]): string {
   const list = concepts.map((concept) => `c${concept.id}: ${concept.name}: ${concept.objective} [${concept.kind}]`).join("\n");
@@ -109,13 +113,16 @@ export async function writeQuestions(llm: LlmClient, concepts: QuestionConcept[]
         const number = Number(id.replace(/\D/g, ""));
         return concept.sources.some((source) => source.sectionId === number) ? number : (concept.sources[0]?.sectionId ?? null);
       };
-      const options = [...new Set(entry.choice.options.map((option) => option.trim()).filter(Boolean))];
-      const choiceUsable =
-        entry.choice.question.trim() !== "" && options.length >= 2 && entry.choice.correctIndex >= 0 && entry.choice.correctIndex < options.length;
-      if (!choiceUsable || entry.open.question.trim() === "") continue;
-      const shuffled = shuffle(options, entry.choice.correctIndex);
-      result.set(concept.id, [
-        {
+      if (entry.open.question.trim() === "") continue;
+      const questions: WrittenQuestion[] = [];
+      // A choice question that is not usable asks the model again, as an empty open question does.
+      if (entry.choice) {
+        const options = [...new Set(entry.choice.options.map((option) => option.trim()).filter(Boolean))];
+        const choiceUsable =
+          entry.choice.question.trim() !== "" && options.length >= 2 && entry.choice.correctIndex >= 0 && entry.choice.correctIndex < options.length;
+        if (!choiceUsable) continue;
+        const shuffled = shuffle(options, entry.choice.correctIndex);
+        questions.push({
           conceptId: concept.id,
           kind: "choice",
           text: entry.choice.question.trim(),
@@ -123,7 +130,10 @@ export async function writeQuestions(llm: LlmClient, concepts: QuestionConcept[]
           answer: String(shuffled.correct),
           keyPoints: [entry.choice.explanation.trim()],
           sectionId: sectionOf(entry.choice.sectionId),
-        },
+        });
+      }
+      result.set(concept.id, [
+        ...questions,
         {
           conceptId: concept.id,
           kind: concept.kind === "skill" ? "apply" : entry.open.kind,

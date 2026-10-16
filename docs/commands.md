@@ -172,7 +172,8 @@ At the first use, the command downloads the yt-dlp program from GitHub into `dat
 
 The book has these parts:
 
-- One video: each YouTube chapter is a chapter of the book.
+- One video of up to 30 minutes: the video is one chapter, and its YouTube chapters are its sections.
+- One longer video: each YouTube chapter is a chapter of the book.
 - A playlist: each video is a chapter, and the YouTube chapters of a video are its sections.
 - A video with no YouTube chapters is one chapter. The parser splits it into sections by size.
 - Each paragraph starts with a link to its time in the video. In the app, "Read the section" shows the player at the paragraph of the quote. A click on a time link moves the player to that time.

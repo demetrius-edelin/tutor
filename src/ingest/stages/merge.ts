@@ -44,7 +44,7 @@ The new concepts of the chapter "${chapterTitle}":
 ${concepts.join("\n")}
 
 Give one entry for each new concept, with its id:
-- action "join": the new concept is the same idea as a concept in the map. Give the slug of that concept in joinWith. Use "join" only for the same idea, not for a related idea.
+- action "join": the new concept is the same idea as a concept in the map, or as an earlier new concept in this list, also in other words. Give the slug of that concept, or the id of the earlier new concept, in joinWith. Use "join" for the same idea, not for a related idea.
 - action "add": the concept is not in the map. joinWith is null.
 - module: the name of a module in the map, or a name from newModules. Use a module in the map if the concept fits it. Put the names of new modules in newModules, in the order of the book. A module name has 1 to 5 words.
 - level: "basic", "intermediate", or "advanced".
@@ -89,11 +89,18 @@ export async function mergeChapter(
 
   const slugOf = new Map<string, string>();
   const added = new Set<string>();
+  // The slugs of the concepts that this chapter added.
+  const addedSlugs = new Set<string>();
   found.forEach((concept, i) => {
     const id = ids[i]!;
     const decision = decisions.get(id);
+    // The target of a join: a concept in the map, or an earlier new concept of this chapter. A new concept with the
+    // name of a concept that this chapter added already joins it too.
+    const joinWith = decision?.action === "join" ? decision.joinWith?.trim() : undefined;
+    const targetSlug = joinWith ? (ids.slice(0, i).includes(joinWith) ? slugOf.get(joinWith) : joinWith) : undefined;
     const target =
-      decision?.action === "join" && decision.joinWith ? map.concepts.find((other) => other.slug === decision.joinWith) : undefined;
+      (targetSlug ? map.concepts.find((other) => other.slug === targetSlug) : undefined) ??
+      map.concepts.find((other) => addedSlugs.has(other.slug) && normalizeQuote(other.name) === normalizeQuote(concept.name));
     if (target) {
       for (const source of concept.sources.map(toMapSource)) {
         if (!target.sources.some((other) => other.key === source.key)) target.sources.push(source);
@@ -118,6 +125,7 @@ export async function mergeChapter(
     });
     slugOf.set(id, slug);
     added.add(id);
+    addedSlugs.add(slug);
   });
 
   // Prerequisites can point to new concepts of the same chapter, so they come after all concepts.

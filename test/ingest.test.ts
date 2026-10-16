@@ -127,6 +127,39 @@ describe("mergeChapter", () => {
     expect(map.concepts.find((concept) => concept.name === "Table scan")!.prerequisites).toEqual([]);
   });
 
+  it("joins a new concept with an earlier new concept of the same chapter, also by its name", async () => {
+    const map = emptyMap();
+    const llm = new FakeLlm({
+      merge: () => ({
+        newModules: ["Basics"],
+        concepts: [
+          { id: "n1", action: "add", joinWith: null, module: "Basics", level: "basic", prerequisites: [] },
+          { id: "n2", action: "join", joinWith: "n1", module: "Basics", level: "basic", prerequisites: [] },
+          // A join with a later concept is not usable, so the concept is new.
+          { id: "n3", action: "join", joinWith: "n4", module: "Basics", level: "basic", prerequisites: [] },
+          { id: "n4", action: "add", joinWith: null, module: "Basics", level: "basic", prerequisites: ["n2"] },
+          { id: "n5", action: "add", joinWith: null, module: "Basics", level: "basic", prerequisites: [] },
+        ],
+      }),
+    });
+    const sourceIn = (name: string, sectionId: string): FoundConcept => ({ ...found(name), sources: [{ sectionId, quote: "q", quoteFound: true }] });
+    const stats = await mergeChapter(
+      llm,
+      map,
+      "Chapter 1",
+      [sourceIn("Purpose of RAG", "1.1"), sourceIn("RAG purpose", "1.2"), sourceIn("Hallucination", "1.3"), sourceIn("Retriever", "1.4"), sourceIn("purpose of RAG", "1.5")],
+      toSource,
+    );
+    expect(stats).toEqual({ added: 3, joined: 2 });
+    expect(map.concepts.map((concept) => [concept.name, concept.sources.map((source) => source.key)])).toEqual([
+      ["Purpose of RAG", ["book#1.1", "book#1.2", "book#1.5"]],
+      ["Hallucination", ["book#1.3"]],
+      ["Retriever", ["book#1.4"]],
+    ]);
+    // A prerequisite on a joined concept points to the concept that it joined.
+    expect(map.concepts[2]!.prerequisites).toEqual(["purpose-of-rag"]);
+  });
+
   it("joins a concept with the same name without a model request", async () => {
     const map = emptyMap();
     map.modules.push({ name: "Indexes", position: 1, rowId: 7 });

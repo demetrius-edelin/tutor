@@ -79,7 +79,7 @@ Each concept has these properties:
 - The prerequisites: other concepts that the user must know first.
 - The sources: the book sections that teach the concept.
 
-Size rule: one concept is an idea that the tutor can teach in 5 to 10 minutes and test with 3 questions.
+Size rule: one concept is one idea that the source explains, so that the tutor can teach it in one lesson and test it. Three things go into the concept of an idea: the same idea in other words, a direct result of the idea, and a small part of it. The number of concepts follows the content, not the length of the text.
 
 The user does not write the concept map. The model makes it during ingest. The user can see it on the map screen.
 
@@ -97,7 +97,9 @@ Ingest is the most important step. If ingest misses a concept, the user never se
 2. Find all important concepts.
 3. Show the user what ingest skipped, so that the user can fix the gaps.
 
-Ingest keeps a doubtful concept. The user can skip a concept with one click, but the user cannot see a concept that ingest missed.
+Ingest keeps the list of concepts short. Each concept costs the user a lesson and a test, and it costs model requests. Thus, ingest puts a doubtful small idea into a larger concept, or leaves it out. The review stage compares the concepts with the important terms of the author, so a main idea is not lost. The report shows the items that ingest skipped.
+
+Before this rule, ingest kept each doubtful concept. A 6-minute video of 1,099 words then gave 26 concepts and 52 diagnosis questions, and the same ideas came back in many concepts.
 
 Until phase 3, the user starts ingest from the command line. In phase 3, the user adds a book on the subject screen. See "Ingest in the app (phase 3)".
 
@@ -178,7 +180,9 @@ The output has one entry for each section of the chapter. Each entry lists the c
 
 Each concept has the properties from "Concept map" and a short quote from its source section. The code checks that the quote is in the text of the section. Thus, the model cannot add a concept that is not in the book. If the quote is not in the text, the code asks the model one more time. Then it records a warning.
 
-The prompt contains the size rule and a second rule: keep a doubtful concept.
+The prompt contains the size rule and a second rule. A doubtful small idea goes into the concept that it belongs to, or ingest leaves it out.
+
+The cache key of a chapter contains the version of the extract and review prompts. A change of these prompts changes the version, so that the cache does not give the concepts of the old prompts.
 
 ### Stage 3: Review
 
@@ -192,15 +196,16 @@ The author of the book shows what is important. The parser collects these signal
 After the extraction, the code compares the checklist with the concepts of the chapter. Then the model gets the chapter text, the concept list, and the checklist items that match no concept. The model does these things:
 
 - It maps each item to an existing concept, adds a new concept for it, or marks it "minor" with a reason.
-- It finds other important ideas in the chapter that the concept list does not have. It adds each idea as a new concept, with a quote.
+- It adds a main idea of the chapter that no concept covers, with a quote. It does not add a small idea, or an idea in other words.
 
-This second look at each chapter finds the concepts that the first look missed.
+This second look at each chapter finds the main concepts that the first look missed.
 
 ### Stage 4: Merge
 
 The merge step adds the concepts of the book to the concept map of the subject:
 
-- If a new concept and an existing concept are the same idea, the merge step joins them. The existing concept gets one more source.
+- If a new concept and an existing concept are the same idea, also in other words, the merge step joins them. The existing concept gets one more source.
+- Two new concepts of one chapter can be the same idea too. Then the later concept joins the earlier one.
 - It adds each other new concept to the correct module, or it makes a new module.
 - It sets the prerequisites and the level of each new concept.
 
@@ -278,7 +283,7 @@ A diagnosis of concepts from one module shows the name of the module. A diagnosi
 
 ## Diagnose
 
-For each concept with the mark "Test", the tutor asks 2 questions. At least one of the 2 is a short answer or an apply question. Thus, a guess cannot pass.
+For each concept with the mark "Test", the tutor asks 1 or 2 questions. The model decides. Each concept gets a short answer or an apply question. A concept with more than one part to check also gets a multiple-choice question. Thus, a guess cannot pass, and a simple concept costs only one answer.
 
 Each concept gets one of two results: `known` or `failed`.
 
@@ -593,7 +598,8 @@ Milestone 17 in `PLAN.md` adds the command. It needs nothing from the online boo
 
 The user gives the address of one video or of one playlist. Only YouTube addresses work.
 
-- One video: the video is the book. Each YouTube chapter of the video is a chapter of the book.
+- One video of up to 30 minutes: the video is one chapter, and its YouTube chapters are its sections. Thus, ingest reads the full video in one request, and the same idea does not come back as a concept in each small chapter.
+- One longer video: each YouTube chapter of the video is a chapter of the book.
 - A playlist: the playlist is the book. Each video is a chapter. The YouTube chapters of a video are its sections.
 - A video with no YouTube chapters is one chapter. The parser splits it into sections by size, as for a long section of a book.
 

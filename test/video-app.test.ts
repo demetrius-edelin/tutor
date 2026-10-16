@@ -150,6 +150,7 @@ describe("Find a YouTube video or playlist", () => {
       model: "openrouter google/gemini-test",
       modelError: null,
       maxSeconds: 5400,
+      oneChapterSeconds: 1800,
       costNote: null,
     });
     expect(video.chapters).toEqual([
@@ -183,7 +184,7 @@ describe("Find a YouTube video or playlist", () => {
 });
 
 describe("Download the transcript of a video", () => {
-  it("writes a book with one chapter for each YouTube chapter, and a second download uses the cache", async () => {
+  it("writes a short video as one chapter with a section for each YouTube chapter, and a second download uses the cache", async () => {
     const fake = fakeClient();
     start({ config: CONFIG, client: () => fake.client });
     await post("/api/subjects", { name: "Videos" });
@@ -200,7 +201,9 @@ describe("Download the transcript of a video", () => {
 
     const book = (await get<BookView>("/api/subjects/videos/books/one")).body;
     expect(book).toMatchObject({ title: "One", saved: false, problem: null, run: { video: true, status: "done" } });
-    expect(book.chapters.map((chapter) => chapter.title)).toEqual(["Intro", "Types", "Generics"]);
+    // The video is shorter than 30 minutes, so it is one chapter. The parser joins the very short intro to the next section.
+    expect(book.chapters.map((chapter) => chapter.title)).toEqual(["One"]);
+    expect(book.chapters[0]!.sections).toBeGreaterThan(1);
 
     // The transcript is in the cache now. The download of the same video again makes no request.
     const again = await findVideo("https://www.youtube.com/watch?v=aaaaaaaaaaa");
@@ -295,7 +298,7 @@ describe("Download the transcripts of a playlist", () => {
 
 describe("Watch the video at a reference", () => {
   it("gives the point in the video for the sources, the section, and the references of a lesson", async () => {
-    // The lesson quotes the paragraph at 2:00 of the chapter "Types".
+    // The lesson quotes the paragraph at 2:00 of the section "Types".
     const llm = new FakeLlm({
       text: (request) => checkReferences("The concept [1].", [{ number: 1, sourceId: request.sources[0]!.id, quote: "more3 more4 more5" }], request.sources),
     });
@@ -303,13 +306,16 @@ describe("Watch the video at a reference", () => {
     await post("/api/subjects", { name: "Videos" });
     await post("/api/subjects/videos/fetch", { video: await findVideo("https://www.youtube.com/watch?v=aaaaaaaaaaa") });
     await app.idle();
-    await post("/api/subjects/videos/books/one/ingest", { mode: "save", chapters: [2] });
+    await post("/api/subjects/videos/books/one/ingest", { mode: "save", chapters: [1] });
     await app.idle();
 
-    const concept = (await get<ConceptMapView>("/api/subjects/videos/map")).body.modules[0]!.concepts[0]!;
+    // The fake model makes one concept for each section, with the title of the section.
+    const map = (await get<ConceptMapView>("/api/subjects/videos/map")).body;
+    const concept = map.modules.flatMap((module) => module.concepts).find((item) => item.name === "Types")!;
     // The quote of the fake model is not in the text, so the source starts at the first paragraph of the section.
-    expect(concept.sources[0]!.video).toEqual({ id: "aaaaaaaaaaa", start: 30 });
-    expect((await get<SectionView>(`/api/sections/${concept.sources[0]!.sectionId}`)).body.video).toEqual({ id: "aaaaaaaaaaa", start: 30 });
+    // The parser joins the very short intro to this section, so the section starts at 0:00.
+    expect(concept.sources[0]!.video).toEqual({ id: "aaaaaaaaaaa", start: 0 });
+    expect((await get<SectionView>(`/api/sections/${concept.sources[0]!.sectionId}`)).body.video).toEqual({ id: "aaaaaaaaaaa", start: 0 });
 
     const lesson = (await post<LessonView>(`/api/concepts/${concept.id}/lesson`)).body;
     expect(lesson.lesson!.references).toEqual([expect.objectContaining({ quote: "more3 more4 more5", video: { id: "aaaaaaaaaaa", start: 120 } })]);

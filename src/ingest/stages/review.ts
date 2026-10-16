@@ -20,9 +20,9 @@ const ReviewSchema = z.object({
   newConcepts: z.array(ConceptSchema.extend({ sectionId: z.string() })),
 });
 
-const REVIEW_SYSTEM = `You check the list of concepts of some book sections, so that the list misses no important idea.
+const REVIEW_SYSTEM = `You check the list of concepts of some book sections against the items that the author marks as important, so that the list misses no important idea.
 ${CONCEPT_RULES}
-If you are not sure that an idea is a concept, add it. The learner can skip it later.`;
+Add a new concept only for an important idea that no concept in the list covers. If a concept in the list covers the idea, also in other words or as a part of a larger idea, the idea is not new.`;
 
 // The maximum number of checklist items in one request.
 export const MAX_ITEMS = 60;
@@ -54,10 +54,10 @@ ${checklist}
 
 Do two tasks:
 1. For each item, give one decision:
-   - "existing": a concept in the list covers the item. Give the name of that concept in "concept".
-   - "new": the item is a concept that the list does not have. Add it to newConcepts, and give its name in "concept".
-   - "minor": the item is not a concept, for example an example, a name, or a word with no idea behind it. Give a short reason.
-2. Read the sections again. Find other important ideas that the list does not have. Add each one to newConcepts.
+   - "existing": a concept in the list covers the item, also in other words or as a part. Give the name of that concept in "concept".
+   - "new": the item is an important idea that the sections explain, and no concept in the list covers it. Add it to newConcepts, and give its name in "concept".
+   - "minor": the item is not a concept, for example an example, a name, a word with no idea behind it, or an idea that the sections only mention. Give a short reason.
+2. Read the sections again. If they explain a main idea that no concept in the list covers, add it to newConcepts. Do not add a small idea or an idea in other words.
 For each new concept, give the sectionId of the section that teaches it.`;
 }
 

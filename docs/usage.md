@@ -122,7 +122,7 @@ First, set the video model in `.env`. The video model must be a Gemini model, so
 
 At the first use, the tutor downloads the yt-dlp program into `data/bin/`, so you install nothing. yt-dlp reads the facts of the video: the title, the channel, the length, and the YouTube chapters.
 
-For one video, the page shows its YouTube chapters. Each YouTube chapter becomes a chapter of the book. You cannot select the chapters of one video, because each request contains the full video.
+For one video, the page shows its YouTube chapters. A video of up to 30 minutes becomes one chapter, and its YouTube chapters become its sections. For a longer video, each YouTube chapter becomes a chapter of the book. You cannot select the chapters of one video, because each request contains the full video.
 
 For a playlist, the page shows its videos with their lengths. Each video becomes a chapter of the book, and its YouTube chapters become its sections. All the videos start selected. A video longer than 90 minutes shows "Too long" and has no checkbox. "In the cache" marks a video with a transcript from an earlier download. Such a video costs nothing.
 

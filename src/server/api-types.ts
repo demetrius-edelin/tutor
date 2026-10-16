@@ -111,6 +111,8 @@ export interface VideoToc {
   chapters: { title: string; start: number }[];
   // The longest video that the tutor can transcribe, in seconds.
   maxSeconds: number;
+  // The longest video that becomes one chapter. Its YouTube chapters become sections.
+  oneChapterSeconds: number;
   // The video model from .env, or the reason that there is no video model.
   model: string | null;
   modelError: string | null;

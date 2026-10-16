@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describeVideoModel, videoConfig } from "../config.js";
 import { slugify } from "../ingest/core/text.js";
-import { fetchVideos, playlistBookTitle } from "../ingest/video/book.js";
+import { fetchVideos, ONE_CHAPTER_SECONDS, playlistBookTitle } from "../ingest/video/book.js";
 import { createVideoClient, estimateCost, openRouterPrices } from "../ingest/video/client.js";
 import { MAX_VIDEO_SECONDS } from "../ingest/video/transcript.js";
 import { ensureYtDlp, readPlaylist, readVideo, ytDlpRunner } from "../ingest/video/ytdlp.js";
@@ -48,6 +48,9 @@ export async function fetchVideoCommand(args: VideoCommandArgs): Promise<void> {
     if (video.chapters.length > 0) {
       console.log("\n  #   Start  Chapter");
       video.chapters.forEach((chapter, i) => console.log(`${String(i + 1).padStart(3)}  ${formatTime(chapter.start).padStart(6)}  ${chapter.title}`));
+      if (video.duration <= ONE_CHAPTER_SECONDS) {
+        console.log(`\nThe video is ${ONE_CHAPTER_SECONDS / 60} minutes or shorter, so the book gets one chapter. The YouTube chapters become its sections.`);
+      }
     } else {
       console.log("The video has no YouTube chapters. The book gets one chapter, and the parser splits it by size.");
     }

@@ -305,7 +305,7 @@ let lucky: number = 23;
 [7:00] ${prose("generic2", 40)}
 [9:00] ${prose("end", 20)}`;
 
-  it("writes one chapter for each YouTube chapter of one video, with time links and notes", async () => {
+  it("writes a short video as one chapter, with a section for each YouTube chapter, time links, and notes", async () => {
     const client = fakeClient({ "https://www.youtube.com/watch?v=aaaaaaaaaaa": [{ text: oneText }] });
     const result = await fetchVideos({
       kind: "video",
@@ -327,25 +327,29 @@ let lucky: number = 23;
     expect(book.title).toBe("TypeScript Basics");
     expect(book.authors).toEqual(["Teacher"]);
     expect(book.warnings).toEqual([]);
-    expect(book.chapters.map((chapter) => chapter.title)).toEqual(["Intro", "Types", "Generics"]);
-    const types = book.chapters[1]!.sections[0]!.markdown;
+    expect(book.chapters.map((chapter) => chapter.title)).toEqual(["TypeScript Basics"]);
+    const sections = book.chapters[0]!.sections;
+    const types = sections.find((section) => section.title === "Types")!.markdown;
     expect(types).toContain("[0:30](https://www.youtube.com/watch?v=aaaaaaaaaaa&t=30s) A **type annotation** tells");
     expect(types).toContain("_The tutor read this code from the video:_");
     expect(types).toContain("let lucky: number = 23;");
-    expect(book.chapters[1]!.checklist).toContainEqual(expect.objectContaining({ term: "type annotation", source: "bold" }));
-    expect(book.chapters[2]!.sections[0]!.markdown).toContain("[9:00](https://www.youtube.com/watch?v=aaaaaaaaaaa&t=540s)");
+    expect(book.chapters[0]!.checklist).toContainEqual(expect.objectContaining({ term: "type annotation", source: "bold" }));
+    expect(sections.find((section) => section.title === "Generics")!.markdown).toContain("[9:00](https://www.youtube.com/watch?v=aaaaaaaaaaa&t=540s)");
   });
 
-  it("leaves out a YouTube chapter with no paragraph", async () => {
-    const short = video("aaaaaaaaaaa", "Short", 600, [
-      { title: "Intro", start: 0, end: 20 },
-      { title: "Empty", start: 20, end: 25 },
-      { title: "Main", start: 25, end: 600 },
+  // A transcript of a long video: a paragraph each 2 minutes, up to the end.
+  const longText = (seconds: number) =>
+    Array.from({ length: Math.floor(seconds / 120) }, (_, i) => `[${formatTime(i * 120)}] ${prose(`part${i}x`, 40)}`).join("\n");
+
+  it("writes one chapter for each YouTube chapter of a long video, and leaves out a chapter with no paragraph", async () => {
+    const long = video("aaaaaaaaaaa", "Long", 2400, [
+      { title: "Intro", start: 0, end: 600 },
+      { title: "Empty", start: 600, end: 610 },
+      { title: "Main", start: 610, end: 2400 },
     ]);
-    const text = `[0:00] ${prose("intro", 50)}\n[0:40] ${prose("main", 50)}\n[2:30] ${prose("a", 50)}\n[5:00] ${prose("b", 50)}\n[7:30] ${prose("c", 50)}\n[9:30] ${prose("d", 50)}`;
-    const client = fakeClient({ "https://www.youtube.com/watch?v=aaaaaaaaaaa": [{ text }] });
-    const result = await fetchVideos({ kind: "video", title: "Short", channel: "T", source: "s", videos: [short], client, model: "m", cacheDir: tempDir() });
-    const book = await parseBook(result.epub, "short.epub");
+    const client = fakeClient({ "https://www.youtube.com/watch?v=aaaaaaaaaaa": [{ text: longText(2400) }] });
+    const result = await fetchVideos({ kind: "video", title: "Long", channel: "T", source: "s", videos: [long], client, model: "m", cacheDir: tempDir() });
+    const book = await parseBook(result.epub, "long.epub");
     expect(book.chapters.map((chapter) => chapter.title)).toEqual(["Intro", "Main"]);
   });
 

@@ -276,7 +276,7 @@ function SelectionBar(props: { subjectSlug: string; ids: number[]; onDone: (ids:
         <button className="button secondary" onClick={() => apply("learn")} disabled={busy}>
           Add to the queue
         </button>
-        <button className="button" onClick={() => apply("test")} disabled={busy} title="Answer 2 questions about each concept">
+        <button className="button" onClick={() => apply("test")} disabled={busy} title="Answer 1 or 2 questions about each concept">
           Test {count === 1 ? "it" : "them"}
         </button>
       </span>
@@ -454,7 +454,7 @@ function ConceptActions({ concept, actions }: { concept: ConceptView; actions: R
               </button>
             )}
             {concept.status !== "queued" && (
-              <button className="chip" onClick={testIt} disabled={busy} title="Answer 2 questions about the concept">
+              <button className="chip" onClick={testIt} disabled={busy} title="Answer 1 or 2 questions about the concept">
                 <span className="chip-icon" aria-hidden="true">
                   ?
                 </span>

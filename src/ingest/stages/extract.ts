@@ -15,7 +15,12 @@ const ExtractSchema = z.object({
   ),
 });
 
-export const CONCEPT_RULES = `A concept is one idea that a tutor can teach in 5 to 10 minutes and test with 3 questions. A full topic is too large. One small fact is too small.
+// Each concept gets a lesson and a test, so a long list of small concepts costs the learner time and money.
+// The rules keep the ideas that the sections explain, and put the small ideas into a larger concept.
+export const CONCEPT_RULES = `A concept is one idea that the sections explain, so that a tutor can teach it in one lesson and test it. A full topic is too large. One small fact is too small.
+- Use only the ideas that the sections explain. An idea that the sections only mention is not a concept.
+- One idea gets one concept. The same idea in other words, a direct result of an idea, and a small part of an idea go into the concept of that idea. Do not make two concepts that a learner can learn in one lesson.
+- The number of concepts follows the content, not the length of the text. A short section often teaches one concept or no new concept. A section that repeats an earlier idea teaches no new concept.
 For each concept, give these fields:
 - name: 2 to 6 words. The name must be clear without the book.
 - objective: one sentence. It tells what the learner can explain or do after learning the concept.
@@ -25,7 +30,7 @@ For each concept, give these fields:
 
 export const EXTRACT_SYSTEM = `You read sections of a book and find the concepts that a learner must know.
 ${CONCEPT_RULES}
-If you are not sure that an idea is a concept, keep it. The learner can skip it later. A missed concept cannot be found later.
+If you are not sure that an idea is a separate concept, put it into the concept that it belongs to, or leave it out. Each concept costs the learner a lesson and a test.
 Do not add a concept that the sections do not teach.`;
 
 function extractPrompt(bookTitle: string, chapter: ChapterInput, sections: SectionInput[]): string {

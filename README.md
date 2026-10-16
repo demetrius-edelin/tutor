@@ -30,7 +30,7 @@ The tutor runs on your computer. It uses one large language model (LLM) from Ant
 A chat with a book answers the questions that you think of. The tutor turns your books into a course:
 
 - **Structure.** The tutor puts the concepts of a subject into modules on a concept map. It teaches them one at a time, from a study queue.
-- **All the concepts.** Ingest finds the concepts in each chapter. Then it makes sure that the concepts cover the bold and italic terms of the book.
+- **All the concepts, and no more.** Ingest finds the concepts in each chapter. Then it makes sure that the concepts cover the bold and italic terms of the book. One idea gets one concept, so you do not learn the same idea two times.
 - **Visible progress.** The concept map and the review board show the status of each concept, for example known, learning, or mastered.
 - **Your control.** You select the concepts to test, to learn, and to skip. You also set the order of the study queue. The tutor only suggests.
 - **One course from all your material.** A book, the online documentation, and a YouTube course about the same subject give one concept map.
@@ -86,7 +86,7 @@ In the app, you open a subject and go through these stages:
 
 - Books: add a book file, an online book, or a YouTube video, or more chapters of a book. Select the chapters, make a preview, and save it. The concept map follows the order of the books.
 - Choose: on the concept map, test, learn, or skip each concept. To do this for many concepts in one step, select their checkboxes and use the bar at the bottom of the page.
-- Diagnosis: the tutor asks 2 questions about each concept that you selected for a test. To start it, click "Test it" next to a concept, or select concepts and click "Test them".
+- Diagnosis: the tutor asks 1 or 2 questions about each concept that you selected for a test. A simple concept gets one question. To start it, click "Test it" next to a concept, or select concepts and click "Test them".
 - Study queue: the concepts to learn, in an order that you can change.
 - Lesson and test: the tutor teaches one concept from your books, with references. Then it tests the concept with the questions that fit it: one question for a simple concept, at most 5 for a larger one. To pass, answer each question correctly. A pass makes the concept mastered.
 - Review board: a list of all concepts with their status and their stars.
@@ -222,7 +222,7 @@ See [Add an online book](docs/usage.md#add-an-online-book).
 
 - On the subject screen, click "Add an online book or video" and type the address of a video or of a playlist.
 - The tutor does not download the video. It sends the address to a video model, which hears the speech and sees the screen. Thus, the transcript also contains the code, the commands, and the tables on the screen.
-- For one video, each YouTube chapter becomes a chapter of the book. For a playlist, each video becomes a chapter, and you select the videos.
+- A video of up to 30 minutes becomes one chapter, and its YouTube chapters become its sections. For a longer video, each YouTube chapter becomes a chapter. For a playlist, each video becomes a chapter, and you select the videos.
 - You watch the video in the app, at the point of each reference. "Read the section" shows the player at the paragraph of the quote, and the concept map and the lessons have "Watch from 4:05".
 - The tutor keeps each transcript, so you pay for a video only one time. See [Cost](#cost).
 - A video can be 90 minutes long at most. The video model reads only public videos.

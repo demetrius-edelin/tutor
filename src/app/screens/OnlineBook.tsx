@@ -353,6 +353,13 @@ function Videos({ slug, video }: { slug: string; video: VideoToc }) {
         </p>
       )}
 
+      {!playlist && video.chapters.length > 0 && (
+        <p className="section-intro">
+          {(one.duration ?? 0) <= video.oneChapterSeconds
+            ? `The video is ${formatLength(video.oneChapterSeconds)} or shorter, so the book gets one chapter. These YouTube chapters become its sections.`
+            : "Each YouTube chapter becomes a chapter of the book."}
+        </p>
+      )}
       {!playlist &&
         (video.chapters.length > 0 ? (
           <div className="table-scroll">

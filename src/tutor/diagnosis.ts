@@ -134,7 +134,7 @@ export function failInterruptedSessions(db: Db): void {
 
 // Write the questions of a session. The function runs in the background. It saves the questions
 // of each group of concepts at once, so that the app can show the progress.
-// A diagnosis gets 2 questions for each concept. A test after a lesson gets the new questions that fit the concept.
+// A diagnosis gets 1 or 2 questions for each concept. A test after a lesson gets the new questions that fit the concept.
 export async function prepareSession(db: Db, llm: LlmClient, dataDir: string, sessionId: number): Promise<void> {
   try {
     db.prepare("UPDATE sessions SET status = 'preparing', error = NULL WHERE id = ?").run(sessionId);

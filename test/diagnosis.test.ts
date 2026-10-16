@@ -218,4 +218,21 @@ describe("writeQuestions", () => {
       [2, "apply"],
     ]);
   });
+
+  it("writes only the open question for a simple concept, so that a guess cannot pass", async () => {
+    const llm = new FakeLlm({
+      questions: (ids, sources) => {
+        const answer = defaultQuestions(ids, sources) as { concepts: { choice: unknown }[] };
+        answer.concepts[0]!.choice = null;
+        return answer;
+      },
+    });
+    const questions = await writeQuestions(llm, [concept(1), concept(2)]);
+    expect(questions.map((question) => [question.conceptId, question.kind])).toEqual([
+      [1, "short"],
+      [2, "choice"],
+      [2, "short"],
+    ]);
+    expect(llm.calls[0]!.request.system).toContain("A simple concept gets only the open question");
+  });
 });

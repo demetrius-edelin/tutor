@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { describeVideoModel, type VideoConfig } from "../config.js";
 import type { Db } from "../db/index.js";
-import { fetchVideos, playlistBookTitle } from "../ingest/video/book.js";
+import { fetchVideos, ONE_CHAPTER_SECONDS, playlistBookTitle } from "../ingest/video/book.js";
 import { estimateCost, type ModelPrices, type VideoClient } from "../ingest/video/client.js";
 import { MAX_VIDEO_SECONDS } from "../ingest/video/transcript.js";
 import { readPlaylist, readVideo, type YtDlpRunner } from "../ingest/video/ytdlp.js";
@@ -66,6 +66,7 @@ export async function findVideoToc(video: VideoAccess, dataDir: string, url: str
     model: video.config ? describeVideoModel(video.config) : null,
     modelError: video.config ? null : (video.error ?? NO_VIDEO_MODEL),
     maxSeconds: MAX_VIDEO_SECONDS,
+    oneChapterSeconds: ONE_CHAPTER_SECONDS,
     ...(await costRate(video)),
   };
   try {

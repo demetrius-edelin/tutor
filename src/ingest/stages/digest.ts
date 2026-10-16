@@ -6,10 +6,15 @@ import { extractGroup, groupSections } from "./extract.js";
 import { reviewGroup } from "./review.js";
 import type { ChapterDigest, ChapterInput, FoundConcept, ModelConcept } from "./types.js";
 
-// A key of the chapter content. The cache of a chapter digest is valid only for the same key.
+// The version of the extract and review prompts. A change of these prompts must change the version,
+// so that the cache does not give the concepts of the old prompts.
+// Version 2: fewer and larger concepts, and a review step that adds only main ideas.
+export const PROMPTS_VERSION = 2;
+
+// A key of the chapter content and of the prompts. The cache of a chapter digest is valid only for the same key.
 export function chapterKey(chapter: ChapterInput): string {
   const content = chapter.sections.map((section) => `${section.id}:${section.words}:${section.title}`).join("|");
-  return createHash("sha1").update(`${chapter.number}|${chapter.title}|${content}`).digest("hex");
+  return createHash("sha1").update(`v${PROMPTS_VERSION}|${chapter.number}|${chapter.title}|${content}`).digest("hex");
 }
 
 // The number of model requests for a chapter, without the second requests: one extract

@@ -8,9 +8,14 @@ import { checkTranscript, maxTokensFor, paragraphMarkdown, parseTranscript, tran
 import { formatLength, videoUrl, type VideoChapter, type VideoFacts } from "./youtube.js";
 
 // A YouTube video or playlist becomes an EPUB file, as an online book does.
-// - One video: each YouTube chapter is a chapter of the book.
+// - A short video: the video is one chapter, and its YouTube chapters are its sections. Then ingest reads the full video
+//   in one request, and does not find the same idea again in each small chapter.
+// - A long video: each YouTube chapter is a chapter of the book.
 // - A playlist: each video is a chapter, and the YouTube chapters of a video are its sections.
 // - A video with no YouTube chapters is one chapter. The parser splits it into sections by size.
+
+// The longest video that becomes one chapter.
+export const ONE_CHAPTER_SECONDS = 30 * 60;
 
 export interface FetchVideosOptions {
   kind: "video" | "playlist";
@@ -168,12 +173,13 @@ export async function fetchVideos(options: FetchVideosOptions): Promise<FetchVid
     if (!paragraphs) continue;
     const parts = video.chapters.length > 0 ? video.chapters : wholeVideo(video);
     const groups = splitByParts(paragraphs, parts, video.duration);
-    if (options.kind === "video") {
+    if (options.kind === "video" && video.duration > ONE_CHAPTER_SECONDS) {
       // Each YouTube chapter is a chapter of the book. A part with no speech, for example a short intro with music, goes.
       parts.forEach((part, p) => {
         if (groups[p]!.length > 0) chapters.push({ title: part.title, pages: [page(video, `v${v + 1}c${p + 1}`, null, groups[p]!)] });
       });
     } else {
+      // A short video, or a video of a playlist, is one chapter. Its YouTube chapters are the sections.
       const heading = (p: number) => (video.chapters.length > 0 ? parts[p]!.title : null);
       const pages = parts.flatMap((_, p) => (groups[p]!.length > 0 ? [page(video, `v${v + 1}c${p + 1}`, heading(p), groups[p]!)] : []));
       chapters.push({ title: video.title, pages });
