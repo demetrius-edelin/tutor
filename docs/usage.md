@@ -228,4 +228,6 @@ The concept map of the subject is in `data/subjects/<subject>/concept-map.md`, f
 
 The README lists the [stages of the app](../README.md#in-the-app). The app shows the next action at each stage.
 
+You can leave a diagnosis before the end. The tutor keeps each answer. The subject screen and the concept map then show "Continue the diagnosis". "Test it" for a concept of that diagnosis also opens it, with no new questions.
+
 The diagnosis, the lessons, the questions about a lesson, and the tests use the model in `.env`. The model writes the questions and grades the open answers. If you think that a grade is wrong, use "Dispute the grade". A disputed answer counts as correct.

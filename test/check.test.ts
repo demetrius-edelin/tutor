@@ -201,7 +201,13 @@ describe("the test after a lesson", () => {
     const { body } = await post<{ sessionId: number }>(`/api/concepts/${concept}/test-prerequisites`);
     await app.idle();
     const session = await get<SessionView>(`/api/sessions/${body.sessionId}`);
-    expect(session).toMatchObject({ kind: "diagnose", status: "ready", module: null });
+    // As for each diagnosis, a diagnosis of concepts from one module belongs to that module.
+    expect(session).toMatchObject({ kind: "diagnose", status: "ready", module: { name: "Basics" } });
     expect(new Set(session.questions.map((question) => question.conceptId))).toEqual(new Set([prerequisite]));
+    // The prerequisite is in the open diagnosis now, so a second click opens it again with no new questions.
+    const written = llm.count("questions");
+    expect((await post<{ sessionId: number }>(`/api/concepts/${concept}/test-prerequisites`)).body.sessionId).toBe(body.sessionId);
+    await app.idle();
+    expect(llm.count("questions")).toBe(written);
   });
 });

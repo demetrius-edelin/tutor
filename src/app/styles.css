@@ -2217,6 +2217,21 @@ button.button {
   background: var(--panel);
 }
 
+/* A diagnosis that did not finish: the text, and the button that opens it again. */
+.open-diagnoses {
+  max-width: var(--measure);
+  margin: 0 0 1.5rem;
+}
+
+.open-diagnosis {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 0 0 0.5rem;
+}
+
 .run-note.error {
   border-color: color-mix(in srgb, var(--margin-red) 45%, var(--rule));
 }

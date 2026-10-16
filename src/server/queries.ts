@@ -15,6 +15,7 @@ import {
 } from "./api-types.js";
 import { CONCEPT_PLACE } from "../ingest/map.js";
 import { videoMoment } from "../ingest/video/youtube.js";
+import { openDiagnoses } from "../tutor/diagnosis.js";
 import { runningIngest, toIngestView } from "./ingests.js";
 
 interface SubjectRow {
@@ -118,6 +119,7 @@ export function subjectDetail(db: Db, slug: string): SubjectDetail | undefined {
       : null,
     ingest: running ? toIngestView(running, false) : null,
     unsavedBooks,
+    openDiagnoses: openDiagnoses(db, subject.id),
   };
 }
 
@@ -197,8 +199,22 @@ export function conceptMap(db: Db, dataDir: string, slug: string): ConceptMapVie
     return text ? videoMoment(text, quote) : null;
   };
 
+  // The open diagnosis of each concept that waits for its test.
+  const diagnosisOf = new Map(
+    (
+      db
+        .prepare(
+          `SELECT sc.concept_id, MAX(sc.session_id) AS session_id FROM session_concepts sc
+           JOIN sessions s ON s.id = sc.session_id JOIN concepts c ON c.id = sc.concept_id
+           WHERE s.subject_id = ? AND s.kind = 'diagnose' AND s.status <> 'finished' AND c.status = 'to_test' GROUP BY sc.concept_id`,
+        )
+        .all(subject.id) as { concept_id: number; session_id: number }[]
+    ).map((row) => [row.concept_id, row.session_id]),
+  );
+
   return {
     subject: { slug: subject.slug, name: subject.name },
+    openDiagnoses: openDiagnoses(db, subject.id),
     modules: modules.map((module) => ({
       ...module,
       concepts: concepts
@@ -206,6 +222,7 @@ export function conceptMap(db: Db, dataDir: string, slug: string): ConceptMapVie
         .map(({ module_id: _module, ...concept }) => ({
           ...concept,
           starred: concept.starred === 1,
+          diagnosis: diagnosisOf.get(concept.id) ?? null,
           prerequisites: prerequisites
             .filter((prerequisite) => prerequisite.concept_id === concept.id)
             .map(({ slug, name }) => ({ slug, name })),

@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { ConceptMapView, ConceptView, Mark, SelectionResult, SourceRef, Status } from "../../server/api-types";
-import { postJson, useApi } from "../api";
+import { getJson, postJson, useApi } from "../api";
 import { InlineCode } from "../components/InlineCode";
 import { Layout, Notice } from "../components/Layout";
+import { OpenDiagnoses } from "../components/OpenDiagnoses";
 import { SectionPanel } from "../components/SectionPanel";
 import { StarButton } from "../components/StarButton";
 import { WatchButton } from "../components/VideoPlayer";
@@ -108,14 +109,27 @@ function MapView({ map: loaded, focus, focusModule }: { map: ConceptMapView; foc
   );
 
   // Show the new status or star of concepts after an action, without a new load of the map.
-  const updateConcepts = (ids: number[], change: Partial<Pick<ConceptView, "status" | "starred">>) =>
+  // A concept with a new mark leaves its open diagnosis, as on the server. Then the map loads the open diagnoses again.
+  const updateConcepts = (ids: number[], change: Partial<Pick<ConceptView, "status" | "starred">>) => {
+    const leaves = (concept: ConceptView) => ids.includes(concept.id) && concept.diagnosis !== null && change.status !== undefined && change.status !== "to_test";
+    const leaving = map.modules.some((module) => module.concepts.some(leaves));
     setMap((current) => ({
       ...current,
       modules: current.modules.map((module) => ({
         ...module,
-        concepts: module.concepts.map((concept) => (ids.includes(concept.id) ? { ...concept, ...change } : concept)),
+        concepts: module.concepts.map((concept) =>
+          ids.includes(concept.id) ? { ...concept, ...change, ...(leaves(concept) ? { diagnosis: null } : {}) } : concept,
+        ),
       })),
     }));
+    if (leaving) {
+      getJson<ConceptMapView>(`/api/subjects/${encodeURIComponent(map.subject.slug)}/map`)
+        .then((fresh) => setMap((current) => ({ ...current, openDiagnoses: fresh.openDiagnoses })))
+        .catch(() => {
+          // The next load of the map shows the open diagnoses.
+        });
+    }
+  };
   const updateConcept = (id: number, change: Partial<Pick<ConceptView, "status" | "starred">>) => updateConcepts([id], change);
 
   const setChecked = (ids: number[], checked: boolean) =>
@@ -154,6 +168,7 @@ function MapView({ map: loaded, focus, focusModule }: { map: ConceptMapView; foc
         the buttons next to a concept to learn it, test it, or skip it. To do this for many concepts in one step, select their
         boxes. The color of a row shows its status: yellow to learn, green known, and gray skipped.
       </p>
+      <OpenDiagnoses diagnoses={map.openDiagnoses} />
       <div className="search">
         <label htmlFor="concept-search">Find a concept</label>
         <input
@@ -454,11 +469,16 @@ function ConceptActions({ concept, actions }: { concept: ConceptView; actions: R
               </button>
             )}
             {concept.status !== "queued" && (
-              <button className="chip" onClick={testIt} disabled={busy} title="Answer 1 or 2 questions about the concept">
+              <button
+                className="chip"
+                onClick={testIt}
+                disabled={busy}
+                title={concept.diagnosis ? "The concept is in a diagnosis that you did not finish" : "Answer 1 or 2 questions about the concept"}
+              >
                 <span className="chip-icon" aria-hidden="true">
                   ?
                 </span>
-                Test it
+                {concept.diagnosis ? "Continue the diagnosis" : "Test it"}
               </button>
             )}
             {concept.status !== "skipped" && (

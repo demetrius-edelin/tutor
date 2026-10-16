@@ -213,7 +213,8 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelNa
     const marks = request.body?.marks ?? {};
     if (Object.values(marks).includes("test")) requireModel();
     const result = applyMarks(db, request.params.slug, marks);
-    if (result.sessionId !== null) runInBackground(prepareSession(db, requireModel(), dataDir, result.sessionId));
+    // An open diagnosis keeps its questions and answers, so only a new session needs questions.
+    if (result.sessionId !== null && result.newSession) runInBackground(prepareSession(db, requireModel(), dataDir, result.sessionId));
     return result;
   });
 
@@ -291,8 +292,8 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelNa
   // Test one concept, for example a prerequisite.
   app.post<{ Params: { id: string } }>("/api/concepts/:id/test", async (request) => {
     const model = requireModel();
-    const sessionId = testConcept(db, Number(request.params.id));
-    runInBackground(prepareSession(db, model, dataDir, sessionId));
+    const { sessionId, newSession } = testConcept(db, Number(request.params.id));
+    if (newSession) runInBackground(prepareSession(db, model, dataDir, sessionId));
     return { sessionId };
   });
 
@@ -317,8 +318,8 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelNa
 
   app.post<{ Params: { id: string } }>("/api/concepts/:id/test-prerequisites", async (request) => {
     const model = requireModel();
-    const sessionId = testPrerequisites(db, Number(request.params.id));
-    runInBackground(prepareSession(db, model, dataDir, sessionId));
+    const { sessionId, newSession } = testPrerequisites(db, Number(request.params.id));
+    if (newSession) runInBackground(prepareSession(db, model, dataDir, sessionId));
     return { sessionId };
   });
 

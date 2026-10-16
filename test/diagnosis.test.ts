@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { openDb, type Db } from "../src/db/index.js";
 import { ingestBook } from "../src/ingest/ingest.js";
 import { parseEpub } from "../src/ingest/parse.js";
-import type { SessionView } from "../src/server/api-types.js";
+import type { ConceptMapView, SessionView, SubjectDetail } from "../src/server/api-types.js";
 import { buildServer, type TutorServer } from "../src/server/app.js";
 import { writeQuestions } from "../src/tutor/questions.js";
 import { buildEpub, mainFixture } from "./fixtures/epub.js";
@@ -92,7 +92,8 @@ describe("selection", () => {
 
     const both = await post<{ sessionId: number }>(`/api/subjects/git/selection`, { marks: { [a!]: "test", [b!]: "test" } });
     expect((await get<SessionView>(`/api/sessions/${both.body.sessionId}`)).module).toBeNull();
-    const one = await post<{ sessionId: number }>(`/api/subjects/git/selection`, { marks: { [a!]: "test" } });
+    // A concept in the open diagnosis stays in it, so the diagnosis of one module uses another concept.
+    const one = await post<{ sessionId: number }>(`/api/subjects/git/selection`, { marks: { [conceptIds[2]!]: "test" } });
     expect((await get<SessionView>(`/api/sessions/${one.body.sessionId}`)).module).toMatchObject({ id: moduleId });
     await app.idle();
   });
@@ -179,6 +180,64 @@ describe("diagnosis", () => {
     expect((await post<SessionView>(`/api/sessions/${sessionId}/prepare`)).status).toBe(200);
     await app.idle();
     expect((await get<SessionView>(`/api/sessions/${sessionId}`)).status).toBe("ready");
+  });
+});
+
+describe("a diagnosis that did not finish", () => {
+  const select = async (marks: Record<number, string>) =>
+    (await post<{ sessionId: number }>(`/api/subjects/git/selection`, { marks })).body.sessionId;
+  const conceptsOf = (session: SessionView) => [...new Set(session.questions.map((question) => question.conceptId))];
+
+  it("shows the open diagnosis with its answers, and opens it again with no new questions", async () => {
+    const [a, b, c] = conceptIds as [number, number, number];
+    const first = await select({ [a]: "test", [b]: "test" });
+    await app.idle();
+    const session = await get<SessionView>(`/api/sessions/${first}`);
+    await post(`/api/questions/${session.questions[0]!.id}/answer`, { answer: "0" });
+    expect((await get<SubjectDetail>("/api/subjects/git")).openDiagnoses).toEqual([
+      { sessionId: first, status: "ready", concepts: 2, questions: 4, answered: 1 },
+    ]);
+    const map = await get<ConceptMapView>("/api/subjects/git/map");
+    expect(map.openDiagnoses).toHaveLength(1);
+    expect(map.modules.flatMap((module) => module.concepts).filter((concept) => concept.diagnosis === first).map((concept) => concept.id)).toEqual([a, b]);
+
+    // "Test it" for a concept in the open diagnosis opens that diagnosis. The model writes no new questions.
+    const written = llm.count("questions");
+    expect((await post<{ sessionId: number }>(`/api/concepts/${a}/test`)).body.sessionId).toBe(first);
+    expect(await select({ [a]: "test", [b]: "test" })).toBe(first);
+    // With a concept that is not in an open diagnosis, only that concept gets a new diagnosis.
+    const second = await select({ [b]: "test", [c]: "test" });
+    expect(second).not.toBe(first);
+    await app.idle();
+    expect(llm.count("questions")).toBe(written + 1);
+    expect(conceptsOf(await get<SessionView>(`/api/sessions/${second}`))).toEqual([c]);
+    expect(conceptsOf(await get<SessionView>(`/api/sessions/${first}`))).toEqual([a, b]);
+    // The answer in the open diagnosis is still there.
+    expect((await get<SubjectDetail>("/api/subjects/git")).openDiagnoses).toMatchObject([{ sessionId: first, answered: 1 }, { sessionId: second }]);
+  });
+
+  it("takes a concept with a new mark out of the open diagnosis, and keeps the new mark at the end", async () => {
+    const [a, b, c] = conceptIds as [number, number, number];
+    const first = await select({ [a]: "test", [b]: "test", [c]: "test" });
+    await app.idle();
+    await select({ [b]: "learn" });
+    expect(statusOf(b)).toBe("queued");
+    const session = await get<SessionView>(`/api/sessions/${first}`);
+    expect(conceptsOf(session)).toEqual([a, c]);
+    expect(session.total).toBe(2);
+
+    // A concept that an earlier version of the tutor left in the diagnosis keeps its new mark at the end.
+    db.prepare("UPDATE concepts SET status = 'skipped' WHERE id = ?").run(c);
+    expect((await get<SubjectDetail>("/api/subjects/git")).openDiagnoses).toMatchObject([{ sessionId: first, concepts: 1 }]);
+    await post(`/api/sessions/${first}/finish`);
+    expect([statusOf(a), statusOf(b), statusOf(c)]).toEqual(["failed", "queued", "skipped"]);
+    expect((await get<SubjectDetail>("/api/subjects/git")).openDiagnoses).toEqual([]);
+
+    // A diagnosis with no concept left goes.
+    const only = await select({ [a]: "test" });
+    await app.idle();
+    await select({ [a]: "skip" });
+    expect(db.prepare("SELECT COUNT(*) FROM sessions WHERE id = ?").pluck().get(only)).toBe(0);
   });
 });
 

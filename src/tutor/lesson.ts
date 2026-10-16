@@ -343,14 +343,13 @@ export function afterTest(db: Db, conceptId: number, action: AfterTestAction): v
 }
 
 // After repeated failed tests, a weak prerequisite is a frequent cause. Test all prerequisites of the concept.
-export function testPrerequisites(db: Db, conceptId: number): number {
+// The prerequisites get a diagnosis. A prerequisite in an open diagnosis opens that diagnosis, as for "Test it".
+export function testPrerequisites(db: Db, conceptId: number): { sessionId: number; newSession: boolean } {
   const concept = conceptRow(db, conceptId);
   const prerequisites = db.prepare("SELECT prereq_id FROM concept_prereqs WHERE concept_id = ? ORDER BY prereq_id").pluck().all(conceptId) as number[];
   if (prerequisites.length === 0) throw new TutorError("This concept has no prerequisites.", 409);
-  return db.transaction(() => {
-    for (const id of prerequisites) db.prepare("UPDATE concepts SET status = 'to_test', queue_pos = NULL WHERE id = ?").run(id);
-    return createSession(db, concept.subject_id, null, prerequisites, "diagnose");
-  })();
+  const result = applyMarks(db, concept.subject_slug, Object.fromEntries(prerequisites.map((id) => [id, "test" as const])));
+  return { sessionId: result.sessionId!, newSession: result.newSession };
 }
 
 // The concept in the lesson has the status "learning". Only one concept of a subject can have it.
@@ -464,8 +463,9 @@ export function starConcept(db: Db, conceptId: number, starred: unknown): { star
 }
 
 // Test one concept, for example a prerequisite: a diagnosis session with this concept only.
-export function testConcept(db: Db, conceptId: number): number {
+// Test one concept. A concept in an open diagnosis opens that diagnosis, with its questions and answers.
+export function testConcept(db: Db, conceptId: number): { sessionId: number; newSession: boolean } {
   const { subject_slug: subjectSlug } = conceptRow(db, conceptId);
   const result = applyMarks(db, subjectSlug, { [conceptId]: "test" });
-  return result.sessionId!;
+  return { sessionId: result.sessionId!, newSession: result.newSession };
 }

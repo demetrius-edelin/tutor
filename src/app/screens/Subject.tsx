@@ -3,6 +3,7 @@ import type { IngestView, ModuleSummary, StatusCounts, SubjectDetail } from "../
 import { postFile, useApi } from "../api";
 import { InlineCode } from "../components/InlineCode";
 import { Layout, Notice } from "../components/Layout";
+import { OpenDiagnoses } from "../components/OpenDiagnoses";
 import { knownShare, ProgressBar, ProgressLegend } from "../components/Progress";
 import { Spinner } from "../components/Spinner";
 import { href } from "../router";
@@ -73,6 +74,7 @@ function SubjectView({ subject }: { subject: SubjectDetail }) {
         </li>
       </ol>
 
+      <OpenDiagnoses diagnoses={subject.openDiagnoses} />
       <NextCard subject={subject} />
 
       <section aria-labelledby="modules-heading">

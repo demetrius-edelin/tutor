@@ -287,6 +287,13 @@ For each concept with the mark "Test", the tutor asks 1 or 2 questions. The mode
 
 Each concept gets one of two results: `known` or `failed`.
 
+The tutor keeps each answer at once. The results come only at the end of the diagnosis. Thus, the user can leave a diagnosis and continue it later:
+
+- The subject screen and the concept map show each diagnosis that did not finish, with the number of answers and the "Continue the diagnosis" button.
+- "Test it" or "Test them" for a concept in an open diagnosis opens that diagnosis. The model writes no new questions, and the answers stay.
+- A concept with a new mark, for example "Learn" or "Skip", leaves the open diagnosis, with its questions and answers. A diagnosis with no concept left goes.
+- At the end of a diagnosis, a concept that the user marked again keeps the new mark.
+
 ## Choose
 
 After the diagnosis, the results screen shows each concept:

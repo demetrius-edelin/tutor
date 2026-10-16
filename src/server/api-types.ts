@@ -27,6 +27,16 @@ export interface BookSummary {
   concepts: number;
 }
 
+// A diagnosis that did not finish. The answers stay, so the learner can continue it.
+export interface OpenDiagnosis {
+  sessionId: number;
+  status: "preparing" | "ready" | "failed";
+  // The concepts that wait for their test, the questions, and the questions with an answer.
+  concepts: number;
+  questions: number;
+  answered: number;
+}
+
 export interface SubjectDetail extends SubjectSummary {
   bookList: BookSummary[];
   moduleList: ModuleSummary[];
@@ -36,6 +46,7 @@ export interface SubjectDetail extends SubjectSummary {
   ingest: IngestView | null;
   // The books with a run in the app that the subject did not save, for example after a preview.
   unsavedBooks: { slug: string; title: string }[];
+  openDiagnoses: OpenDiagnosis[];
 }
 
 // Ingest in the app
@@ -255,6 +266,8 @@ export interface ConceptView {
   starred: boolean;
   prerequisites: { slug: string; name: string }[];
   sources: SourceRef[];
+  // The open diagnosis of a concept that waits for its test, or null.
+  diagnosis: number | null;
 }
 
 export interface ModuleView {
@@ -267,6 +280,7 @@ export interface ModuleView {
 export interface ConceptMapView {
   subject: { slug: string; name: string };
   modules: ModuleView[];
+  openDiagnoses: OpenDiagnosis[];
 }
 
 export interface SectionView {
@@ -290,6 +304,8 @@ export type Choice = "learn" | "skip" | "keep";
 export interface SelectionResult {
   // The session of the diagnosis, or null if no concept has the mark "test".
   sessionId: number | null;
+  // True for a new session, which needs questions. False for an open diagnosis that keeps its questions and answers.
+  newSession: boolean;
   queued: number;
   skipped: number;
 }

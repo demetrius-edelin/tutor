@@ -7,7 +7,9 @@ import type {
   Choice,
   ConceptResult,
   Mark,
+  OpenDiagnosis,
   QuestionView,
+  SelectionResult,
   SessionView,
   Status,
   TestOutcome,
@@ -58,10 +60,54 @@ export function createSession(db: Db, subjectId: number, moduleId: number | null
   return sessionId;
 }
 
+// The diagnosis sessions that did not finish. A concept in such a session waits for its test with the status "to_test".
+const OPEN_DIAGNOSES = "SELECT id FROM sessions WHERE kind = 'diagnose' AND status <> 'finished'";
+
+// The open diagnosis of a concept that waits for its test, or null.
+function openDiagnosisOf(db: Db, conceptId: number): number | null {
+  return (
+    (db
+      .prepare(
+        `SELECT sc.session_id FROM session_concepts sc JOIN concepts c ON c.id = sc.concept_id
+         WHERE sc.concept_id = ? AND c.status = 'to_test' AND sc.session_id IN (${OPEN_DIAGNOSES}) ORDER BY sc.session_id DESC LIMIT 1`,
+      )
+      .pluck()
+      .get(conceptId) as number | undefined) ?? null
+  );
+}
+
+// A concept with a new mark leaves the open diagnoses, with its questions and their answers.
+// An open diagnosis with no concept left goes.
+function leaveOpenDiagnoses(db: Db, conceptId: number): void {
+  const sessions = db.prepare(`SELECT session_id FROM session_concepts WHERE concept_id = ? AND session_id IN (${OPEN_DIAGNOSES})`).pluck().all(conceptId) as number[];
+  for (const sessionId of sessions) {
+    db.prepare("DELETE FROM questions WHERE session_id = ? AND concept_id = ?").run(sessionId, conceptId);
+    db.prepare("DELETE FROM session_concepts WHERE session_id = ? AND concept_id = ?").run(sessionId, conceptId);
+    const left = db.prepare("SELECT COUNT(*) FROM session_concepts WHERE session_id = ?").pluck().get(sessionId) as number;
+    if (left === 0) db.prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
+    else db.prepare("UPDATE sessions SET total = ? WHERE id = ?").run(left, sessionId);
+  }
+}
+
+// The diagnoses of a subject that did not finish, for the link back to them.
+export function openDiagnoses(db: Db, subjectId: number): OpenDiagnosis[] {
+  return db
+    .prepare(
+      `SELECT s.id AS sessionId, s.status,
+         (SELECT COUNT(*) FROM session_concepts sc JOIN concepts c ON c.id = sc.concept_id WHERE sc.session_id = s.id AND c.status = 'to_test') AS concepts,
+         (SELECT COUNT(*) FROM questions q WHERE q.session_id = s.id) AS questions,
+         (SELECT COUNT(DISTINCT a.question_id) FROM attempts a JOIN questions q ON q.id = a.question_id WHERE q.session_id = s.id) AS answered
+       FROM sessions s WHERE s.subject_id = ? AND s.kind = 'diagnose' AND s.status <> 'finished' ORDER BY s.id`,
+    )
+    .all(subjectId)
+    .filter((row) => (row as OpenDiagnosis).concepts > 0) as OpenDiagnosis[];
+}
+
 // Apply the marks of the learner for concepts of one subject, from any module. A concept without a mark
 // does not change. A mark can also change an earlier mark, for example "learn" to "test".
-// The concepts with the mark "test" get a new diagnosis session. The function returns the session id, or null.
-export function applyMarks(db: Db, subjectSlug: string, marks: Record<string, Mark>): { sessionId: number | null; queued: number; skipped: number } {
+// The concepts with the mark "test" get a new diagnosis session. A concept in an open diagnosis stays in it,
+// so that its questions and answers are not lost. The function returns the session to open, or null.
+export function applyMarks(db: Db, subjectSlug: string, marks: Record<string, Mark>): SelectionResult {
   const subjectId = db.prepare("SELECT id FROM subjects WHERE slug = ?").pluck().get(subjectSlug) as number | undefined;
   if (subjectId === undefined) throw new TutorError(`The subject "${subjectSlug}" does not exist.`, 404);
   const moduleOf = new Map(
@@ -79,7 +125,14 @@ export function applyMarks(db: Db, subjectSlug: string, marks: Record<string, Ma
     let queued = 0;
     let skipped = 0;
     const toTest: number[] = [];
+    const reused: number[] = [];
     for (const [id, mark] of entries) {
+      const open = openDiagnosisOf(db, id);
+      if (mark === "test" && open !== null) {
+        reused.push(open);
+        continue;
+      }
+      if (open !== null) leaveOpenDiagnoses(db, id);
       if (mark === "learn") {
         // A concept in the queue keeps its place.
         const status = db.prepare("SELECT status FROM concepts WHERE id = ?").pluck().get(id);
@@ -95,11 +148,11 @@ export function applyMarks(db: Db, subjectSlug: string, marks: Record<string, Ma
         toTest.push(id);
       }
     }
-    if (toTest.length === 0) return { sessionId: null, queued, skipped };
+    if (toTest.length === 0) return { sessionId: reused.length > 0 ? Math.max(...reused) : null, newSession: false, queued, skipped };
     // A diagnosis of concepts from one module belongs to that module. A diagnosis of concepts from more modules has no module.
     const modules = new Set(toTest.map((id) => moduleOf.get(id)!));
     const moduleId = modules.size === 1 ? [...modules][0]! : null;
-    return { sessionId: createSession(db, subjectId, moduleId, toTest, "diagnose"), queued, skipped };
+    return { sessionId: createSession(db, subjectId, moduleId, toTest, "diagnose"), newSession: true, queued, skipped };
   })();
 }
 
@@ -158,7 +211,10 @@ export async function prepareSession(db: Db, llm: LlmClient, dataDir: string, se
         questions = await writeQuestions(llm, batch);
       }
       db.transaction(() => {
+        // A concept that the learner marked again during the preparation is not in the session now.
+        const still = new Set(db.prepare("SELECT concept_id FROM session_concepts WHERE session_id = ?").pluck().all(sessionId) as number[]);
         for (const question of questions) {
+          if (!still.has(question.conceptId)) continue;
           insert.run(
             question.conceptId,
             kind,
@@ -465,6 +521,8 @@ export function finishSession(db: Db, sessionId: number): SessionView {
   const conceptIds = db.prepare("SELECT concept_id FROM session_concepts WHERE session_id = ?").pluck().all(sessionId) as number[];
   db.transaction(() => {
     for (const conceptId of conceptIds) {
+      // A concept that the learner marked again after the start of the diagnosis keeps the new mark.
+      if (db.prepare("SELECT status FROM concepts WHERE id = ?").pluck().get(conceptId) !== "to_test") continue;
       const own = questions.filter((question) => question.concept_id === conceptId);
       if (own.length === 0) {
         setStatus(db, conceptId, "new");
