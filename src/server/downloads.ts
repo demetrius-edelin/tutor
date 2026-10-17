@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import type { Db } from "../db/index.js";
 import { slugify } from "../ingest/core/text.js";
+import { bookSlugFor } from "../ingest/ingest.js";
 import { FetchStopped, type FetchProgress } from "../ingest/web/fetch.js";
 import { TutorError } from "../tutor/diagnosis.js";
 import type { DownloadView, FetchStartView } from "./api-types.js";
@@ -49,7 +50,7 @@ export function startDownload({ db, dataDir, subject, plan, again, stops }: Down
       .prepare(
         "INSERT INTO ingests (subject_id, book, file, title, mode, chapters, status, total, source) VALUES (?, ?, ?, ?, 'fetch', ?, 'running', ?, ?)",
       )
-      .run(subject.id, slugify(plan.title), relative(dataDir, file), plan.title, JSON.stringify(plan.chapters), plan.total, plan.source).lastInsertRowid,
+      .run(subject.id, bookSlugFor(db, dataDir, subject.name, plan.title), relative(dataDir, file), plan.title, JSON.stringify(plan.chapters), plan.total, plan.source).lastInsertRowid,
   );
   return { view: { run: toIngestView(ingestRow(db, id)!, false), existing: null }, job: downloadJob(db, dataDir, subject, plan, id, file, stops) };
 }

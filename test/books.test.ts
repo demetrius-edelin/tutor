@@ -114,6 +114,34 @@ describe("Upload a book", () => {
     }
   });
 
+  it("keeps two books with the same slug apart, also after a save", async () => {
+    start(new FakeLlm());
+    await post("/api/subjects", { name: "Git" });
+    const plus = await buildEpub({ ...mainFixture(), title: "C++ Primer" });
+    const sharp = await buildEpub({ ...mainFixture(), title: "C# Primer" });
+    const folder = (slug: string) => join(dataDir, "subjects", "git", "books", slug);
+    const saved = () => db.prepare("SELECT slug, title FROM books ORDER BY id").all();
+    expect((await upload("git", "plus.epub", plus)).body).toEqual({ book: "c-primer" });
+    expect((await upload("git", "sharp.epub", sharp)).body).toEqual({ book: "c-primer-2" });
+    expect(existsSync(join(folder("c-primer"), "plus.epub"))).toBe(true);
+    expect(existsSync(join(folder("c-primer-2"), "sharp.epub"))).toBe(true);
+    expect((await get<BookView>("/api/subjects/git/books/c-primer-2")).body.title).toBe("C# Primer");
+    // A title with other punctuation is the same book.
+    expect((await upload("git", "plus.epub", await buildEpub({ ...mainFixture(), title: "C++: Primer" }))).body).toEqual({ book: "c-primer" });
+    expect((await upload("git", "plus.epub", plus)).body).toEqual({ book: "c-primer" });
+
+    await post("/api/subjects/git/books/c-primer/ingest", { mode: "save", chapters: [1] });
+    await app.idle();
+    expect(saved()).toEqual([{ slug: "c-primer", title: "C++ Primer" }]);
+    expect((await upload("git", "sharp.epub", sharp)).body).toEqual({ book: "c-primer-2" });
+    await post("/api/subjects/git/books/c-primer-2/ingest", { mode: "save", chapters: [1] });
+    await app.idle();
+    expect(saved()).toEqual([
+      { slug: "c-primer", title: "C++ Primer" },
+      { slug: "c-primer-2", title: "C# Primer" },
+    ]);
+  });
+
   it("refuses a file that is not a book, and accepts a file larger than the default limit of 1 MB", async () => {
     start(new FakeLlm());
     await post("/api/subjects", { name: "Git" });

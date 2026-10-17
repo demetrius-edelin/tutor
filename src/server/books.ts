@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { basename, extname, join } from "node:path";
 import type { Db } from "../db/index.js";
 import { normalizeSpace, slugify } from "../ingest/core/text.js";
-import { sectionMismatch, type IngestReport } from "../ingest/ingest.js";
+import { bookSlugFor, sectionMismatch, writeBookTitle, type IngestReport } from "../ingest/ingest.js";
 import { readBookSource } from "../ingest/parse.js";
 import { countRequests, loadBook } from "../ingest/run.js";
 import { TutorError } from "../tutor/diagnosis.js";
@@ -75,7 +75,8 @@ export async function storeBook(
   } catch (error) {
     throw new TutorError(error instanceof Error ? error.message : String(error));
   }
-  const slug = slugify(title);
+  // A book with another title and the same slug gets its own folder, so that the two books do not replace each other.
+  const slug = bookSlugFor(db, dataDir, subject.name, title);
   if (db.prepare("SELECT 1 FROM books WHERE subject_id = ? AND slug = ?").get(subject.id, slug)) return { book: slug };
   const running = runningIngest(db, subject.slug);
   if (running && running.id !== ownRun && running.book === slug) {
@@ -87,6 +88,7 @@ export async function storeBook(
   mkdirSync(dir, { recursive: true });
   for (const old of readdirSync(dir)) if (BOOK_FILE.test(old) && old !== name) rmSync(join(dir, old));
   writeFileSync(join(dir, name), data);
+  writeBookTitle(dir, title);
   return { book: slug };
 }
 
@@ -165,7 +167,7 @@ export async function bookView(db: Db, dataDir: string, book: BookLocation, mode
 
   let loaded;
   try {
-    loaded = await loadBook(dataDir, subject.name, readFileSync(book.file), book.file);
+    loaded = await loadBook(db, dataDir, subject.name, readFileSync(book.file), book.file, book.slug);
   } catch (error) {
     return { ...view, problem: error instanceof Error ? error.message : String(error) };
   }
@@ -174,7 +176,7 @@ export async function bookView(db: Db, dataDir: string, book: BookLocation, mode
   return {
     ...view,
     title: loaded.book.title,
-    problem: book.row ? sectionMismatch(db, dataDir, subject.name, loaded.book) : null,
+    problem: book.row ? sectionMismatch(db, dataDir, subject.name, book.slug, loaded.book) : null,
     warnings: loaded.book.warnings.map((warning) => warning.message),
     chapters: loaded.book.chapters.map((chapter) => {
       const count = counts.get(chapter.number);

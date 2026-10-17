@@ -173,7 +173,7 @@ async function runJob(
   const progress = db.prepare("UPDATE ingests SET done = ?, total = ?, step = ? WHERE id = ?");
   try {
     const file = book.file!;
-    const loaded = await loadBook(dataDir, book.subject.name, readFileSync(file), file);
+    const loaded = await loadBook(db, dataDir, book.subject.name, readFileSync(file), file, book.slug);
     db.prepare("UPDATE ingests SET title = ? WHERE id = ?").run(loaded.book.title, id);
     const unknown = chapters.filter((n) => !loaded.book.chapters.some((chapter) => chapter.number === n));
     if (unknown.length > 0) throw new Error(`The book has no chapter ${unknown.join(", ")}.`);

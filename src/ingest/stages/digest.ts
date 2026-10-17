@@ -12,9 +12,11 @@ import type { ChapterDigest, ChapterInput, FoundConcept, ModelConcept } from "./
 export const PROMPTS_VERSION = 2;
 
 // A key of the chapter content and of the prompts. The cache of a chapter digest is valid only for the same key.
+// The key includes the text of each section: a new edition can change a text and keep its word count and its title.
 export function chapterKey(chapter: ChapterInput): string {
-  const content = chapter.sections.map((section) => `${section.id}:${section.words}:${section.title}`).join("|");
-  return createHash("sha1").update(`v${PROMPTS_VERSION}|${chapter.number}|${chapter.title}|${content}`).digest("hex");
+  const hash = createHash("sha1").update(`v${PROMPTS_VERSION}|${chapter.number}|${chapter.title}`);
+  for (const section of chapter.sections) hash.update(`|${section.id}:${section.title}\n${section.markdown}`);
+  return hash.digest("hex");
 }
 
 // The number of model requests for a chapter, without the second requests: one extract

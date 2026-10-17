@@ -45,6 +45,8 @@ const READY: Status[] = ["known", "mastered"];
 
 interface ConceptRow {
   id: number;
+  // A random id that SQLite does not give to another concept, also after the concept goes.
+  uid: string;
   subject_id: number;
   slug: string;
   name: string;
@@ -64,7 +66,7 @@ interface ConceptRow {
 function conceptRow(db: Db, conceptId: number): ConceptRow {
   const row = db
     .prepare(
-      `SELECT c.id, c.subject_id, c.slug, c.name, c.objective, c.kind, c.level, c.status, c.starred, c.queue_pos,
+      `SELECT c.id, c.uid, c.subject_id, c.slug, c.name, c.objective, c.kind, c.level, c.status, c.starred, c.queue_pos,
          sub.slug AS subject_slug, sub.name AS subject_name, m.id AS module_id, m.position AS module_position, m.name AS module_name
        FROM concepts c JOIN subjects sub ON sub.id = c.subject_id JOIN modules m ON m.id = c.module_id WHERE c.id = ?`,
     )
@@ -359,8 +361,16 @@ function markLearning(db: Db, concept: ConceptRow): void {
   db.prepare("UPDATE concepts SET status = 'learning' WHERE id = ?").run(concept.id);
 }
 
-// Two requests for the same lesson at the same time get the same result.
-const writing = new Map<number, Promise<LessonView>>();
+// Two requests for the same lesson at the same time get the same result. The key is the uid of the concept.
+const writing = new Map<string, Promise<LessonView>>();
+
+// The learner can delete the subject during a model request. Then a new concept can get the same id.
+// A request saves its result only if the concept still has its uid.
+function checkConcept(db: Db, conceptId: number, uid: string): void {
+  if (db.prepare("SELECT uid FROM concepts WHERE id = ?").pluck().get(conceptId) !== uid) {
+    throw new TutorError("The concept does not exist now, so the tutor did not save the answer of the model.", 409);
+  }
+}
 
 // Start a lesson. An existing lesson is used again, unless again is true: then the tutor writes a new round.
 export function startLesson(db: Db, llm: LlmClient | null, dataDir: string, conceptId: number, again = false): Promise<LessonView> {
@@ -371,7 +381,7 @@ export function startLesson(db: Db, llm: LlmClient | null, dataDir: string, conc
     return Promise.resolve(lessonView(db, dataDir, conceptId));
   }
   if (!llm) throw new TutorError("No model is set. Set the model in .env and start the tutor again.", 503);
-  const running = writing.get(conceptId);
+  const running = writing.get(concept.uid);
   if (running) return running;
 
   const job = (async () => {
@@ -385,6 +395,7 @@ export function startLesson(db: Db, llm: LlmClient | null, dataDir: string, conc
     });
     if (result.text.trim() === "") throw new TutorError("The model returned an empty lesson. Try again.", 502);
     db.transaction(() => {
+      checkConcept(db, conceptId, concept.uid);
       db.prepare("INSERT INTO lessons (concept_id, round, text, refs) VALUES (?, ?, ?, ?)").run(
         conceptId,
         round,
@@ -394,8 +405,8 @@ export function startLesson(db: Db, llm: LlmClient | null, dataDir: string, conc
       markLearning(db, conceptRow(db, conceptId));
     })();
     return lessonView(db, dataDir, conceptId);
-  })().finally(() => writing.delete(conceptId));
-  writing.set(conceptId, job);
+  })().finally(() => writing.delete(concept.uid));
+  writing.set(concept.uid, job);
   return job;
 }
 
@@ -433,6 +444,8 @@ export async function askAboutLesson(db: Db, llm: LlmClient | null, dataDir: str
   if (result.text.trim() === "") throw new TutorError("The model returned an empty answer. Try again.", 502);
   const insert = db.prepare("INSERT INTO lesson_messages (lesson_id, role, text, refs) VALUES (?, ?, ?, ?)");
   db.transaction(() => {
+    // A lesson goes only with its concept, so the uid of the concept also tells if the lesson is still the same lesson.
+    checkConcept(db, lesson.concept_id, concept.uid);
     insert.run(lessonId, "user", question.trim(), "[]");
     insert.run(lessonId, "assistant", result.text, JSON.stringify(toReferences(result.references, sources)));
   })();

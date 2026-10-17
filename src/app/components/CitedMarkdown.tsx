@@ -4,9 +4,10 @@ import type { LessonReference } from "../../server/api-types";
 import { WatchButton } from "./VideoPlayer";
 
 // Change each reference marker " [2]" into a link "ref:2", outside of code.
+// The code parts are the same as in outsideCode on the server (src/llm/references.ts).
 export function linkReferences(markdown: string): string {
   return markdown
-    .split(/(```[\s\S]*?```|`[^`\n]*`)/)
+    .split(/(```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)|`[^`\n]*`)/)
     .map((part, i) => (i % 2 === 1 ? part : part.replace(/ \[(\d+)\](?!\()/g, " [$1](ref:$1)")))
     .join("");
 }

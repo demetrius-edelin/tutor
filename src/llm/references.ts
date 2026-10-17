@@ -57,13 +57,27 @@ export function checkReferences(text: string, references: Reference[], sources: 
     renumber.set(reference.number, kept.length + 1);
     kept.push({ ...reference, number: kept.length + 1 });
   }
-  const cleaned = text
-    .replace(/ ?\[(\d+)\]/g, (marker, number: string) => {
-      const next = renumber.get(Number(number));
-      return next === undefined ? "" : ` [${next}]`;
-    })
-    .replace(/ (\[\d+\])(?: \1)+/g, " $1");
+  // A marker is " [2]", outside of code. Code such as "xs[0]" or "const xs = [10];" stays as it is.
+  const cleaned = outsideCode(text, (part) =>
+    part
+      .replace(/ \[(\d+)\](?!\()/g, (marker, number: string) => {
+        const next = renumber.get(Number(number));
+        return next === undefined ? "" : ` [${next}]`;
+      })
+      .replace(/ (\[\d+\])(?: \1)+/g, " $1"),
+  );
   return { text: cleaned, references: kept };
+}
+
+// Fenced code blocks and inline code in Markdown. A code block without its closing fence goes to the end of the text.
+const CODE = /(```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)|`[^`\n]*`)/;
+
+// Change only the parts of the Markdown text outside of code.
+function outsideCode(text: string, change: (part: string) => string): string {
+  return text
+    .split(CODE)
+    .map((part, i) => (i % 2 === 1 ? part : change(part)))
+    .join("");
 }
 
 // True if the quote is in the text, without differences in Markdown formatting, space, case,

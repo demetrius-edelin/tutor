@@ -73,42 +73,43 @@ async function main(): Promise<void> {
 
   loadEnvFile();
   const config = modelConfig();
-  // The sections get the image texts from the cache now. The model reads the other images after the question.
-  const loaded = await loadBook("data", subjectName, readFileSync(bookFile), bookFile);
-  const { book } = loaded;
-  const chapters = chaptersValue ? parseChapters(chaptersValue) : undefined;
-  const sections = sectionsValue ? parseSections(sectionsValue, book) : undefined;
-  const selected = selectedInputs(book, chapters, sections);
-  if (selected.length === 0) throw new Error("No chapter matches the --chapters list.");
-
-  // Cached chapters need no extract and review requests. Each chapter needs one merge request.
-  const { images, requests, chapters: counts } = countRequests("data", subjectName, loaded, chapters, sections, flag("--fresh"));
-  const selectedSections = selected.flatMap((input) => input.sections);
-  const words = selectedSections.reduce((total, section) => total + section.words, 0);
-  console.log(`\nBook: ${book.title}`);
-  console.log(`Subject: ${subjectName}`);
-  console.log(`Model: ${config.provider} ${config.model}${config.reasoning ? `, reasoning ${config.reasoning}` : ""}`);
-  const mode = flag("--preview") ? " (preview, the database does not change)" : " (saved to the database)";
-  console.log(`Chapters: ${selected.length} of ${book.chapters.length}${mode}`);
-  console.log(`Sections: ${selectedSections.length} of ${book.chapters.reduce((total, chapter) => total + chapter.sections.length, 0)}`);
-  if (sections) for (const section of selectedSections) console.log(`  ${section.id}  ${section.title}`);
-  console.log(`Text: ${words.toLocaleString("en-US")} words`);
-  if (images > 0) console.log(`Images: ${images} to read with the model`);
-  const cachedCount = counts.filter((chapter) => chapter.cached).length;
-  console.log(`Model requests: about ${requests}${cachedCount > 0 ? ` (${cachedCount} chapters come from the cache)` : ""}.\n`);
-
-  if (!flag("--yes")) {
-    const prompt = createInterface({ input: process.stdin, output: process.stdout });
-    const answer = await prompt.question("Start? The requests cost money. [y/N] ");
-    prompt.close();
-    if (answer.trim().toLowerCase() !== "y") {
-      console.log("Stopped.");
-      return;
-    }
-  }
-
+  // The database tells the folder name of the book: two books with the same slug get different folders.
   const db = openDb("data/tutor.db");
   try {
+    // The sections get the image texts from the cache now. The model reads the other images after the question.
+    const loaded = await loadBook(db, "data", subjectName, readFileSync(bookFile), bookFile);
+    const { book } = loaded;
+    const chapters = chaptersValue ? parseChapters(chaptersValue) : undefined;
+    const sections = sectionsValue ? parseSections(sectionsValue, book) : undefined;
+    const selected = selectedInputs(book, chapters, sections);
+    if (selected.length === 0) throw new Error("No chapter matches the --chapters list.");
+
+    // Cached chapters need no extract and review requests. Each chapter needs one merge request.
+    const { images, requests, chapters: counts } = countRequests("data", subjectName, loaded, chapters, sections, flag("--fresh"));
+    const selectedSections = selected.flatMap((input) => input.sections);
+    const words = selectedSections.reduce((total, section) => total + section.words, 0);
+    console.log(`\nBook: ${book.title}`);
+    console.log(`Subject: ${subjectName}`);
+    console.log(`Model: ${config.provider} ${config.model}${config.reasoning ? `, reasoning ${config.reasoning}` : ""}`);
+    const mode = flag("--preview") ? " (preview, the database does not change)" : " (saved to the database)";
+    console.log(`Chapters: ${selected.length} of ${book.chapters.length}${mode}`);
+    console.log(`Sections: ${selectedSections.length} of ${book.chapters.reduce((total, chapter) => total + chapter.sections.length, 0)}`);
+    if (sections) for (const section of selectedSections) console.log(`  ${section.id}  ${section.title}`);
+    console.log(`Text: ${words.toLocaleString("en-US")} words`);
+    if (images > 0) console.log(`Images: ${images} to read with the model`);
+    const cachedCount = counts.filter((chapter) => chapter.cached).length;
+    console.log(`Model requests: about ${requests}${cachedCount > 0 ? ` (${cachedCount} chapters come from the cache)` : ""}.\n`);
+
+    if (!flag("--yes")) {
+      const prompt = createInterface({ input: process.stdin, output: process.stdout });
+      const answer = await prompt.question("Start? The requests cost money. [y/N] ");
+      prompt.close();
+      if (answer.trim().toLowerCase() !== "y") {
+        console.log("Stopped.");
+        return;
+      }
+    }
+
     const report = await runIngest({
       llm: createClient(config),
       db,

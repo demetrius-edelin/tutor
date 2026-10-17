@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve, sep } from "node:path";
 import type { Db } from "../db/index.js";
@@ -188,9 +189,12 @@ export function failInterruptedSessions(db: Db): void {
 // Write the questions of a session. The function runs in the background. It saves the questions
 // of each group of concepts at once, so that the app can show the progress.
 // A diagnosis gets 1 or 2 questions for each concept. A test after a lesson gets the new questions that fit the concept.
+// The learner can remove the session during a model request, for example with a new mark for its last concept.
+// Then a new session can get the same id. The job changes the session only while the session has its job id.
 export async function prepareSession(db: Db, llm: LlmClient, dataDir: string, sessionId: number): Promise<void> {
+  const job = randomUUID();
   try {
-    db.prepare("UPDATE sessions SET status = 'preparing', error = NULL WHERE id = ?").run(sessionId);
+    db.prepare("UPDATE sessions SET status = 'preparing', error = NULL, job = ? WHERE id = ?").run(job, sessionId);
     db.prepare("DELETE FROM questions WHERE session_id = ?").run(sessionId);
     const kind = db.prepare("SELECT kind FROM sessions WHERE id = ?").pluck().get(sessionId) as "diagnose" | "test";
     const concepts = questionConcepts(db, dataDir, sessionId);
@@ -210,6 +214,7 @@ export async function prepareSession(db: Db, llm: LlmClient, dataDir: string, se
       } else {
         questions = await writeQuestions(llm, batch);
       }
+      if (db.prepare("SELECT job FROM sessions WHERE id = ?").pluck().get(sessionId) !== job) return;
       db.transaction(() => {
         // A concept that the learner marked again during the preparation is not in the session now.
         const still = new Set(db.prepare("SELECT concept_id FROM session_concepts WHERE session_id = ?").pluck().all(sessionId) as number[]);
@@ -234,11 +239,12 @@ export async function prepareSession(db: Db, llm: LlmClient, dataDir: string, se
     }
     const status = position > 0 ? "ready" : "failed";
     const error = position > 0 ? null : "The model wrote no usable questions.";
-    db.prepare("UPDATE sessions SET status = ?, error = ? WHERE id = ?").run(status, error, sessionId);
+    db.prepare("UPDATE sessions SET status = ?, error = ? WHERE id = ? AND job = ?").run(status, error, sessionId, job);
   } catch (error) {
-    db.prepare("UPDATE sessions SET status = 'failed', error = ? WHERE id = ?").run(
+    db.prepare("UPDATE sessions SET status = 'failed', error = ? WHERE id = ? AND job = ?").run(
       error instanceof Error ? error.message : String(error),
       sessionId,
+      job,
     );
   }
 }
@@ -413,6 +419,7 @@ export async function answerQuestion(db: Db, llm: LlmClient | null, dataDir: str
   if (!question) throw new TutorError(`The question ${questionId} does not exist.`, 404);
   const existing = latestAttempts(db, [questionId]).get(questionId);
   if (existing) return attemptView(existing, question);
+  if (sessionStatus(db, questionId) === "finished") throw new TutorError("You cannot answer a question after the results.", 409);
 
   let score: number;
   let feedback: string;
@@ -422,6 +429,7 @@ export async function answerQuestion(db: Db, llm: LlmClient | null, dataDir: str
     feedback = score === 2 ? "Correct." : "Not correct.";
   } else {
     if (!llm) throw new TutorError("No model is set. Set the model in .env and start the tutor again.", 503);
+    const owner = questionOwner(db, questionId);
     const path = question.section_id === null ? undefined : (db.prepare("SELECT path FROM sections WHERE id = ?").pluck().get(question.section_id) as string);
     const grade = await gradeAnswer(llm, {
       question: question.text,
@@ -432,6 +440,12 @@ export async function answerQuestion(db: Db, llm: LlmClient | null, dataDir: str
     });
     score = grade.score;
     feedback = grade.feedback;
+    // The learner can remove the question during the grade, for example with a new mark for its concept.
+    if (questionOwner(db, questionId) !== owner) throw new TutorError("The question does not exist now, so the tutor did not save the answer.", 409);
+    // The results do not change after the end of the session. A grade that comes after the end does not count.
+    if (sessionStatus(db, questionId) === "finished") {
+      throw new TutorError("The session finished before the grade was ready. The results do not include this answer.", 409);
+    }
   }
   const id = Number(
     db.prepare("INSERT INTO attempts (question_id, answer, score, feedback) VALUES (?, ?, ?, ?)").run(questionId, answer, score, feedback)
@@ -440,14 +454,29 @@ export async function answerQuestion(db: Db, llm: LlmClient | null, dataDir: str
   return attemptView({ id, question_id: questionId, answer, score, feedback, disputed: 0 }, question);
 }
 
+// The question as it is now: its session, the job of the session, and the uid of its concept. The result is null if the
+// question does not exist. SQLite can give the id of a removed question to a new question, but then the result changes.
+function questionOwner(db: Db, questionId: number): string | null {
+  const row = db
+    .prepare("SELECT q.session_id, s.job, c.uid FROM questions q JOIN concepts c ON c.id = q.concept_id LEFT JOIN sessions s ON s.id = q.session_id WHERE q.id = ?")
+    .get(questionId);
+  return row === undefined ? null : JSON.stringify(row);
+}
+
+// The status of the session of a question. The result is undefined if the question does not exist, and null if it has no session.
+function sessionStatus(db: Db, questionId: number): string | null | undefined {
+  const row = db.prepare("SELECT s.status FROM questions q LEFT JOIN sessions s ON s.id = q.session_id WHERE q.id = ?").get(questionId) as
+    | { status: string | null }
+    | undefined;
+  return row?.status;
+}
+
 // Retake a question: remove its answers, so that the learner can answer it again.
 // The answers of a finished session stay, because the results come from them.
 export function retakeQuestion(db: Db, questionId: number): void {
-  const question = db
-    .prepare("SELECT s.status FROM questions q LEFT JOIN sessions s ON s.id = q.session_id WHERE q.id = ?")
-    .get(questionId) as { status: string | null } | undefined;
-  if (!question) throw new TutorError(`The question ${questionId} does not exist.`, 404);
-  if (question.status === "finished") throw new TutorError("You cannot retake a question after the results.", 409);
+  const status = sessionStatus(db, questionId);
+  if (status === undefined) throw new TutorError(`The question ${questionId} does not exist.`, 404);
+  if (status === "finished") throw new TutorError("You cannot retake a question after the results.", 409);
   db.prepare("DELETE FROM attempts WHERE question_id = ?").run(questionId);
 }
 

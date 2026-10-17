@@ -4,12 +4,13 @@ import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { openDb, type Db } from "../src/db/index.js";
 import type { ParsedBook } from "../src/ingest/core/types.js";
-import { ingestBook } from "../src/ingest/ingest.js";
+import { ingestBook, IngestStopped } from "../src/ingest/ingest.js";
 import { emptyMap, mapPreview, type ConceptMap, type MapSource } from "../src/ingest/map.js";
 import { conceptMap } from "../src/server/queries.js";
 import { parseEpub } from "../src/ingest/parse.js";
+import { refreshBook } from "../src/ingest/refresh.js";
 import { loadBook, runIngest, type RunProgress } from "../src/ingest/run.js";
-import { digestChapter } from "../src/ingest/stages/digest.js";
+import { chapterKey, digestChapter } from "../src/ingest/stages/digest.js";
 import { extractGroup, groupSections } from "../src/ingest/stages/extract.js";
 import { mergeChapter } from "../src/ingest/stages/merge.js";
 import type { ChapterInput, FoundConcept } from "../src/ingest/stages/types.js";
@@ -83,6 +84,14 @@ describe("digestChapter", () => {
     expect(digest.minorItems).toEqual([{ term: "full table scan", source: "bold", reason: "an example" }]);
     expect(digest.quoteWarnings).toEqual([]);
     expect(llm.calls.find((call) => call.stage === "review")!.request.prompt).toContain("- full table scan [bold, section 1.1]");
+  });
+});
+
+describe("chapterKey", () => {
+  it("changes with the text of a section, also with the same word count and the same title", () => {
+    const changed = { ...chapter, sections: chapter.sections.map((item, i) => (i === 0 ? { ...item, markdown: item.markdown.replace("faster", "slower") } : item)) };
+    expect(changed.sections[0]!.markdown).not.toBe(chapter.sections[0]!.markdown);
+    expect(chapterKey(changed)).not.toBe(chapterKey(chapter));
   });
 });
 
@@ -275,6 +284,25 @@ describe("ingestBook", () => {
     await expect(run({ sections: ["5.1"] })).rejects.toThrow(/do not match the new parse/);
   });
 
+  it("keeps a concept with a history when it loses its last source, also with the status new", async () => {
+    const otherDb = openDb(":memory:");
+    const run = (llm: FakeLlm, replace: boolean) =>
+      ingestBook({ llm, db: otherDb, dataDir, subjectName: "History", bookFile, book, sections: ["2.1", "2.2"], replace, fresh: true });
+    await run(new FakeLlm(), false);
+    const [studied, unstudied] = otherDb.prepare("SELECT id FROM concepts ORDER BY id").pluck().all() as [number, number];
+    // "Later" after a lesson: the concept is new again, but it keeps its lesson.
+    otherDb.prepare("INSERT INTO lessons (concept_id, round, text) VALUES (?, 1, 'A lesson.')").run(studied);
+    otherDb.prepare("UPDATE concepts SET status = 'new' WHERE id IN (?, ?)").run(studied, unstudied);
+
+    // The new run finds no concepts in the two sections, so both concepts lose their last source.
+    const empty = new FakeLlm({
+      extract: (sources) => ({ sections: sources.map((source) => ({ sectionId: source.id, concepts: [], noConceptReason: "summary" })) }),
+    });
+    await run(empty, true);
+    expect(otherDb.prepare("SELECT id FROM concepts ORDER BY id").pluck().all()).toEqual([studied]);
+    expect(otherDb.prepare("SELECT COUNT(*) FROM lessons WHERE concept_id = ?").pluck().get(studied)).toBe(1);
+  });
+
   it("needs --replace for a book that the subject has already", async () => {
     await expect(ingestBook({ llm: new FakeLlm(), db, dataDir, subjectName: "Git", bookFile, book })).rejects.toThrow(/--replace/);
   });
@@ -298,6 +326,64 @@ describe("ingestBook", () => {
     expect(after).toEqual(before);
     expect(db.prepare("SELECT COUNT(*) FROM books").pluck().get()).toBe(1);
   });
+
+  it("changes the files of a saved book only in a save, not in a preview or in a run that stops", async () => {
+    const otherDb = openDb(":memory:");
+    const run = (options: Partial<Parameters<typeof ingestBook>[0]>) =>
+      ingestBook({ llm: new FakeLlm(), db: otherDb, dataDir, subjectName: "Files", bookFile, book, ...options });
+    await run({});
+    const paths = () => otherDb.prepare("SELECT path FROM sections ORDER BY id").pluck().all() as string[];
+    const saved = paths();
+    const texts = () => saved.map((path) => (existsSync(join(dataDir, path)) ? readFileSync(join(dataDir, path), "utf8") : null));
+    const before = texts();
+    const concepts = otherDb.prepare("SELECT id FROM concepts ORDER BY id").pluck().all();
+    // A new edition with a new title and a new text for a section. The file of the section gets a new name.
+    const edition = structuredClone(book);
+    Object.assign(edition.chapters[0]!.sections[0]!, { title: "A New Title", markdown: "The new text." });
+
+    await run({ book: edition, preview: true });
+    expect(texts()).toEqual(before);
+
+    // The user stops the run during the last merge request.
+    let stop = false;
+    const stopped = run({
+      book: edition,
+      replace: true,
+      progress: (step) => {
+        if (step.stage === "merge" && step.index === step.count - 1) stop = true;
+      },
+      stopped: () => stop,
+    });
+    await expect(stopped).rejects.toThrow(IngestStopped);
+    expect(paths()).toEqual(saved);
+    expect(texts()).toEqual(before);
+    expect(otherDb.prepare("SELECT id FROM concepts ORDER BY id").pluck().all()).toEqual(concepts);
+
+    await run({ book: edition, replace: true });
+    const first = paths()[0]!;
+    expect(first).toMatch(/01-01-a-new-title\.md$/);
+    expect(readFileSync(join(dataDir, first), "utf8")).toBe("The new text.\n");
+  });
+
+  it("keeps a copy of the new book file after a replace, so that refresh reads the new edition", async () => {
+    const otherDb = openDb(":memory:");
+    await ingestBook({ llm: new FakeLlm(), db: otherDb, dataDir, subjectName: "Edition", bookFile, book });
+    // The new edition has the same file name, in another folder.
+    const fixture = mainFixture();
+    fixture.files["ch1.xhtml"] = (fixture.files["ch1.xhtml"] as string).replace("Text of the second section", "New text of the second section");
+    const data = await buildEpub(fixture);
+    const newFile = join(mkdtempSync(join(tmpdir(), "tutor-edition-")), "fixture.epub");
+    writeFileSync(newFile, data);
+    await ingestBook({ llm: new FakeLlm(), db: otherDb, dataDir, subjectName: "Edition", bookFile: newFile, book: await parseEpub(data), replace: true });
+
+    const text = () => {
+      const path = otherDb.prepare("SELECT path FROM sections WHERE title = 'Second Section'").pluck().get() as string;
+      return readFileSync(join(dataDir, path), "utf8");
+    };
+    expect(text()).toContain("New text of the second section");
+    await refreshBook({ llm: new FakeLlm(), db: otherDb, dataDir, subjectName: "Edition", bookName: "Fixture Book" });
+    expect(text()).toContain("New text of the second section");
+  });
 });
 
 describe("runIngest", () => {
@@ -306,7 +392,7 @@ describe("runIngest", () => {
     const dataDir = mkdtempSync(join(tmpdir(), "tutor-run-"));
     const bookFile = join(dataDir, "fixture.epub");
     writeFileSync(bookFile, data);
-    const loaded = await loadBook(dataDir, "Progress", data, bookFile);
+    const loaded = await loadBook(openDb(":memory:"), dataDir, "Progress", data, bookFile);
     const steps: RunProgress[] = [];
     const llm = new FakeLlm();
     const run = () =>

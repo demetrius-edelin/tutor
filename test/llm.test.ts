@@ -313,6 +313,19 @@ describe("helpers", () => {
     });
   });
 
+  it("changes only the markers outside of code, and keeps the brackets in the code", () => {
+    const sources = [{ id: "s", title: "t", text: "Arrays start at zero." }];
+    const references = [
+      { number: 2, sourceId: "s", quote: "Arrays start at zero." },
+      { number: 3, sourceId: "s", quote: "This is not in the source." },
+    ];
+    const code = "```js\nconst xs = [10];\nconsole.log(xs[0]);\n```";
+    const result = checkReferences(`Arrays start at zero [2].\n\n${code}\n\nUse \`xs[1]\` for the second item [3].`, references, sources);
+    expect(result.text).toBe(`Arrays start at zero [1].\n\n${code}\n\nUse \`xs[1]\` for the second item.`);
+    // A code block without its closing fence goes to the end of the text.
+    expect(checkReferences("```js\nconst xs = [10];", [], sources).text).toBe("```js\nconst xs = [10];");
+  });
+
   it("accepts quotes with other spaces and quote characters", () => {
     const sources = [{ id: "s", title: "t", text: "It is “fast”,\nand it is small." }];
     const result = checkReferences("A [1] B [2]", [

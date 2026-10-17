@@ -238,7 +238,26 @@ const V11 = `
 ALTER TABLE ingests ADD COLUMN source TEXT;
 `;
 
-export const MIGRATIONS = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11];
+// Version 12: a session keeps the id of the job that writes its questions. SQLite can give the id of a removed
+// session to a new session. The job id tells the job if the session with its id is still its own session.
+const V12 = `
+ALTER TABLE sessions ADD COLUMN job TEXT;
+`;
+
+// Version 13: each concept gets a random uid that does not change. SQLite can give the id of a removed concept
+// to a new concept, but not its uid. A model request for a concept checks the uid before it saves its result.
+// The trigger gives a uid to each new concept.
+const V13 = `
+ALTER TABLE concepts ADD COLUMN uid TEXT;
+UPDATE concepts SET uid = lower(hex(randomblob(16)));
+CREATE UNIQUE INDEX concepts_uid ON concepts (uid);
+CREATE TRIGGER concepts_new_uid AFTER INSERT ON concepts WHEN NEW.uid IS NULL
+BEGIN
+  UPDATE concepts SET uid = lower(hex(randomblob(16))) WHERE id = NEW.id;
+END;
+`;
+
+export const MIGRATIONS = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13];
 // The version that renames the "themes" data folder to "subjects".
 export const SUBJECTS_VERSION = 8;
 export const SCHEMA_VERSION = MIGRATIONS.length;

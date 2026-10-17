@@ -210,7 +210,7 @@ A subject is an area of study, for example "SQL". If the subject does not exist,
 ### What ingest does
 
 1. It parses the book with the same parser as `npm run parse`.
-2. It keeps a copy of the book file, and writes one Markdown file for each section.
+2. It keeps a copy of the book file, and writes one Markdown file for each section. For a book that the subject has already, this step comes with the save in step 5. Then a preview, a stop, or an error does not change the files of the saved book.
 3. The model reads each image of the selected chapters one time. Code becomes a code block, a table becomes a Markdown table, and other images get a short description.
 4. The model finds the concepts in each chapter. Then it adds them to the concept map of the subject, in modules.
 5. It saves the subject, the book, the sections, and the concepts to the database. A preview skips this part.
@@ -247,7 +247,7 @@ npm run ingest -- SQL /path/to/book.pdf --chapters 4-6
 
 The command adds the concepts of the new parts to the subject. The other sections keep their concepts, and your old lessons keep their references. The concept map follows the order of the book, so the order of your runs does not matter.
 
-If a section in the list has concepts already, the command stops. To ingest that section again, add `--replace`. Then only the concepts of the sections in the list change. If a concept loses its last source and you did not start it, the tutor deletes it.
+If a section in the list has concepts already, the command stops. To ingest that section again, add `--replace`. Then only the concepts of the sections in the list change. If a concept loses its last source and you never studied it, the tutor deletes it. A concept with a lesson, a test, an answer, or a star stays.
 
 You can also ingest the full book with `--replace`. The chapters that you saved before come from the cache, so you do not pay for them again. Your concepts and their progress stay. But the book gets new sections, so the references of your old lessons break. To get a lesson with correct references, open the lesson and click "Teach it again".
 

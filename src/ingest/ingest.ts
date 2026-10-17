@@ -1,5 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { basename, join, relative } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 import type { Db } from "../db/index.js";
 import type { LlmClient } from "../llm/index.js";
 import { selectSections } from "./core/book.js";
@@ -19,6 +19,8 @@ export interface IngestOptions {
   subjectName: string;
   bookFile: string;
   book: ParsedBook;
+  // The folder name of the book in the subject. Without it, the name comes from bookSlugFor.
+  bookSlug?: string;
   // Run only these chapters.
   chapters?: number[];
   // Run only these sections, for example "1.10". With chapters too, the run takes the sections of the two lists.
@@ -35,7 +37,7 @@ export interface IngestOptions {
   log?: (line: string) => void;
   // Called before each model request of the extract, review, and merge stages. A chapter in the cache has no extract and review requests.
   progress?: (step: IngestStep) => void;
-  // True if the user stopped the run. Then the run ends with IngestStopped before the next chapter or merge.
+  // True if the user stopped the run. Then the run ends with IngestStopped before the next chapter, the next merge, or the save.
   stopped?: () => boolean;
 }
 
@@ -52,7 +54,7 @@ export interface IngestStep {
   parts: number;
 }
 
-// The user stopped the run. The finished chapters stay in the cache, and the database does not change.
+// The user stopped the run. The finished chapters stay in the cache. The database and the files of a saved book do not change.
 export class IngestStopped extends Error {
   override name = "IngestStopped";
   constructor() {
@@ -91,8 +93,59 @@ export function subjectDir(dataDir: string, subjectName: string): string {
   return join(dataDir, "subjects", slugify(subjectName));
 }
 
-export function bookDir(dataDir: string, subjectName: string, book: Pick<ParsedBook, "title">): string {
-  return join(subjectDir(dataDir, subjectName), "books", slugify(book.title));
+export function bookDir(dataDir: string, subjectName: string, bookSlug: string): string {
+  return join(subjectDir(dataDir, subjectName), "books", bookSlug);
+}
+
+// The file with the title of the book, in the folder of the book. A book that is not saved has its title only in this file.
+const TITLE_FILE = "book.json";
+
+export function writeBookTitle(dir: string, title: string): void {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, TITLE_FILE), `${JSON.stringify({ title }, null, 2)}\n`);
+}
+
+// The title of the book in a folder, or null. A folder from an older version of the tutor has no title file,
+// but it can have the parse report, with the title.
+function folderTitle(dir: string): string | null {
+  for (const name of [TITLE_FILE, "parse-report.json"]) {
+    try {
+      const { title } = JSON.parse(readFileSync(join(dir, name), "utf8")) as { title?: unknown };
+      if (typeof title === "string") return title;
+    } catch {
+      // No file, or a broken file. Try the next file.
+    }
+  }
+  return null;
+}
+
+// Two titles are the same book if they differ only in case, space, or punctuation, for example in the EPUB file and
+// in the PDF file of a book. The characters "+" and "#" count, so "C++ Primer" and "C# Primer" are different books.
+function titleKey(title: string): string {
+  return title
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}+#]/gu, "");
+}
+
+// The folder name of a book in a subject, from the title. Two different books can have the same slug,
+// for example "C++ Primer" and "C# Primer". Then the second book gets a number: "c-primer-2".
+// A saved book keeps its slug. A folder with no title, from an older version, belongs to each title with its slug.
+export function bookSlugFor(db: Db, dataDir: string, subjectName: string, title: string): string {
+  const same = (other: string) => titleKey(other) === titleKey(title);
+  const saved = db
+    .prepare("SELECT b.slug, b.title FROM books b JOIN subjects s ON s.id = b.subject_id WHERE s.slug = ?")
+    .all(slugify(subjectName)) as { slug: string; title: string }[];
+  const own = saved.find((book) => same(book.title));
+  if (own) return own.slug;
+  const base = slugify(title);
+  for (let n = 1; ; n++) {
+    const slug = n === 1 ? base : `${base}-${n}`;
+    if (saved.some((book) => book.slug === slug)) continue;
+    const other = folderTitle(bookDir(dataDir, subjectName, slug));
+    if (other === null || same(other)) return slug;
+  }
 }
 
 export function chapterInput(chapter: ParsedBook["chapters"][number]): ChapterInput {
@@ -137,15 +190,20 @@ function cachedDigest(workDir: string, book: ParsedBook, input: ChapterInput): C
 }
 
 // The chapters with a valid cached result for their selected sections. They need no model request.
-export function cachedChapters(dataDir: string, subjectName: string, book: ParsedBook, inputs: ChapterInput[]): Set<number> {
-  const workDir = join(bookDir(dataDir, subjectName, book), "work");
+export function cachedChapters(dataDir: string, subjectName: string, bookSlug: string, book: ParsedBook, inputs: ChapterInput[]): Set<number> {
+  const workDir = join(bookDir(dataDir, subjectName, bookSlug), "work");
   return new Set(inputs.filter((input) => cachedDigest(workDir, book, input)).map((input) => input.number));
 }
 
-// Remove the concepts that have no source and no progress, and the modules with no concept.
+// Remove the concepts that have no source and no history, and the modules with no concept.
+// The status "new" is not enough: after "Later", a concept is "new" again, but it keeps its lessons, tests, answers, and star.
 function removeOrphans(db: Db, subjectId: number): void {
   db.prepare(
-    "DELETE FROM concepts WHERE subject_id = ? AND status = 'new' AND id NOT IN (SELECT concept_id FROM concept_sources)",
+    `DELETE FROM concepts WHERE subject_id = ? AND status = 'new' AND starred = 0
+       AND id NOT IN (SELECT concept_id FROM concept_sources)
+       AND id NOT IN (SELECT concept_id FROM lessons)
+       AND id NOT IN (SELECT concept_id FROM questions)
+       AND id NOT IN (SELECT concept_id FROM session_concepts)`,
   ).run(subjectId);
   db.prepare("DELETE FROM modules WHERE subject_id = ? AND id NOT IN (SELECT module_id FROM concepts)").run(subjectId);
 }
@@ -196,15 +254,14 @@ function sectionPathIn(dataDir: string, dir: string) {
 
 // The problem if the subject has the book already and its sections do not match the parse. Then a run cannot keep them.
 // The result is null if the sections match, or if the subject does not have the book.
-export function sectionMismatch(db: Db, dataDir: string, subjectName: string, book: ParsedBook): string | null {
-  const bookSlug = slugify(book.title);
+export function sectionMismatch(db: Db, dataDir: string, subjectName: string, bookSlug: string, book: ParsedBook): string | null {
   const bookId = db
     .prepare("SELECT b.id FROM books b JOIN subjects s ON s.id = b.subject_id WHERE s.slug = ? AND b.slug = ?")
     .pluck()
     .get(slugify(subjectName), bookSlug) as number | undefined;
   if (bookId === undefined) return null;
   try {
-    keptSections(db, bookId, book, bookSlug, sectionPathIn(dataDir, bookDir(dataDir, subjectName, book)));
+    keptSections(db, bookId, book, bookSlug, sectionPathIn(dataDir, bookDir(dataDir, subjectName, bookSlug)));
     return null;
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
@@ -216,13 +273,13 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
   const log = options.log ?? (() => {});
   const preview = options.preview === true;
   const subjectSlug = slugify(subjectName);
-  const bookSlug = slugify(book.title);
+  const bookSlug = options.bookSlug ?? bookSlugFor(db, dataDir, subjectName, book.title);
 
   const subject = db.prepare("SELECT id FROM subjects WHERE slug = ?").get(subjectSlug) as { id: number } | undefined;
   const existing = subject
     ? (db.prepare("SELECT id FROM books WHERE subject_id = ? AND slug = ?").get(subject.id, bookSlug) as { id: number } | undefined)
     : undefined;
-  const dir = bookDir(dataDir, subjectName, book);
+  const dir = bookDir(dataDir, subjectName, bookSlug);
   const sectionPath = sectionPathIn(dataDir, dir);
   const sectionInfo = new Map(book.chapters.flatMap((chapter) => chapter.sections.map((section) => [section.id, section])));
   const inputs = selectedInputs(book, options.chapters, options.sections);
@@ -246,11 +303,20 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
     }
   }
 
-  // Keep a copy of the book file, the section files, and the parse report.
-  mkdirSync(dir, { recursive: true });
+  // Keep a copy of the book file, the section files, and the parse report. Refresh parses the copy again.
+  // The saved sections use these files. The files of a saved book change only in the save at the end.
+  // Then a preview, a stop, or an error does not change them.
   const bookCopy = join(dir, basename(options.bookFile));
-  if (!existsSync(bookCopy)) copyFileSync(options.bookFile, bookCopy);
-  writeParsedBook(book, dir);
+  const writeFiles = () => {
+    // The book file of a run in the app is in the book folder already.
+    if (resolve(options.bookFile) !== resolve(bookCopy)) copyFileSync(options.bookFile, bookCopy);
+    writeParsedBook(book, dir);
+  };
+  mkdirSync(dir, { recursive: true });
+  if (!existing) {
+    writeBookTitle(dir, book.title);
+    writeFiles();
+  }
 
   // Stages 2 and 3, one chapter at a time. A cached chapter result is used again.
   // "fresh" removes only the cached chapter results. The cached image texts stay.
@@ -318,6 +384,9 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
   // The modules and the concepts follow the book order, also when the chapters come in a different order of runs.
   sortMap(map);
 
+  // A stop during the last merge request ends the run here, before the save.
+  stopCheck();
+
   // Save the book, its sections, and the map in one transaction. A preview saves nothing.
   if (!preview) {
     db.transaction(() => {
@@ -328,6 +397,8 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
         // The book and its sections stay. Only the old sources of the selected sections go.
         const removeSources = db.prepare("DELETE FROM concept_sources WHERE section_id = ?");
         for (const key of keys) removeSources.run(sectionRows.get(key));
+        // The section files come from the new book file, so refresh must parse the new file.
+        db.prepare("UPDATE books SET file = ? WHERE id = ?").run(relative(dataDir, bookCopy), existing!.id);
       } else {
         // Removing the book also removes its sections and the sources that point to them.
         if (existing) db.prepare("DELETE FROM books WHERE id = ?").run(existing.id);
@@ -350,6 +421,8 @@ export async function ingestBook(options: IngestOptions): Promise<IngestReport> 
       }
       saveMap(db, subjectId, map, sectionRows);
       removeOrphans(db, subjectId);
+      // The files change after the rows. If a row cannot change, the transaction stops and the files stay.
+      if (existing) writeFiles();
     })();
   }
 

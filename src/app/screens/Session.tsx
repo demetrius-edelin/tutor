@@ -125,6 +125,8 @@ function QuestionFlow({ session, title, onChange }: { session: SessionView; titl
   const firstOpen = session.questions.findIndex((question) => question.attempt === null);
   const [index, setIndex] = useState(firstOpen === -1 ? session.questions.length - 1 : firstOpen);
   const [finishing, setFinishing] = useState(false);
+  // The results wait for the grade of an answer. A grade that comes after the results does not count.
+  const [grading, setGrading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const question = session.questions[index];
   if (!question) return <Notice title="This diagnosis has no questions" />;
@@ -162,6 +164,7 @@ function QuestionFlow({ session, title, onChange }: { session: SessionView; titl
         question={question}
         about={session.kind === "test" ? TEST_LABEL[question.kind] : `About: ${question.conceptName}`}
         onAnswered={updateAttempt}
+        onSending={setGrading}
       />
       <div className="action-bar">
         <span className="quiet">
@@ -179,7 +182,7 @@ function QuestionFlow({ session, title, onChange }: { session: SessionView; titl
             </button>
           )}
           {last && (
-            <button className="button" onClick={finish} disabled={finishing}>
+            <button className="button" onClick={finish} disabled={finishing || grading}>
               {finishing ? "Saving" : "See the results"}
             </button>
           )}
@@ -202,10 +205,12 @@ function QuestionCard({
   question,
   about,
   onAnswered,
+  onSending,
 }: {
   question: QuestionView;
   about: string;
   onAnswered: (attempt: AttemptView | null) => void;
+  onSending: (sending: boolean) => void;
 }) {
   const [choice, setChoice] = useState<number | null>(null);
   const [text, setText] = useState("");
@@ -217,6 +222,7 @@ function QuestionCard({
 
   const send = async () => {
     setSending(true);
+    onSending(true);
     setError(null);
     try {
       const answer = question.kind === "choice" ? String(choice) : text;
@@ -225,6 +231,7 @@ function QuestionCard({
       setError((problem as Error).message);
     }
     setSending(false);
+    onSending(false);
   };
 
   // Remove the answer, and show the empty question again.

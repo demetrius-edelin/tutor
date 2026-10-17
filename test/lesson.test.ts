@@ -1,10 +1,11 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, type Db } from "../src/db/index.js";
 import { ingestBook } from "../src/ingest/ingest.js";
 import { parseEpub } from "../src/ingest/parse.js";
+import type { LlmClient } from "../src/llm/index.js";
 import type { ConceptMapView, LessonView, SessionView } from "../src/server/api-types.js";
 import { buildServer, type TutorServer } from "../src/server/app.js";
 import { buildEpub, mainFixture } from "./fixtures/epub.js";
@@ -159,6 +160,34 @@ describe("lessons", () => {
     expect(answer.statusCode).toBe(502);
     expect(db.prepare("SELECT COUNT(*) FROM lessons").pluck().get()).toBe(1);
     expect(db.prepare("SELECT COUNT(*) FROM lesson_messages").pluck().get()).toBe(0);
+  });
+
+  it("does not save a lesson for a concept that goes during the model request", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let holding = false;
+    const slow: LlmClient = {
+      object: (request) => llm.object(request),
+      text: async (request) => {
+        holding = true;
+        await held;
+        return llm.text(request);
+      },
+    };
+    const server = buildServer({ db, dataDir, llm: slow });
+    const id = conceptIds[1]!;
+    const pending = server.inject({ method: "POST", url: `/api/concepts/${id}/lesson` });
+    await vi.waitFor(() => expect(holding).toBe(true));
+    expect((await server.inject({ method: "DELETE", url: "/api/subjects/git" })).statusCode).toBe(200);
+    // The concepts of another subject get the ids of the removed concepts.
+    const bookFile = join(dataDir, "fixture.epub");
+    await ingestBook({ llm: new FakeLlm(), db, dataDir, subjectName: "Other", bookFile, book: await parseEpub(readFileSync(bookFile)) });
+    expect(db.prepare("SELECT s.slug FROM concepts c JOIN subjects s ON s.id = c.subject_id WHERE c.id = ?").pluck().get(id)).toBe("other");
+
+    release();
+    expect((await pending).statusCode).toBe(409);
+    expect(db.prepare("SELECT COUNT(*) FROM lessons").pluck().get()).toBe(0);
+    expect(statusOf(id)).toBe("new");
   });
 
   it("needs a model to write a lesson", async () => {

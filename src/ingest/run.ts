@@ -2,7 +2,8 @@ import { buildBook } from "./core/book.js";
 import type { BookSource } from "./core/source.js";
 import type { ParsedBook } from "./core/types.js";
 import { cachedImageText, imageCacheFile, imagesToRead, readImages } from "./images.js";
-import { bookDir, cachedChapters, ingestBook, IngestStopped, selectedInputs, type IngestOptions, type IngestReport, type IngestStep } from "./ingest.js";
+import type { Db } from "../db/index.js";
+import { bookDir, bookSlugFor, cachedChapters, ingestBook, IngestStopped, selectedInputs, type IngestOptions, type IngestReport, type IngestStep } from "./ingest.js";
 import { readBookSource } from "./parse.js";
 import { requestsFor } from "./stages/digest.js";
 
@@ -13,14 +14,18 @@ export interface LoadedBook {
   source: BookSource;
   // The book with the image texts from the cache.
   book: ParsedBook;
+  // The folder name of the book in the subject.
+  slug: string;
   // The cache file of the image texts, in the folder of the book.
   cacheFile: string;
 }
 
-export async function loadBook(dataDir: string, subjectName: string, data: Uint8Array, fileName: string): Promise<LoadedBook> {
+// slug: the folder name of the book, for example from the address of the book page. Without it, the name comes from the title.
+export async function loadBook(db: Db, dataDir: string, subjectName: string, data: Uint8Array, fileName: string, slug?: string): Promise<LoadedBook> {
   const source = await readBookSource(data, fileName);
-  const cacheFile = imageCacheFile(bookDir(dataDir, subjectName, source));
-  return { source, book: buildBook(source, { imageText: cachedImageText(cacheFile) }), cacheFile };
+  const bookSlug = slug ?? bookSlugFor(db, dataDir, subjectName, source.title);
+  const cacheFile = imageCacheFile(bookDir(dataDir, subjectName, bookSlug));
+  return { source, book: buildBook(source, { imageText: cachedImageText(cacheFile) }), slug: bookSlug, cacheFile };
 }
 
 export interface ChapterRequests {
@@ -45,13 +50,13 @@ export interface RequestCount {
 export function countRequests(
   dataDir: string,
   subjectName: string,
-  { book, cacheFile }: LoadedBook,
+  { book, slug, cacheFile }: LoadedBook,
   chapters?: number[],
   sections?: string[],
   fresh = false,
 ): RequestCount {
   const inputs = selectedInputs(book, chapters, sections);
-  const cached = fresh ? new Set<number>() : cachedChapters(dataDir, subjectName, book, inputs);
+  const cached = fresh ? new Set<number>() : cachedChapters(dataDir, subjectName, slug, book, inputs);
   const perChapter = inputs.map((input) => {
     const images = imagesToRead(book, cacheFile, undefined, input.sections.map((section) => section.id)).length;
     const inCache = cached.has(input.number);
@@ -69,7 +74,7 @@ export interface RunProgress {
   total: number;
 }
 
-export interface RunOptions extends Omit<IngestOptions, "book" | "progress" | "imageWarning"> {
+export interface RunOptions extends Omit<IngestOptions, "book" | "bookSlug" | "progress" | "imageWarning"> {
   loaded: LoadedBook;
   progress?: (progress: RunProgress) => void;
   // Called with a problem of the images, before the chapters start.
@@ -103,6 +108,7 @@ export async function runIngest(options: RunOptions): Promise<IngestReport> {
   return ingestBook({
     ...ingest,
     book,
+    bookSlug: loaded.slug,
     imageWarning,
     progress: (step) => progress?.({ text: stepText(step), done: Math.min(toRead + started++, total), total }),
   });

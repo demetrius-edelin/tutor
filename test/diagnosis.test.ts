@@ -1,10 +1,11 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, type Db } from "../src/db/index.js";
 import { ingestBook } from "../src/ingest/ingest.js";
 import { parseEpub } from "../src/ingest/parse.js";
+import type { LlmClient } from "../src/llm/index.js";
 import type { ConceptMapView, SessionView, SubjectDetail } from "../src/server/api-types.js";
 import { buildServer, type TutorServer } from "../src/server/app.js";
 import { writeQuestions } from "../src/tutor/questions.js";
@@ -238,6 +239,78 @@ describe("a diagnosis that did not finish", () => {
     await app.idle();
     await select({ [a]: "skip" });
     expect(db.prepare("SELECT COUNT(*) FROM sessions WHERE id = ?").pluck().get(only)).toBe(0);
+  });
+});
+
+// A model that holds its first request with a system prompt that starts with prefix, until the test calls release.
+function holdingModel(prefix: string) {
+  const fake = new FakeLlm();
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  let holding = false;
+  let first = true;
+  const model: LlmClient = {
+    object: async (request) => {
+      if (first && request.system.startsWith(prefix)) {
+        first = false;
+        holding = true;
+        await held;
+      }
+      return fake.object(request);
+    },
+    text: (request) => fake.text(request),
+  };
+  return { model, release: () => release(), holding: () => holding };
+}
+
+describe("a model request that ends late", () => {
+  const select = async (server: TutorServer, marks: Record<number, string>) =>
+    (await server.inject({ method: "POST", url: "/api/subjects/git/selection", payload: { marks } })).json<{ sessionId: number }>().sessionId;
+  const view = async (server: TutorServer, id: number) => (await server.inject({ method: "GET", url: `/api/sessions/${id}` })).json<SessionView>();
+  const answer = (server: TutorServer, id: number, text: string) =>
+    server.inject({ method: "POST", url: `/api/questions/${id}/answer`, payload: { answer: text } });
+
+  it("does not change a new session with the id of a removed session", async () => {
+    const [a, b] = conceptIds as [number, number];
+    const slow = holdingModel("You write diagnosis questions");
+    const server = buildServer({ db, dataDir, llm: slow.model });
+    const removed = await select(server, { [a]: "test" });
+    await vi.waitFor(() => expect(slow.holding()).toBe(true));
+    await select(server, { [a]: "learn" });
+    const id = await select(server, { [b]: "test" });
+    // SQLite gives the id of the removed session to the new session.
+    expect(id).toBe(removed);
+    await vi.waitFor(() => expect(db.prepare("SELECT status FROM sessions WHERE id = ?").pluck().get(id)).toBe("ready"));
+    const session = await view(server, id);
+    await answer(server, session.questions[0]!.id, "0");
+
+    slow.release();
+    await server.idle();
+    const after = await view(server, id);
+    expect(after).toMatchObject({ status: "ready", error: null });
+    expect(after.questions.map((question) => question.id)).toEqual(session.questions.map((question) => question.id));
+    expect(after.questions[0]!.attempt).not.toBeNull();
+  });
+
+  it("does not count a grade that comes after the results", async () => {
+    const slow = holdingModel("You grade the answer");
+    const server = buildServer({ db, dataDir, llm: slow.model });
+    const id = await select(server, { [conceptIds[0]!]: "test" });
+    await server.idle();
+    const open = (await view(server, id)).questions.find((question) => question.kind !== "choice")!;
+    const late = answer(server, open.id, "It has the point.");
+    await vi.waitFor(() => expect(slow.holding()).toBe(true));
+    const finished = (await server.inject({ method: "POST", url: `/api/sessions/${id}/finish` })).json<SessionView>();
+    expect(finished.results![0]!.result).toBe("failed");
+
+    slow.release();
+    expect((await late).statusCode).toBe(409);
+    const after = await view(server, id);
+    expect(after.results).toEqual(finished.results);
+    expect(after.questions.find((question) => question.id === open.id)!.attempt).toBeNull();
+    expect(statusOf(conceptIds[0]!)).toBe("failed");
+    // After the results, a question takes no new answer.
+    expect((await answer(server, open.id, "It has the point.")).statusCode).toBe(409);
   });
 });
 
