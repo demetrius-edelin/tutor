@@ -36,9 +36,10 @@ import { applyBookOrder, applySuggestedOrder, queueView, removeFromQueue, reorde
 import type { AfterTestAction, Choice, Mark } from "./api-types.js";
 import { addBook, addWebBook, bookView, createSubject, MAX_UPLOAD_BYTES } from "./books.js";
 import { failInterruptedIngests, findBook, ingestRow, runningIngest, runText, startIngest, toIngestView } from "./ingests.js";
-import { findOnlineToc, startFetch } from "./online.js";
+import { findOnlineToc, startFetch, type OnlineAccess } from "./online.js";
 import type { VideoAccess } from "./videos.js";
 import { conceptMap, deleteSubject, listSubjects, section, subjectDetail } from "./queries.js";
+import { checkModel, envValues, loadModels, saveSettings, settingsView } from "./settings.js";
 
 export interface ServerOptions {
   db: Db;
@@ -55,18 +56,33 @@ export interface ServerOptions {
   fetchPauseMs?: number;
   // The video model from .env, and the parts of a video download. The tests use a fake yt-dlp and a fake video model.
   video?: Partial<VideoAccess>;
+  // The .env file of the settings page, and the values of the shell. With no settings, the server has no settings routes.
+  settings?: {
+    envFile: string;
+    // A new .env file starts as a copy of this file.
+    exampleFile?: string;
+    shellEnv: NodeJS.ProcessEnv;
+    log?: (line: string) => void;
+  };
 }
+
+const NO_MODEL = "No model is set. Open the Settings page and select a model.";
 
 export interface TutorServer extends FastifyInstance {
   // Wait for the background work, for example the questions of a session. The tests use it.
   idle(): Promise<void>;
 }
 
-export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelName, fetcher, fetchPauseMs, video }: ServerOptions): TutorServer {
+export function buildServer(options: ServerOptions): TutorServer {
+  const { db, dataDir, appDir, fetcher, fetchPauseMs, video, settings } = options;
+  // The settings page can change the model while the server runs.
+  let llm = options.llm ?? null;
+  let llmError = options.llmError;
+  let modelName = options.modelName;
   const app = Fastify({ logger: false }) as unknown as TutorServer;
   // Two requests at the same time use one install or update of yt-dlp.
   let ytDlpReady: Promise<YtDlpRunner> | null = null;
-  const online = {
+  const online: OnlineAccess = {
     dataDir,
     web: { fetcher: fetcher ?? httpFetcher, pauseMs: fetchPauseMs ?? 1000 },
     video: {
@@ -94,7 +110,7 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelNa
     while (jobs.size > 0) await Promise.all([...jobs]);
   });
   const requireModel = (): LlmClient => {
-    if (!llm) throw new TutorError(llmError ?? "No model is set. Set the model in .env and start the tutor again.", 503);
+    if (!llm) throw new TutorError(llmError ?? NO_MODEL, 503);
     return llm;
   };
 
@@ -150,7 +166,7 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelNa
   app.get<{ Params: { slug: string; book: string } }>("/api/subjects/:slug/books/:book", async (request, reply) => {
     const book = findBook(db, dataDir, request.params.slug, request.params.book);
     if (!book) return reply.code(404).send({ error: `The subject "${request.params.slug}" has no book "${request.params.book}".` });
-    const model = { name: llm ? (modelName ?? null) : null, error: llm ? null : (llmError ?? "No model is set in .env.") };
+    const model = { name: llm ? (modelName ?? null) : null, error: llm ? null : (llmError ?? NO_MODEL) };
     return bookView(db, dataDir, book, model, (id) => stops.has(id));
   });
 
@@ -322,6 +338,38 @@ export function buildServer({ db, dataDir, appDir, llm = null, llmError, modelNa
     if (newSession) runInBackground(prepareSession(db, model, dataDir, sessionId));
     return { sessionId };
   });
+
+  // Settings
+
+  if (settings) {
+    const view = () =>
+      settingsView(settings.envFile, envValues(settings.envFile, settings.shellEnv), {
+        llmError: llm ? null : (llmError ?? NO_MODEL),
+        modelName: llm ? (modelName ?? null) : null,
+        video: online.video.config,
+        videoError: online.video.error,
+      });
+
+    // The model values. The answer gives only the end of each API key.
+    app.get("/api/settings", async () => view());
+
+    // Write the values into .env. The new model works at once, with no restart of the server.
+    // A run that started before the change keeps the old model.
+    app.post<{ Body: unknown }>("/api/settings", async (request) => {
+      saveSettings(settings.envFile, settings.exampleFile, request.body);
+      const models = loadModels(envValues(settings.envFile, settings.shellEnv));
+      llm = models.llm;
+      llmError = models.llmError ?? undefined;
+      modelName = models.modelName ?? undefined;
+      online.video.config = models.video;
+      online.video.error = models.videoError;
+      settings.log?.(models.modelName ? `Model: ${models.modelName}` : `No model: ${models.llmError}`);
+      return view();
+    });
+
+    // Send one small request to the model.
+    app.post("/api/settings/check", async () => checkModel(requireModel()));
+  }
 
   if (appDir && existsSync(appDir)) {
     app.register(fastifyStatic, { root: resolve(appDir) });

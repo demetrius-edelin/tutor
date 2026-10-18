@@ -428,7 +428,7 @@ export async function answerQuestion(db: Db, llm: LlmClient | null, dataDir: str
     score = Number(answer) === correct ? 2 : 0;
     feedback = score === 2 ? "Correct." : "Not correct.";
   } else {
-    if (!llm) throw new TutorError("No model is set. Set the model in .env and start the tutor again.", 503);
+    if (!llm) throw new TutorError("No model is set. Open the Settings page and select a model.", 503);
     const owner = questionOwner(db, questionId);
     const path = question.section_id === null ? undefined : (db.prepare("SELECT path FROM sections WHERE id = ?").pluck().get(question.section_id) as string);
     const grade = await gradeAnswer(llm, {

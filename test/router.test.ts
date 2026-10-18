@@ -22,6 +22,11 @@ describe("router", () => {
     expect(parseHash("#/subjects/sql/map?module=x")).toMatchObject({ module: null });
   });
 
+  it("opens the settings", () => {
+    expect(parseHash(href.settings())).toEqual({ name: "settings" });
+    expect(parseHash("#/settings/other")).toEqual({ name: "not-found" });
+  });
+
   it("opens the book page, also with the plan for a new run", () => {
     expect(parseHash(href.book("sql", "pro-git"))).toEqual({ name: "book", slug: "sql", book: "pro-git", view: null });
     expect(parseHash(href.book("sql", "pro-git", "plan"))).toEqual({ name: "book", slug: "sql", book: "pro-git", view: "plan" });

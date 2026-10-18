@@ -17,23 +17,25 @@ Do this step one time.
    npm install
    ```
 
-2. Copy the example configuration file:
+2. Start the app. See [Step 2](#step-2-start-the-app).
 
-   ```
-   cp .env.example .env
-   ```
+3. Click "Settings" at the top right of the page.
 
-   In the Windows command prompt, use `copy` instead of `cp`.
+4. Select the provider. Then type the API key and the model name, and select the reasoning level. For OpenRouter, you can also type the providers that serve the model. The tutor has no default model. For the model that we recommend, see [Configuration](../README.md#configuration).
 
-3. In `.env`, set the provider, the model, the reasoning level, and the API key. For OpenRouter, you can also select the providers that serve the model. The file explains each value. The tutor has no default model. For the model that we recommend, see [Configuration](../README.md#configuration).
+5. Optional: for YouTube videos, select the video provider and type the name of the video model. See [Which video model to use](../README.md#which-video-model-to-use).
 
-4. Optional: check the model. The command sends three small requests:
+6. Click "Save". The tutor uses the new model at once. You do not have to start the app again.
 
-   ```
-   npm run llm:check
-   ```
+7. Click "Test the model". The tutor sends one small request to the model. If the API key or the model name is not correct, the page shows the error.
 
-   If a value in `.env` is missing or not valid, the command tells you which value to change. See [Check the model](commands.md#check-the-model).
+The page shows only the last 4 characters of an API key. To keep a key, leave its field empty. To change a key, type the new key.
+
+### The .env file
+
+The Settings page writes the values into the `.env` file in the folder of the tutor. If `.env` does not exist, the page makes it from `.env.example`. The commands in the terminal read the same file.
+
+You can also edit `.env` by hand. The file explains each value. After a change by hand, start the app again. To check the model with three requests, run `npm run llm:check`. See [Check the model](commands.md#check-the-model).
 
 ## Step 2: Start the app
 
@@ -114,7 +116,7 @@ The tutor cannot read pages behind a login, or pages that show their text only a
 
 The tutor can teach from a YouTube video or playlist. The tutor does not download the video. It sends the YouTube address to a video model, which hears the speech and sees the screen. Thus, the transcript also contains the code, the commands, and the tables on the screen.
 
-First, set the video model in `.env`. The video model must be a Gemini model, so you need an OpenRouter key or a Gemini key from Google AI Studio. An Anthropic key or an OpenAI key alone does not work for videos. See [Which video model to use](../README.md#which-video-model-to-use).
+First, set the video model on the Settings page. The video model must be a Gemini model, so you need an OpenRouter key or a Gemini key from Google AI Studio. An Anthropic key or an OpenAI key alone does not work for videos. See [Which video model to use](../README.md#which-video-model-to-use).
 
 1. On the subject screen, click "Add an online book or video".
 2. In "Address of the book or video", type the address of a YouTube video or playlist.
@@ -129,7 +131,7 @@ For a playlist, the page shows its videos with their lengths. Each video becomes
 4. For a playlist, clear the checkboxes of the videos that you do not want.
 5. Click "Download".
 
-The bar at the bottom of the page shows the total length. For OpenRouter, it also shows the estimated cost. If `.env` has no video model, the bar shows the message about the video model, and the page has no "Download" button.
+The bar at the bottom of the page shows the total length. For OpenRouter, it also shows the estimated cost. If the settings have no video model, the bar shows the message about the video model, and the page has no "Download" button.
 
 The book page shows the progress. Each video is one request to the video model, and a long video can take some minutes. "Stop" ends the download after the current video. The finished transcripts stay in the cache, so a new download does not pay for them again. A stopped download writes no EPUB file.
 
@@ -158,7 +160,7 @@ The book page has one row for each chapter:
 | Images | The images that the model did not read yet. The model reads each image one time. |
 | Requests | The model requests for the chapter. The number is an estimate. |
 
-Select the chapters with the checkboxes. "Select all" selects each chapter without concepts. The bar at the bottom of the page shows the number of model requests for your selection, and the model from `.env`.
+Select the chapters with the checkboxes. "Select all" selects each chapter without concepts. The bar at the bottom of the page shows the number of model requests for your selection, and the model from the settings.
 
 A chapter with concepts has no checkbox. To ingest such a chapter again, use the [ingest command](commands.md#ingest-a-book-from-the-terminal) with `--replace`.
 
@@ -230,4 +232,4 @@ The README lists the [stages of the app](../README.md#in-the-app). The app shows
 
 You can leave a diagnosis before the end. The tutor keeps each answer. The subject screen and the concept map then show "Continue the diagnosis". "Test it" for a concept of that diagnosis also opens it, with no new questions.
 
-The diagnosis, the lessons, the questions about a lesson, and the tests use the model in `.env`. The model writes the questions and grades the open answers. If you think that a grade is wrong, use "Dispute the grade". A disputed answer counts as correct.
+The diagnosis, the lessons, the questions about a lesson, and the tests use the model from the settings. The model writes the questions and grades the open answers. If you think that a grade is wrong, use "Dispute the grade". A disputed answer counts as correct.

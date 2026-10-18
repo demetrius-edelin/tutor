@@ -380,7 +380,7 @@ export function startLesson(db: Db, llm: LlmClient | null, dataDir: string, conc
     markLearning(db, concept);
     return Promise.resolve(lessonView(db, dataDir, conceptId));
   }
-  if (!llm) throw new TutorError("No model is set. Set the model in .env and start the tutor again.", 503);
+  if (!llm) throw new TutorError("No model is set. Open the Settings page and select a model.", 503);
   const running = writing.get(concept.uid);
   if (running) return running;
 
@@ -425,7 +425,7 @@ function storedLesson(db: Db, lessonId: number): StoredLesson {
 
 // Answer a question of the learner about a lesson. The conversation starts with the lesson request and the lesson.
 export async function askAboutLesson(db: Db, llm: LlmClient | null, dataDir: string, lessonId: number, question: string): Promise<LessonView> {
-  if (!llm) throw new TutorError("No model is set. Set the model in .env and start the tutor again.", 503);
+  if (!llm) throw new TutorError("No model is set. Open the Settings page and select a model.", 503);
   if (question.trim() === "") throw new TutorError("The question is empty.");
   const lesson = storedLesson(db, lessonId);
   const concept = conceptRow(db, lesson.concept_id);

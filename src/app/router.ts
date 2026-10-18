@@ -25,12 +25,15 @@ export type Route =
   | { name: "online"; slug: string }
   | { name: "lesson"; conceptId: number }
   | { name: "session"; id: number }
+  // The model, the API keys, and the video model.
+  | { name: "settings" }
   | { name: "not-found" };
 
 export function parseHash(hash: string): Route {
   const [path = "", query = ""] = hash.replace(/^#/, "").split("?");
   const parts = path.split("/").filter(Boolean).map(decodeURIComponent);
   if (parts.length === 0) return { name: "home" };
+  if (parts[0] === "settings" && parts.length === 1) return { name: "settings" };
   if (parts[0] === "subjects" && parts[1] && parts.length === 2) return { name: "subject", slug: parts[1] };
   if (parts[0] === "subjects" && parts[1] && parts[2] === "map" && parts.length === 3) {
     const params = new URLSearchParams(query);
@@ -80,6 +83,7 @@ export const href = {
   online: (slug: string) => `#/subjects/${encodeURIComponent(slug)}/online`,
   session: (id: number) => `#/sessions/${id}`,
   lesson: (conceptId: number) => `#/lessons/${conceptId}`,
+  settings: () => "#/settings",
 };
 
 // The event after replaceHash. The browser sends no "hashchange" event after history.replaceState.

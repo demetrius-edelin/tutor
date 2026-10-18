@@ -8,6 +8,7 @@ import { Lesson } from "./screens/Lesson";
 import { OnlineBook } from "./screens/OnlineBook";
 import { Queue } from "./screens/Queue";
 import { Session } from "./screens/Session";
+import { Settings } from "./screens/Settings";
 import { Subject } from "./screens/Subject";
 
 export function App() {
@@ -31,6 +32,8 @@ export function App() {
       return <Lesson key={route.conceptId} conceptId={route.conceptId} />;
     case "session":
       return <Session key={route.id} id={route.id} />;
+    case "settings":
+      return <Settings />;
     default:
       return (
         <Layout>

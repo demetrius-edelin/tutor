@@ -29,7 +29,8 @@ export interface VideoAccess {
   log?: (line: string) => void;
 }
 
-const NO_VIDEO_MODEL = "Videos need a video model. In .env, set VIDEO_PROVIDER to openrouter or google, and set VIDEO_MODEL.";
+const NO_VIDEO_MODEL =
+  "Videos need a video model. On the Settings page, select the video provider and the video model, or set VIDEO_PROVIDER and VIDEO_MODEL in .env.";
 const LIMIT = `The tutor transcribes videos of up to ${MAX_VIDEO_SECONDS / 60} minutes, because a longer transcript does not fit into the answer of the model.`;
 const tooLong = (seconds: number | null) => seconds !== null && seconds > MAX_VIDEO_SECONDS;
 const transcriptsDir = (dataDir: string) => join(dataDir, "web", "transcripts");

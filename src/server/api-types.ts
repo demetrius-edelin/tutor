@@ -486,3 +486,39 @@ export interface TestOutcome {
 }
 
 export type AfterTestAction = "later" | "skip";
+
+// Settings
+
+// The model values in .env. An empty string means that the value is not set.
+export interface SettingsValues {
+  provider: string;
+  model: string;
+  reasoning: string;
+  openrouterProviders: string;
+  videoProvider: string;
+  videoModel: string;
+}
+
+export interface SettingsView {
+  values: SettingsValues;
+  // For each provider: null if no API key is set, else the last 4 characters of the key. A short key gives "".
+  keys: Record<string, string | null>;
+  // The model of the tutor, or the reason that there is no model.
+  model: string | null;
+  modelError: string | null;
+  // The video model, or the reason that it does not work. Both are null if no video provider is selected.
+  videoModel: string | null;
+  videoError: string | null;
+  // The full path of the .env file.
+  file: string;
+}
+
+// The body of POST /api/settings. For each provider, an empty key keeps the key that is set.
+export interface SettingsInput extends SettingsValues {
+  keys: Record<string, string>;
+}
+
+// The answer of the model to the small test request.
+export interface ModelCheckView {
+  seconds: number;
+}

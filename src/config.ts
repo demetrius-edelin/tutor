@@ -48,19 +48,19 @@ export function loadEnvFile(path = ".env", env: NodeJS.ProcessEnv = process.env)
 export function modelConfig(env: NodeJS.ProcessEnv = process.env): ModelConfig {
   const provider = (env.LLM_PROVIDER ?? "").trim().toLowerCase();
   if (!provider) {
-    throw new ConfigError("No provider is selected. In .env, set LLM_PROVIDER to anthropic, openai, openrouter, or google.");
+    throw new ConfigError("No provider is selected. On the Settings page, select a provider, or set LLM_PROVIDER in .env.");
   }
   if (!(PROVIDERS as readonly string[]).includes(provider)) {
     throw new ConfigError(`LLM_PROVIDER "${provider}" is not valid. Use anthropic, openai, openrouter, or google.`);
   }
   const model = (env.LLM_MODEL ?? "").trim();
   if (!model) {
-    throw new ConfigError("No model is selected. In .env, set LLM_MODEL to a model name of the provider.");
+    throw new ConfigError("No model is selected. On the Settings page, type the model name, or set LLM_MODEL in .env.");
   }
   const keyName = KEY_NAMES[provider as Provider];
   const apiKey = (env[keyName] ?? "").trim();
   if (!apiKey) {
-    throw new ConfigError(`The provider "${provider}" needs an API key. In .env, set ${keyName}.`);
+    throw new ConfigError(`The provider "${provider}" needs an API key. On the Settings page, type the key, or set ${keyName} in .env.`);
   }
   const reasoning = (env.LLM_REASONING ?? "").trim().toLowerCase();
   if (reasoning && !(REASONING_LEVELS as readonly string[]).includes(reasoning)) {
@@ -103,19 +103,19 @@ export function describeVideoModel(config: VideoConfig): string {
 export function videoConfig(env: NodeJS.ProcessEnv = process.env): VideoConfig {
   const provider = (env.VIDEO_PROVIDER ?? "").trim().toLowerCase();
   if (!provider) {
-    throw new ConfigError("Videos need a video model. In .env, set VIDEO_PROVIDER to openrouter or google, and set VIDEO_MODEL.");
+    throw new ConfigError("Videos need a video model. On the Settings page, select the video provider and the video model, or set VIDEO_PROVIDER and VIDEO_MODEL in .env.");
   }
   if (!(VIDEO_PROVIDERS as readonly string[]).includes(provider)) {
     throw new ConfigError(`VIDEO_PROVIDER "${provider}" is not valid. Use openrouter or google.`);
   }
   const model = (env.VIDEO_MODEL ?? "").trim();
   if (!model) {
-    throw new ConfigError("No video model is selected. In .env, set VIDEO_MODEL to a Gemini model of the video provider.");
+    throw new ConfigError("No video model is selected. On the Settings page, type the name of a Gemini model, or set VIDEO_MODEL in .env.");
   }
   const keyName = VIDEO_KEY_NAMES[provider as VideoProvider];
   const apiKey = (env[keyName] ?? "").trim();
   if (!apiKey) {
-    throw new ConfigError(`The video provider "${provider}" needs an API key. In .env, set ${keyName}.`);
+    throw new ConfigError(`The video provider "${provider}" needs an API key. On the Settings page, type the key, or set ${keyName} in .env.`);
   }
   return { provider: provider as VideoProvider, model, apiKey };
 }

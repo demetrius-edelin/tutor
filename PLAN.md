@@ -40,6 +40,7 @@ Status: draft 5. Date: 2026-10-15. The design is in `DESIGN-v3.md`. This file gi
 - The video at a reference: built. "Read the section" shows the YouTube player at the paragraph of the quote, and a time link moves the player. The concept map and the references of a lesson have "Watch from 4:05". A test in the browser with the data of the user passed. The player played the IBM video on RAG from 0:08. The four references of one lesson got the times 9:22, 9:30, 9:37, and 9:57.
 - Fewer concepts: done. Before, the 6-minute RAG video of 1,099 words gave 26 concepts and 52 diagnosis questions, and the same ideas came back in many concepts. Now the prompts keep only the ideas that a section explains, and put a small idea into a larger concept. The review stage adds only a main idea. The merge step also joins two new concepts of one chapter. A video of up to 30 minutes is one chapter. The diagnosis has 1 or 2 questions for each concept. The cache key has the version of the prompts. The user tests the change with a new ingest of the RAG video. The test gave 7 concepts and 8 questions, and the user approved the result.
 - Open diagnoses: built. Before, a diagnosis that the user left had no link back. A new "Test it" made a new session, and the model wrote new questions. Now the subject screen and the concept map show "Continue the diagnosis". "Test it" opens the open diagnosis. A concept with a new mark leaves the diagnosis.
+- Settings page: built. The page `#/settings` sets the provider, the model, the reasoning level, the API keys, and the video model. It writes the values into `.env`, and the server uses the new model with no restart. The page shows only the last 4 characters of a key. "Test the model" sends one small request. The home screen shows a note while the tutor has no model. The error texts name the Settings page and the `.env` variable. This is step 1 of an easy install for users who do not use a terminal.
 
 ## Milestones
 
@@ -307,6 +308,7 @@ If the user asks for them, these options can come later:
 - Export the starred concepts as a Markdown list, as a summary of the books.
 - A "Quiz me" button that asks one question about one concept, with no schedule.
 - With `VIDEO_PROVIDER=google`, one request for each YouTube chapter, with the clip offsets of the Gemini API. First test that the offsets work with a YouTube address. See "Open questions" in `DESIGN-v3.md`.
+- A portable zip for each system, as step 2 of an easy install. A GitHub Actions workflow builds it for each release. The zip has the Node.js program, the built app, the production packages, and a starter file to double-click. Then the user needs no Node.js, no git, and no terminal. Move `data/` to a folder of the user first, so that an update of the app folder keeps the books.
 - Videos longer than 90 minutes, with the Gemini processing mode `agentic` and one request for each YouTube chapter. Test it first with one chapter of a video of about 1 hour. Never send a video of 3 hours for a test, because of the cost.
 
 ## Test books

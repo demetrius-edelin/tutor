@@ -34,8 +34,8 @@ type Sdk = Pick<OpenAI, "chat">;
 
 function openRouterError(error: unknown, config: VideoConfig): Error {
   const where = `openrouter (video model "${config.model}")`;
-  if (error instanceof OpenAI.AuthenticationError) return new LlmError(`${where} did not accept the API key. Check OPENROUTER_API_KEY in .env.`);
-  if (error instanceof OpenAI.NotFoundError) return new LlmError(`${where}: ${error.message}. Check VIDEO_MODEL in .env.`);
+  if (error instanceof OpenAI.AuthenticationError) return new LlmError(`${where} did not accept the API key. Check the OpenRouter key on the Settings page or in .env.`);
+  if (error instanceof OpenAI.NotFoundError) return new LlmError(`${where}: ${error.message}. Check the video model name on the Settings page or in .env.`);
   if (error instanceof OpenAI.RateLimitError) return new LlmError(`${where}: the rate limit or the credit limit is reached. Try again later.`);
   if (error instanceof OpenAI.BadRequestError) return new LlmError(`${where} rejected the request: ${error.message}`);
   if (error instanceof OpenAI.APIConnectionError) return new LlmError("Cannot connect to OpenRouter. Check the network connection.");
@@ -100,9 +100,9 @@ interface GeminiInteraction {
 
 function geminiError(status: number, message: string, config: VideoConfig): LlmError {
   const where = `google (video model "${config.model}")`;
-  if (status === 401 || (status === 400 && /api key/i.test(message))) return new LlmError(`${where} did not accept the API key. Check GEMINI_API_KEY in .env.`);
+  if (status === 401 || (status === 400 && /api key/i.test(message))) return new LlmError(`${where} did not accept the API key. Check the Gemini key on the Settings page or in .env.`);
   if (status === 403) return new LlmError(`${where}: the API key has no access to this model. ${message}`);
-  if (status === 404) return new LlmError(`${where}: the model was not found. Check VIDEO_MODEL in .env. ${message}`);
+  if (status === 404) return new LlmError(`${where}: the model was not found. Check the video model name on the Settings page or in .env. ${message}`);
   if (status === 429) return new LlmError(`${where}: the rate limit or the daily limit is reached. Try again later. ${message}`);
   return new LlmError(`${where} returned an error (HTTP status ${status}): ${message}`);
 }

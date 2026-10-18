@@ -2135,17 +2135,21 @@ button.button {
   margin-bottom: 2rem;
 }
 
-.online-form .field {
+.online-form .field,
+.settings-form .field {
   margin-bottom: 1.1rem;
 }
 
-.online-form label {
+.online-form label,
+.settings-form label {
   display: block;
   margin-bottom: 0.3rem;
   font-weight: 500;
 }
 
-.online-form input {
+.online-form input,
+.settings-form input,
+.settings-form select {
   width: 100%;
   padding: 0.5rem 0.6rem;
   border: 1px solid var(--rule);
@@ -2474,4 +2478,62 @@ button.button {
 
 .module-head + .chapter-heading {
   margin-top: 0.75rem;
+}
+
+/* The link to the settings, at the right end of the top bar. */
+.settings-link {
+  margin-left: auto;
+  padding: 0.45rem 0.8rem;
+  border-radius: 0.3rem;
+  color: var(--graphite);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.settings-link:hover {
+  background: color-mix(in srgb, var(--rule) 40%, var(--paper));
+  color: var(--ink);
+}
+
+.settings-link[aria-current="page"] {
+  border-radius: 0.3rem 0.3rem 0 0;
+  box-shadow: inset 0 -3px 0 var(--margin-red);
+  color: var(--ink);
+}
+
+/* The settings page: the state of the models, then the form. */
+.settings-form {
+  max-width: 36rem;
+}
+
+.settings-form h2:first-child {
+  margin-top: 2rem;
+}
+
+.settings-status {
+  max-width: 36rem;
+}
+
+.settings-status p {
+  margin: 0 0 0.4rem;
+}
+
+.settings-status .button-row {
+  margin: 0.6rem 0 0.2rem;
+}
+
+.settings-label {
+  font-weight: 500;
+}
+
+/* The path of the .env file can be long. */
+.settings-file {
+  max-width: 36rem;
+  margin-top: 2rem;
+  overflow-wrap: anywhere;
+}
+
+/* The note on the home screen if the tutor has no model. */
+.setup-note {
+  margin-bottom: 2rem;
 }

@@ -1,4 +1,4 @@
-# <img src="src/app/public/logo.svg" alt="" height="32"> Tutor - books, YouTube and online docs teacher
+# <img src="src/app/public/logo.svg" alt="" height="32"> Tutor: a personal teacher for your books, online documentation, and YouTube videos
 
 > See also my other project, [Tapas Habit & Goal Tracker](https://tapastracker.app), a full-featured habit tracker for iPhone and Android. Also, **I am looking for a full-time role** as an AI/software developer. Contact me on [LinkedIn](https://www.linkedin.com/in/demetrius-edelin/).
 
@@ -43,31 +43,28 @@ You need Node.js 22 or later and an API key for Anthropic, OpenAI, OpenRouter, o
 git clone https://github.com/demetrius-edelin/tutor.git
 cd tutor
 npm install
-cp .env.example .env   # then set the provider, the model, and the API key
-npm run llm:check      # optional: send 3 small test requests to the model
 npm start              # then open http://localhost:3000
 ```
 
-In the Windows command prompt, use `copy` instead of `cp`.
-
 Then, in the app:
 
-1. Make a subject, for example "SQL".
-2. Add a book in one of these ways:
+1. Click "Settings" at the top right. Select the provider, type the API key and the model name, and click "Save". Then click "Test the model".
+2. Make a subject, for example "SQL".
+3. Add a book in one of these ways:
    - Click "Add a book" and select an EPUB file or a tagged PDF file.
    - Click "Add an online book or video". Then type the address of an online book, of online documentation, or of a YouTube video or playlist.
-3. Select one chapter and click "Preview". The preview shows the concepts of the chapter and changes nothing.
-4. If the concepts look correct, click "Save these chapters". Then start to study.
+4. Select one chapter and click "Preview". The preview shows the concepts of the chapter and changes nothing.
+5. If the concepts look correct, click "Save these chapters". Then start to study.
 
 Before each run, the app shows the number of model requests. Later, click "Add chapters" next to the book to add more chapters.
 
 ## How it works
 
-You use the tutor in four steps. Steps 1 and 2 are commands in the terminal. Steps 3 and 4 are in the app, in the browser.
+You use the tutor in four steps. Step 1 has a command in the terminal and the Settings page of the app. Step 2 is a command in the terminal. Steps 3 and 4 are in the app, in the browser.
 
 ```mermaid
 flowchart LR
-    S1["1. Set up<br/>npm install<br/>.env"] --> S2["2. Start the app<br/>npm start"]
+    S1["1. Set up<br/>npm install<br/>Settings page"] --> S2["2. Start the app<br/>npm start"]
     S2 --> S3["3. Add a book file,<br/>online docs, or a video<br/>preview, then save<br/>some chapters"]
     S3 --> S4["4. Study"]
     S4 -->|"more chapters or books"| S3
@@ -107,7 +104,7 @@ The [command reference](docs/commands.md) explains each command and its options.
 
 ## Configuration
 
-The tutor reads its configuration from the `.env` file. Copy `.env.example` to `.env`. The file explains each value.
+The tutor reads its configuration from the `.env` file. The Settings page of the app writes this file for you. If `.env` does not exist, the page makes it from `.env.example`. You can also copy `.env.example` to `.env` and edit it by hand. The file explains each value.
 
 | Variable | Value |
 |---|---|
@@ -119,7 +116,7 @@ The tutor reads its configuration from the `.env` file. Copy `.env.example` to `
 | `VIDEO_PROVIDER` | Videos only. `openrouter` or `google`. Both give a Gemini model, the only kind of model that reads YouTube videos. |
 | `VIDEO_MODEL` | Videos only. A Gemini model, exactly as the video provider writes it. |
 
-The tutor has no default model. After a change to `.env`, run `npm run llm:check`.
+The tutor has no default model. After a change on the Settings page, the tutor uses the new model at once. Click "Test the model" to send one small request. After a change to `.env` by hand, start the app again. To test the model with 3 requests, run `npm run llm:check`.
 
 ### Which model to use
 
@@ -239,7 +236,7 @@ See [Add a YouTube video or playlist](docs/usage.md#add-a-youtube-video-or-playl
 - **In which order does the concept map show the concepts?** In the order of the books, the chapters, and the sections. The order in which you add the chapters does not change it.
 - **Can I move or delete the book file after I add it?** Yes. The tutor keeps a copy of the book file in the folder of the book.
 - **Can the tutor teach from online documentation?** Yes. On the subject screen, click "Add an online book or video" and type the address. See [Add an online book](docs/usage.md#add-an-online-book).
-- **Can the tutor teach from a YouTube course?** Yes. Set the video model in `.env`. On the subject screen, click "Add an online book or video" and type the address of the video or of the playlist. The concept map and the lessons show the video at the point of each reference. See [Add a YouTube video or playlist](docs/usage.md#add-a-youtube-video-or-playlist).
+- **Can the tutor teach from a YouTube course?** Yes. Set the video model on the Settings page. On the subject screen, click "Add an online book or video" and type the address of the video or of the playlist. The concept map and the lessons show the video at the point of each reference. See [Add a YouTube video or playlist](docs/usage.md#add-a-youtube-video-or-playlist).
 - **How do I add a second book to a subject?** On the subject screen, click "Add a book" or "Add an online book or video". The tutor adds the concepts of the new book to the concept map of the subject.
 - **How do I make a new subject?** On the list of subjects, type a name in the "New subject" field. Then click "Create".
 - **How do I delete a subject?** On the list of subjects, click "Delete" below the subject. Then click the red button in the panel that opens. The tutor deletes the books, the concepts, your progress, and the folder of the subject. You cannot undo this.

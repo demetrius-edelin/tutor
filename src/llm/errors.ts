@@ -12,7 +12,7 @@ export function toLlmError(error: unknown, config: ModelConfig): Error {
     classes.some((errorClass) => error instanceof errorClass);
 
   if (is(Anthropic.AuthenticationError, OpenAI.AuthenticationError)) {
-    return new LlmError(`${where} did not accept the API key. Check the key in .env.`);
+    return new LlmError(`${where} did not accept the API key. Check the key on the Settings page or in .env.`);
   }
   if (is(Anthropic.PermissionDeniedError, OpenAI.PermissionDeniedError)) {
     return new LlmError(`${where}: the API key has no access to this model.`);
@@ -20,10 +20,10 @@ export function toLlmError(error: unknown, config: ModelConfig): Error {
   if (is(Anthropic.NotFoundError, OpenAI.NotFoundError)) {
     if (config.providers?.length) {
       return new LlmError(
-        `${where}: no provider in OPENROUTER_PROVIDERS (${config.providers.join(", ")}) serves the model. Check OPENROUTER_PROVIDERS and LLM_MODEL in .env. ${(error as Error).message}`,
+        `${where}: no provider in OPENROUTER_PROVIDERS (${config.providers.join(", ")}) serves the model. Check the OpenRouter providers and the model name on the Settings page or in .env. ${(error as Error).message}`,
       );
     }
-    return new LlmError(`${where}: the model was not found. Check LLM_MODEL in .env.`);
+    return new LlmError(`${where}: the model was not found. Check the model name on the Settings page or in .env.`);
   }
   if (is(Anthropic.RateLimitError, OpenAI.RateLimitError)) {
     return new LlmError(`${where}: the rate limit or the credit limit is reached. Try again later.`);

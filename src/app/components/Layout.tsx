@@ -41,6 +41,9 @@ export function Layout({ subject, tab, children }: { subject?: { slug: string; n
             </ul>
           </nav>
         )}
+        <a className="settings-link" href={href.settings()} aria-current={route.name === "settings" ? "page" : undefined}>
+          Settings
+        </a>
       </header>
       <main className="page">{children}</main>
     </div>

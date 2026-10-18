@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import type { SubjectSummary } from "../../server/api-types";
+import type { SettingsView, SubjectSummary } from "../../server/api-types";
 import { deleteJson, postJson, useApi } from "../api";
 import { Layout, Notice } from "../components/Layout";
 import { knownShare } from "../components/Progress";
@@ -10,12 +10,19 @@ const plural = (count: number, word: string) => `${count.toLocaleString("en-US")
 
 export function Home() {
   const subjects = useApi<SubjectSummary[]>("/api/subjects");
+  const settings = useApi<SettingsView>("/api/settings");
   // The list does not load again after a delete. The page hides the deleted subjects.
   const [deleted, setDeleted] = useState<string[]>([]);
   const [confirming, setConfirming] = useState<string | null>(null);
   const list = subjects.state === "ready" ? subjects.data.filter((subject) => !deleted.includes(subject.slug)) : [];
   return (
     <Layout>
+      {settings.state === "ready" && !settings.data.model && (
+        <p className="run-note setup-note">
+          The tutor has no model yet. It needs a model to read your books, to teach, and to test.{" "}
+          <a href={href.settings()}>Select a model in the settings</a>
+        </p>
+      )}
       {subjects.state === "loading" && <p className="quiet">Loading the subjects.</p>}
       {subjects.state === "error" && <Notice title="The subjects did not load">{<p>{subjects.message}</p>}</Notice>}
       {subjects.state === "ready" && list.length === 0 && (

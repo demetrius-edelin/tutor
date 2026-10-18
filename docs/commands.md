@@ -15,7 +15,7 @@ The app does the main work of the tutor: you add books, preview and save chapter
 | Command | Use | Uses the model | What it writes |
 |---|---|---|---|
 | `npm start` | Each time that you want to study. It starts the app. | Yes, for ingest, the diagnosis, the lessons, and the tests. | Your books and your progress. |
-| `npm run llm:check` | Optional. After a change to `.env`. | Yes, 3 small requests. | Nothing. |
+| `npm run llm:check` | Optional. After a change to `.env`. The Settings page of the app has a smaller test: "Test the model". | Yes, 3 small requests. | Nothing. |
 | `npm run parse -- <book>` | Optional. To check a book at no cost, and to find the section ids for `--sections`. | No. | A report in `data/parse/<book>/`, for you to read. |
 | `npm run fetch -- <url>` | To download an online book, online documentation, or the transcript of a YouTube video or playlist in the terminal. The app can also do this. Then add the EPUB file in the app. | For a site with no `llms.txt` file: one small request. For YouTube: one request of the video model for each video. | An EPUB file in `data/web/`. For YouTube, also the transcripts in `data/web/transcripts/`. |
 | `npm run ingest -- <subject> <book> [options]` | For the options that the app does not have: `--sections`, `--fresh`, and `--replace`. | Yes. | The folder of the book and the database. |
@@ -152,7 +152,7 @@ The tutor can teach from a YouTube video or a YouTube playlist. The app can get 
 
 The tutor does not download the video. It sends the YouTube address to a video model, which hears the speech and sees the screen. Thus, the transcript also contains the code, the commands, and the tables on the screen.
 
-1. Set the video model in `.env`. See [Which video model to use](../README.md#which-video-model-to-use).
+1. Set the video model on the Settings page of the app, or in `.env`. See [Which video model to use](../README.md#which-video-model-to-use).
 
 2. Get the transcript:
 
