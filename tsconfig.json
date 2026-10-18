@@ -20,7 +20,8 @@
   },
   "include": [
     "src",
-    "test"
+    "test",
+    "scripts"
   ],
   "exclude": [
     "src/app"

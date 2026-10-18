@@ -62,7 +62,7 @@ function keyEnd(key: string): string | null {
   return key.length >= 16 ? key.slice(-4) : "";
 }
 
-export function settingsView(file: string, env: NodeJS.ProcessEnv, models: Omit<Models, "llm">): SettingsView {
+export function settingsView(file: string, env: NodeJS.ProcessEnv, models: Omit<Models, "llm">): Omit<SettingsView, "canStop"> {
   const value = (name: string) => (env[name] ?? "").trim();
   const videoProvider = value("VIDEO_PROVIDER").toLowerCase();
   return {

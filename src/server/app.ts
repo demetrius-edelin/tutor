@@ -64,6 +64,8 @@ export interface ServerOptions {
     shellEnv: NodeJS.ProcessEnv;
     log?: (line: string) => void;
   };
+  // Stop the program. Only the tutor from a download has it, because it has no terminal for Ctrl+C.
+  onStop?: () => void;
 }
 
 const NO_MODEL = "No model is set. Open the Settings page and select a model.";
@@ -74,7 +76,7 @@ export interface TutorServer extends FastifyInstance {
 }
 
 export function buildServer(options: ServerOptions): TutorServer {
-  const { db, dataDir, appDir, fetcher, fetchPauseMs, video, settings } = options;
+  const { db, dataDir, appDir, fetcher, fetchPauseMs, video, settings, onStop } = options;
   // The settings page can change the model while the server runs.
   let llm = options.llm ?? null;
   let llmError = options.llmError;
@@ -129,6 +131,9 @@ export function buildServer(options: ServerOptions): TutorServer {
 
   // The browser sends a book file as the body of one request, so the server needs no package for multipart uploads.
   app.addContentTypeParser("application/octet-stream", { parseAs: "buffer" }, (_request, body, done) => done(null, body));
+
+  // A second start of the tutor from a download asks this route if a tutor runs already.
+  app.get("/api/health", async () => ({ app: "tutor" }));
 
   app.get("/api/subjects", async () => listSubjects(db));
 
@@ -342,13 +347,15 @@ export function buildServer(options: ServerOptions): TutorServer {
   // Settings
 
   if (settings) {
-    const view = () =>
-      settingsView(settings.envFile, envValues(settings.envFile, settings.shellEnv), {
+    const view = () => ({
+      ...settingsView(settings.envFile, envValues(settings.envFile, settings.shellEnv), {
         llmError: llm ? null : (llmError ?? NO_MODEL),
         modelName: llm ? (modelName ?? null) : null,
         video: online.video.config,
         videoError: online.video.error,
-      });
+      }),
+      canStop: onStop !== undefined,
+    });
 
     // The model values. The answer gives only the end of each API key.
     app.get("/api/settings", async () => view());
@@ -369,6 +376,16 @@ export function buildServer(options: ServerOptions): TutorServer {
 
     // Send one small request to the model.
     app.post("/api/settings/check", async () => checkModel(requireModel()));
+  }
+
+  if (onStop) {
+    // Stop the program. A run in progress also stops, and the next start marks it as failed.
+    // The route accepts only JSON, so the browser blocks a request from another site.
+    app.post("/api/stop", async (request) => {
+      if (!request.headers["content-type"]?.startsWith("application/json")) throw new TutorError("Send the stop request as JSON.", 415);
+      onStop();
+      return { ok: true };
+    });
   }
 
   if (appDir && existsSync(appDir)) {

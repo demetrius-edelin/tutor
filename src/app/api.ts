@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+const NO_SERVER = "The tutor does not answer. Start the tutor again: open the Tutor app, or run npm start.";
+
 export async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
   const body = (await response.json().catch(() => null)) as (T & { error?: string }) | null;
@@ -26,7 +28,7 @@ async function send<T>(url: string, init: RequestInit): Promise<T> {
   try {
     response = await fetch(url, init);
   } catch {
-    throw new Error("The tutor server does not answer. Start it with npm start.");
+    throw new Error(NO_SERVER);
   }
   const result = (await response.json().catch(() => null)) as (T & { error?: string }) | null;
   if (!response.ok) throw new Error(result?.error ?? `The server answered ${response.status}.`);
@@ -46,7 +48,7 @@ export function useApi<T>(url: string | null): Loadable<T> {
       .then((data) => active && setResult({ state: "ready", data }))
       .catch((error: unknown) => {
         if (!active) return;
-        const message = error instanceof TypeError ? "The tutor server does not answer. Start it with npm start." : String((error as Error).message);
+        const message = error instanceof TypeError ? NO_SERVER : String((error as Error).message);
         setResult({ state: "error", message });
       });
     return () => {

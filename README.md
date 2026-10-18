@@ -35,9 +35,37 @@ A chat with a book answers the questions that you think of. The tutor turns your
 - **Your control.** You select the concepts to test, to learn, and to skip. You also set the order of the study queue. The tutor only suggests.
 - **One course from all your material.** A book, the online documentation, and a YouTube course about the same subject give one concept map.
 
+## Download
+
+For macOS and Windows, a download contains all the parts of the tutor. You do not need Node.js, git, or a terminal. You need an API key for Anthropic, OpenAI, OpenRouter, or Google Gemini. See [Which model to use](#which-model-to-use).
+
+1. Open the [latest release](https://github.com/demetrius-edelin/tutor/releases/latest) and download the zip file for your computer:
+   - macOS: `Tutor-<version>-macos.zip`. It works on Macs with Apple silicon and on Macs with Intel.
+   - Windows: `Tutor-<version>-windows-x64.zip`.
+2. Start the tutor:
+   - macOS: if the browser did not unzip the file, double-click it. Drag `Tutor` into the Applications folder. Then open `Tutor`.
+   - Windows: right-click the zip file and click "Extract All". Open the new folder and double-click `Start Tutor`.
+3. The browser opens the tutor. The first time, it opens the Settings page. Select the model, type the API key, and click "Save".
+
+If the system shows a warning at the first start:
+
+- macOS: if macOS cannot verify Tutor, open System Settings > Privacy & Security. Scroll down and click "Open Anyway" next to the message about Tutor. A release with the signature of the developer does not show this warning.
+- Windows: click "More info", then "Run anyway". If Windows asks if you want to run the file, click "Run".
+
+To stop the tutor:
+
+- macOS: click "Stop the tutor" on the Settings page. When you log out or turn off the computer, the tutor also stops.
+- Windows: close the window of the tutor.
+
+To start the tutor again, open `Tutor` or double-click `Start Tutor` again. If the tutor runs already, the browser opens it.
+
+The tutor keeps the `.env` file and the `data/` folder in `~/Library/Application Support/Tutor` on macOS and in `%LOCALAPPDATA%\Tutor` on Windows. To update the tutor, stop it and replace `Tutor` or the folder with the new download. Your data stays. On macOS, the log of the tutor is in `~/Library/Logs/Tutor.log`.
+
+The download has no terminal commands, for example `npm run fetch`. For the commands, install the tutor from the source code.
+
 ## Quick start
 
-You need Node.js 22 or later and an API key for Anthropic, OpenAI, OpenRouter, or Google Gemini. An OpenRouter key or a Gemini key serves the whole app, also YouTube videos. With an Anthropic key or an OpenAI key, YouTube videos need a second key. See [Which model to use](#which-model-to-use).
+To install the tutor from the source code, you need Node.js 22 or later and an API key for Anthropic, OpenAI, OpenRouter, or Google Gemini. An OpenRouter key or a Gemini key serves the whole app, also YouTube videos. With an Anthropic key or an OpenAI key, YouTube videos need a second key. See [Which model to use](#which-model-to-use).
 
 ```sh
 git clone https://github.com/demetrius-edelin/tutor.git
@@ -259,12 +287,13 @@ Planned:
 | `npm test` | Run the tests. The tests use a fake model client, so they do not call a model. |
 | `npm run test:watch` | Run the tests again after each change. |
 | `npm run typecheck` | Check the TypeScript types of the server and of the app. |
+| `npm run package` | Build the downloads for macOS and Windows into `release/`. Run it on a Mac. See the [release guide](docs/release.md). |
 
 ### Tech stack
 
 | Part | Tools |
 |---|---|
-| Language | TypeScript on Node.js 22. |
+| Language | TypeScript on Node.js 22 or later. The downloads contain Node.js 24. |
 | Server | Fastify. |
 | App | React 19 and Vite. |
 | Database | SQLite, with better-sqlite3. |
@@ -292,8 +321,9 @@ src/
   tutor/        diagnosis, lessons, questions, grader, and study queue
   server/       HTTP API
   app/          browser app (React)
-docs/           usage guide and command reference
+docs/           usage guide, command reference, and release guide
 test/           tests, a fake model client, and a builder for test EPUB files
+scripts/        the build of the downloads for macOS and Windows
 data/           your books, the results, and the database (not in git)
 ```
 

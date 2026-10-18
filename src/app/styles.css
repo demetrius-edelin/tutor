@@ -2526,6 +2526,10 @@ button.button {
   font-weight: 500;
 }
 
+.settings-stop {
+  max-width: 36rem;
+}
+
 /* The path of the .env file can be long. */
 .settings-file {
   max-width: 36rem;

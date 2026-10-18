@@ -19,7 +19,8 @@
     "build": "vite build",
     "start": "vite build && tsx src/server/main.ts",
     "dev:server": "tsx watch src/server/main.ts",
-    "dev:app": "vite"
+    "dev:app": "vite",
+    "package": "tsx scripts/package.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
@@ -52,6 +53,7 @@
     "@types/react-dom": "^19.3.0",
     "@types/turndown": "^5.0.6",
     "@vitejs/plugin-react": "^6.1.1",
+    "esbuild": "^0.28.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.2",

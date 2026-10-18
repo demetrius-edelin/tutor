@@ -5,3 +5,4 @@ data-backup/
 .env
 *.log
 .DS_Store
+release/

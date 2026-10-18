@@ -11,6 +11,8 @@ This guide explains how to use the tutor in the browser. For an overview, see th
 
 Do this step one time.
 
+If you use the download for macOS or Windows, open the tutor instead of steps 1 and 2 below. Then continue at step 3. See [Download](../README.md#download).
+
 1. Install the packages:
 
    ```

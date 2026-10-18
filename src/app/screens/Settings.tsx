@@ -221,6 +221,7 @@ function SettingsForm({ initial }: { initial: SettingsView }) {
           </p>
         )}
       </form>
+      {view.canStop && <StopTutor />}
       <p className="quiet small settings-file">
         The tutor keeps these values in the file {view.file}. The commands in the terminal read the same file.
       </p>
@@ -266,6 +267,46 @@ function KeyField({
         </a>
       </p>
     </div>
+  );
+}
+
+// The tutor from a download has no terminal window on macOS, so the settings page can stop it.
+function StopTutor() {
+  const [state, setState] = useState<"running" | "stopping" | "stopped">("running");
+  const [error, setError] = useState<string | null>(null);
+  const stop = async () => {
+    setState("stopping");
+    setError(null);
+    try {
+      await postJson("/api/stop");
+      setState("stopped");
+    } catch (problem) {
+      setError((problem as Error).message);
+      setState("running");
+    }
+  };
+  return (
+    <section className="settings-stop" aria-live="polite">
+      <h2>Stop the tutor</h2>
+      {state === "stopped" ? (
+        <p>The tutor stopped. You can close this page. To start the tutor again, open it in the same way as before.</p>
+      ) : (
+        <>
+          <p className="quiet">The tutor runs until you stop it or turn off the computer. If a run is in progress, the run also stops.</p>
+          <p className="button-row">
+            <button className="button secondary" type="button" onClick={stop} disabled={state === "stopping"}>
+              {state === "stopping" && <Spinner />}
+              {state === "stopping" ? "Stopping the tutor" : "Stop the tutor"}
+            </button>
+          </p>
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 

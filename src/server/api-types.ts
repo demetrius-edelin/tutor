@@ -511,6 +511,8 @@ export interface SettingsView {
   videoError: string | null;
   // The full path of the .env file.
   file: string;
+  // True for the tutor from a download. It has no terminal, so the settings page can stop it.
+  canStop: boolean;
 }
 
 // The body of POST /api/settings. For each provider, an empty key keeps the key that is set.
