@@ -16,7 +16,7 @@ import { build } from "esbuild";
 //   MACOS_SIGN_IDENTITY: for example "Developer ID Application: Name (TEAMID)".
 //   APPLE_ID, APPLE_APP_PASSWORD, APPLE_TEAM_ID: the Apple account for notarytool.
 
-const NODE_VERSION = "24.22.0";
+const NODE_VERSION = "24.22.1";
 const ROOT = resolve(import.meta.dirname, "..");
 const FILES = join(ROOT, "scripts", "package");
 const RELEASE = join(ROOT, "release");
