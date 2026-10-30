@@ -18,7 +18,7 @@ import {
   SUMMARY_TITLE,
   type RawSection,
 } from "./structure.js";
-import { countWords, sum } from "./text.js";
+import { countWords, normalizeSpace, sum } from "./text.js";
 import type {
   ChecklistItem,
   ChecklistSource,
@@ -53,6 +53,14 @@ export function buildBook(source: BookSource, options: ParseOptions = {}): Parse
 
   const locator = buildLocator(blocks);
   const spans = buildSpans(source.toc, source.landmarks, blocks, locator, warnings, filesAreParts);
+
+  // A short entry of the table of contents with the title of the book is the title page. A long one is the text of a
+  // book with one chapter, for example an online book of one page.
+  const bookTitle = normalizeSpace(source.title).toLowerCase();
+  for (const span of spans) {
+    const short = sum(blocks.slice(span.start, span.end), (block) => block.words) < 150;
+    if (span.kind === "chapter" && short && bookTitle && normalizeSpace(span.title).toLowerCase() === bookTitle) span.kind = "front";
+  }
 
   // The print page at the start of each block.
   const pageAt: (string | null)[] = [];

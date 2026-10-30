@@ -6,15 +6,17 @@ import { encodePng, imageId, shrink, type Pixels } from "../core/png.js";
 import type { BookImage, BookSource, TocEntry } from "../core/source.js";
 import { classify } from "../core/structure.js";
 import { countWords, normalizeSpace, sum } from "../core/text.js";
+import { bookLayout, layoutToXhtml, markRunningLines, type BookLayout, type LayoutHeading, type PlacedImage } from "./layout.js";
 import { pageToXhtml, plainText, type FontStyle, type OutlineAnchor, type PdfTextItem, type StructNode } from "./page.js";
 
-// Read a tagged PDF file. A tagged PDF has a structure tree with headings, paragraphs,
-// lists, and tables, as HTML has. An untagged PDF has only text at positions on the page.
+// Read a PDF file. A tagged PDF has a structure tree with headings, paragraphs, lists, and tables, as HTML has. An
+// untagged PDF has only text at positions on the page, so the layout reader finds its structure.
 
 export const pageFile = (page: number) => `page-${String(page).padStart(4, "0")}`;
 
-export class UntaggedPdfError extends Error {
-  override name = "UntaggedPdfError";
+// A PDF with no text, for example a scanned book.
+export class NoTextPdfError extends Error {
+  override name = "NoTextPdfError";
 }
 
 interface OutlineNode {
@@ -116,9 +118,10 @@ function fontStyle(page: PDFPageProxy, fontName: string): FontStyle {
   }
 }
 
-export async function readPageItems(page: PDFPageProxy): Promise<PdfTextItem[]> {
+// With no fonts, each item has the regular style. The check of the text and the tags needs no fonts.
+export async function readPageItems(page: PDFPageProxy, withFonts = true): Promise<PdfTextItem[]> {
   // The operator list loads the fonts, so that the font names are available.
-  await page.getOperatorList();
+  if (withFonts) await page.getOperatorList();
   const content = await page.getTextContent({ includeMarkedContent: true });
   const stack: { id: string | null; artifact: boolean }[] = [];
   const styles = new Map<string, FontStyle>();
@@ -221,6 +224,77 @@ export async function readPageImages(page: PDFPageProxy, images: Map<string, Boo
   return result;
 }
 
+// An image smaller than this, in PDF units on each side, is decoration, for example an icon. 72 units are one inch.
+const MIN_IMAGE_SIDE = 36;
+
+// The images that a page with no tags draws, and the top of each image. The reader follows the transformation matrix
+// of the page, because an image fills the unit square of the matrix. Each image becomes a PNG file in the images map.
+export async function readPlacedImages(page: PDFPageProxy, images: Map<string, BookImage>): Promise<PlacedImage[]> {
+  const operators = await page.getOperatorList();
+  const result: PlacedImage[] = [];
+  let matrix = [1, 0, 0, 1, 0, 0];
+  const saved: number[][] = [];
+  // The matrix after a "cm" operator: the new transformation comes first, then the current matrix.
+  const multiply = (m: number[], t: number[]) => [
+    m[0]! * t[0]! + m[2]! * t[1]!,
+    m[1]! * t[0]! + m[3]! * t[1]!,
+    m[0]! * t[2]! + m[2]! * t[3]!,
+    m[1]! * t[2]! + m[3]! * t[3]!,
+    m[0]! * t[4]! + m[2]! * t[5]! + m[4]!,
+    m[1]! * t[4]! + m[3]! * t[5]! + m[5]!,
+  ];
+  for (const [i, fn] of operators.fnArray.entries()) {
+    const args = (operators.argsArray[i] ?? []) as unknown[];
+    if (fn === OPS.save) saved.push(matrix);
+    else if (fn === OPS.restore) matrix = saved.pop() ?? matrix;
+    else if (fn === OPS.transform) matrix = multiply(matrix, args as number[]);
+    else if (fn === OPS.paintFormXObjectBegin) {
+      saved.push(matrix);
+      if (Array.isArray(args[0])) matrix = multiply(matrix, args[0] as number[]);
+    } else if (fn === OPS.paintFormXObjectEnd) matrix = saved.pop() ?? matrix;
+    else if (fn === OPS.paintImageXObject) {
+      const corners = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([u, v]) => ({
+        x: matrix[0]! * u! + matrix[2]! * v! + matrix[4]!,
+        y: matrix[1]! * u! + matrix[3]! * v! + matrix[5]!,
+      }));
+      const xs = corners.map((corner) => corner.x);
+      const ys = corners.map((corner) => corner.y);
+      if (Math.max(...xs) - Math.min(...xs) < MIN_IMAGE_SIDE || Math.max(...ys) - Math.min(...ys) < MIN_IMAGE_SIDE) continue;
+      const pixels = pixelsOf(await imageObject(page, String(args[0])));
+      if (!pixels) continue;
+      const data = encodePng(shrink(pixels));
+      const id = imageId(data);
+      images.set(id, { mediaType: "image/png", data });
+      result.push({ id, top: Math.max(...ys) });
+    }
+  }
+  return result;
+}
+
+// An image on many pages, for example a logo in the running head, is decoration. Remove it from the pages and the map.
+function dropRepeatedImages(pages: PlacedImage[][], images: Map<string, BookImage>): void {
+  const pagesOf = new Map<string, number>();
+  for (const placed of pages) for (const id of new Set(placed.map((image) => image.id))) pagesOf.set(id, (pagesOf.get(id) ?? 0) + 1);
+  for (const [id, count] of pagesOf) {
+    if (count < 3) continue;
+    images.delete(id);
+    for (const placed of pages) placed.splice(0, placed.length, ...placed.filter((image) => image.id !== id));
+  }
+}
+
+// Without bookmarks, the headings of the highest level that the book uses more than one time are the chapters. A level
+// with one heading only is usually the title of the book.
+export function tocFromHeadings(headings: { page: number; heading: LayoutHeading }[]): TocEntry[] {
+  const counts = new Map<number, number>();
+  for (const { heading } of headings) counts.set(heading.level, (counts.get(heading.level) ?? 0) + 1);
+  const levels = [...counts].filter(([, count]) => count >= 2).map(([level]) => level);
+  if (levels.length === 0) return [];
+  const level = Math.min(...levels);
+  return headings
+    .filter(({ heading }) => heading.level === level)
+    .map(({ page, heading }) => ({ title: heading.text, file: pageFile(page), anchor: heading.id, children: [] }));
+}
+
 // Give each Figure the images in its marked content. A content id ends with the marked content id, for example "p4912R_mc7".
 export function attachImages(node: StructNode, images: Map<number, string>): void {
   const contentIds = (current: StructNode): string[] =>
@@ -235,13 +309,24 @@ export function attachImages(node: StructNode, images: Map<number, string>): voi
 }
 
 // Join a paragraph that continues on the next page: the first part has no end punctuation,
-// and the second part starts with a lower case letter.
+// and the second part starts with a lower case letter. A code block at the end of a page and a code block at the start
+// of the next page also join.
 export function joinAcrossPages(blocks: Block[]): Block[] {
   const result: Block[] = [];
   let last: Block | undefined;
   for (const block of blocks) {
     const isParagraph = (candidate: Block | undefined) =>
       candidate?.kind === "content" && candidate.html.startsWith("<p>") && candidate.html.endsWith("</p>");
+    const isCode = (candidate: Block | undefined) =>
+      candidate?.kind === "content" && candidate.html.startsWith("<pre><code>") && candidate.html.endsWith("</code></pre>");
+    // A code block that continues on the next page.
+    if (last && block.file !== last.file && isCode(block) && isCode(last) && block.anchors.length === 0) {
+      last.html = `${last.html.slice(0, -"</code></pre>".length)}\n${block.html.slice("<pre><code>".length)}`;
+      last.text = `${last.text}\n${block.text}`;
+      last.words += block.words;
+      last.pages.push(...block.pages);
+      continue;
+    }
     if (
       last &&
       block.file !== last.file &&
@@ -301,18 +386,17 @@ export async function readPdf(data: Uint8Array, fileName: string): Promise<BookS
       return { title: entry.title, file: pageFile(entry.page), anchor: id, children: entry.children.map(toToc) };
     };
     const toc = outline.map(toToc);
+    let tocSource: BookSource["tocSource"] = toc.length > 0 ? "outline" : "none";
 
-    // Read the tags, the text, and the images of each page.
+    // Read the tags and the text of each page, with no fonts and no images. The fonts and the images come after the
+    // check, because the decode of the images of a scanned book takes most of the time.
     const pages: { tree: StructNode | null; items: PdfTextItem[]; footerNumber: string | null }[] = [];
-    const images = new Map<string, BookImage>();
     let pagesWithText = 0;
     let pagesWithTags = 0;
     for (let number = 1; number <= doc.numPages; number++) {
       const page = await doc.getPage(number);
-      const items = await readPageItems(page);
-      const pageImages = await readPageImages(page, images);
+      const items = await readPageItems(page, false);
       const tree = ((await page.getStructTree()) as StructNode | null) ?? null;
-      if (tree && pageImages.size > 0) attachImages(tree, pageImages);
       const hasText = items.some((item) => !item.artifact && item.str.trim() !== "");
       if (hasText) pagesWithText++;
       if (hasText && tree && (tree.children ?? []).length > 0) pagesWithTags++;
@@ -321,11 +405,39 @@ export async function readPdf(data: Uint8Array, fileName: string): Promise<BookS
       page.cleanup();
     }
     if (pagesWithText === 0) {
-      throw new UntaggedPdfError("The PDF has no text layer. It is probably a scanned book. The tutor cannot read it yet.");
+      throw new NoTextPdfError("The PDF has no text layer. It is probably a scanned book. The tutor cannot read it yet.");
     }
-    if (pagesWithTags < pagesWithText / 2) {
-      throw new UntaggedPdfError(
-        `The PDF has no structure tags on ${pagesWithText - pagesWithTags} of ${pagesWithText} pages with text. The tutor reads only tagged PDFs for now.`,
+    // Most PDF files have tags on all pages or on no page. A file with tags on less than half of its pages with text
+    // goes to the layout reader.
+    const tagged = pagesWithTags >= pagesWithText / 2;
+
+    // Read the text of each page again with its fonts, and the images of each page. In a tagged PDF, the figures of
+    // the tags get their images. In an untagged PDF, each image keeps its place on the page.
+    const images = new Map<string, BookImage>();
+    const placed: PlacedImage[][] = pages.map(() => []);
+    for (const [i, entry] of pages.entries()) {
+      if (tagged && entry.items.length === 0 && !entry.tree) continue;
+      const page = await doc.getPage(i + 1);
+      if (entry.items.length > 0) entry.items = await readPageItems(page);
+      if (tagged && entry.tree) {
+        const pageImages = await readPageImages(page, images);
+        if (pageImages.size > 0) attachImages(entry.tree, pageImages);
+      }
+      if (!tagged) placed[i] = await readPlacedImages(page, images);
+      page.cleanup();
+    }
+
+    // The layout reader marks the running heads and the page numbers as artifacts, and finds the body and heading sizes.
+    let layout: BookLayout | null = null;
+    if (!tagged) {
+      const numbers = markRunningLines(pages.map((page) => page.items));
+      pages.forEach((page, i) => {
+        page.footerNumber ??= numbers[i] ?? null;
+      });
+      dropRepeatedImages(placed, images);
+      layout = bookLayout(pages.map((page) => page.items));
+      notes.push(
+        `The PDF has no structure tags on ${pagesWithText - pagesWithTags} of ${pagesWithText} pages with text. The reader used the layout of the pages.`,
       );
     }
 
@@ -338,15 +450,21 @@ export async function readPdf(data: Uint8Array, fileName: string): Promise<BookS
     let untagged = 0;
     let sourceWords = 0;
     const lossyPages: string[] = [];
+    const headings: { page: number; heading: LayoutHeading }[] = [];
     pages.forEach((page, i) => {
-      const result = pageToXhtml({
-        tree: page.tree,
-        items: page.items,
-        label: labels[i] ?? null,
-        anchors: anchorsByPage.get(i + 1) ?? [],
-      });
-      untagged += result.untaggedItems;
-      const pageBlocks = flattenXhtml(pageFile(i + 1), result.xhtml, blocks.length, new Map());
+      const label = labels[i] ?? null;
+      const anchors = anchorsByPage.get(i + 1) ?? [];
+      let xhtml: string;
+      if (layout) {
+        const result = layoutToXhtml({ items: page.items, images: placed[i]!, label, anchors, layout });
+        headings.push(...result.headings.map((heading) => ({ page: i + 1, heading })));
+        xhtml = result.xhtml;
+      } else {
+        const result = pageToXhtml({ tree: page.tree, items: page.items, label, anchors });
+        untagged += result.untaggedItems;
+        xhtml = result.xhtml;
+      }
+      const pageBlocks = flattenXhtml(pageFile(i + 1), xhtml, blocks.length, new Map());
       blocks.push(...pageBlocks);
 
       // Compare the words of the page text with the words of the page blocks.
@@ -357,6 +475,10 @@ export async function readPdf(data: Uint8Array, fileName: string): Promise<BookS
     });
     const keptWords = sum(blocks, (block) => block.words);
     blocks = joinAcrossPages(blocks);
+    if (layout && toc.length === 0) {
+      toc.push(...tocFromHeadings(headings));
+      if (toc.length > 0) tocSource = "headings";
+    }
     if (untagged > 0) {
       notes.push(`${untagged} text items have no structure tag. The reader put them at the end of their page.`);
     }
@@ -381,7 +503,7 @@ export async function readPdf(data: Uint8Array, fileName: string): Promise<BookS
       format: "pdf",
       title,
       authors,
-      tocSource: toc.length > 0 ? "outline" : "none",
+      tocSource,
       toc,
       landmarks: [],
       blocks,

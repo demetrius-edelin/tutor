@@ -40,11 +40,12 @@ export function locate(target: Target, locator: Locator): number | undefined {
 }
 
 const PART_TITLE = /^part\s+([ivxlcdm]+|\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/i;
+const CHAPTER_TITLE = /^chapter\s+([ivxlcdm]+|\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/i;
 const GLOSSARY_TITLE = /^glossary( of .*)?$/i;
 const INDEX_TITLE = /^((general|subject) )?index$/i;
 const APPENDIX_TITLE = /^appendix\b/i;
 const FRONT_TITLE =
-  /^((preface|foreword)\b.*|licen[cs]e|dedications?|acknowledge?ments?|about (the )?(authors?|this book|the cover.*)|copyright|title page|half title|cover|(table of )?contents?|contributors|praise for\b.*|also by\b.*|epigraph)$/i;
+  /^((preface|foreword)\b.*|licen[cs]e|dedications?|acknowledge?ments?|about (the )?(authors?|this book|the cover.*)|copyright|title page|half title|cover|(table of )?contents?|contributors|praise for\b.*|also by\b.*|epigraph|notice of (rights|liability)|(trademark|legal) notices?|disclaimer)$/i;
 const BACK_TITLE =
   /^(references|further reading|colophon|endnotes|notes|about the authors?|other books( by .*)?)$|\bbibliography\b/i;
 
@@ -77,13 +78,14 @@ interface Start {
 
 // Find the chapters in the table of contents. A part ("Part I") is not a chapter.
 // Its children are the chapters, and its own pages become a separate span.
+// `filesAreParts` is true for an EPUB, where each file is a part of the book. In a PDF, each page is a file.
 export function buildSpans(
   toc: TocEntry[],
   landmarks: Landmark[],
   blocks: Block[],
   locator: Locator,
   warnings: ParseWarning[],
-  splitUnlisted = true,
+  filesAreParts = true,
 ): Span[] {
   if (blocks.length === 0) return [];
   const wordsBetween = (start: number, end: number) => sum(blocks.slice(start, end), (block) => block.words);
@@ -102,6 +104,9 @@ export function buildSpans(
   const isPart = (entry: TocEntry, start: number) => {
     if (entry.children.length === 0) return false;
     if (PART_TITLE.test(entry.title) || blocks[start]?.types.includes("part")) return true;
+    // In a PDF, the children of a chapter are on other pages, as the chapters of a part are in an EPUB. Thus a PDF
+    // uses this rule: if the title says "Part", or if the children are chapters, the entry is a part.
+    if (!filesAreParts) return entry.children.some((child) => CHAPTER_TITLE.test(child.title));
     const otherFiles = entry.children.filter((child) => child.file !== entry.file).length / entry.children.length;
     const firstChild = locate(entry.children[0]!, locator);
     const ownWords = firstChild === undefined ? 0 : wordsBetween(start, firstChild);
@@ -164,7 +169,7 @@ export function buildSpans(
     }
     spans.push({ title: start.title, kind, part: start.part, start: start.start, end });
   });
-  return splitUnlisted ? splitUnlistedFiles(spans, blocks, listedFiles(toc)) : spans;
+  return filesAreParts ? splitUnlistedFiles(spans, blocks, listedFiles(toc)) : spans;
 }
 
 function listedFiles(toc: TocEntry[]): Set<string> {

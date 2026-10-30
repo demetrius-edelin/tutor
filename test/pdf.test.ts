@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { flattenXhtml } from "../src/ingest/core/blocks.js";
+import { flattenXhtml, type Block } from "../src/ingest/core/blocks.js";
+import { buildBook } from "../src/ingest/core/book.js";
+import type { BookSource } from "../src/ingest/core/source.js";
 import { splitChapter } from "../src/ingest/core/structure.js";
 import { htmlToMarkdown } from "../src/ingest/core/markdown.js";
+import { bookLayout, layoutToXhtml, markRunningLines, type LayoutInput } from "../src/ingest/pdf/layout.js";
 import { pageToXhtml, type FontStyle, type PdfTextItem, type StructNode } from "../src/ingest/pdf/page.js";
 import { ImageKind } from "pdfjs-dist/legacy/build/pdf.mjs";
-import { attachImages, joinAcrossPages, joinLabels, pixelsOf, styleOfFont } from "../src/ingest/pdf/read.js";
+import { attachImages, joinAcrossPages, joinLabels, pageFile, pixelsOf, styleOfFont, tocFromHeadings } from "../src/ingest/pdf/read.js";
 
 const regular: FontStyle = { bold: false, italic: false, mono: false };
 const bold: FontStyle = { ...regular, bold: true };
@@ -188,6 +191,17 @@ describe("PDF helpers", () => {
     ]);
     expect(joined.map((block) => block.index)).toEqual(joined.map((_, i) => i));
   });
+
+  it("joins a code block that continues on the next page", () => {
+    const page = (file: string, html: string) => flattenXhtml(file, `<html xmlns:epub="http://www.idpf.org/2007/ops"><body>${html}</body></html>`, 0, new Map());
+    const blocks = [
+      ...page("page-0001", "<p>The loop:</p><pre><code>if (ready) {</code></pre>"),
+      ...page("page-0002", '<span epub:type="pagebreak" title="2"/><pre><code>  start();\n}</code></pre><p>Next paragraph.</p>'),
+    ];
+    const code = joinAcrossPages(blocks).filter((block) => block.html.startsWith("<pre>"));
+    expect(code).toHaveLength(1);
+    expect(markdownOf(`<html><body>${code[0]!.html}</body></html>`)).toBe("```\nif (ready) {\n  start();\n}\n```");
+  });
 });
 
 describe("section titles", () => {
@@ -224,5 +238,169 @@ describe("PDF images", () => {
     });
     expect(pixelsOf({ width: 1, height: 1, kind: 99, data: rgb })).toBeNull();
     expect(pixelsOf({})).toBeNull();
+  });
+});
+
+describe("layout reader", () => {
+  // A text item at a position. The y axis goes up from the bottom of the page.
+  const at = (str: string, x: number, y: number, options: Partial<PdfTextItem> = {}): PdfTextItem => ({
+    str,
+    x,
+    y,
+    width: str.length * 5,
+    height: 10,
+    size: 10,
+    font: regular,
+    mcid: null,
+    artifact: false,
+    ...options,
+  });
+  const layout = { bodySize: 10, headingSizes: [18, 14] };
+  const markdown = (items: PdfTextItem[], extra: Partial<LayoutInput> = {}) =>
+    markdownOf(layoutToXhtml({ items, images: [], label: null, anchors: [], layout, ...extra }).xhtml);
+
+  it("finds headings, paragraphs, inline code, lists, and code blocks in the layout", () => {
+    const items = [
+      at("Getting Started", 50, 700, { size: 18, font: bold }),
+      at("Use the ", 50, 670),
+      at("npm", 90, 670, { font: mono }),
+      at(" command to install the pack-", 105, 670),
+      at("age.", 50, 658),
+      at("Next, run it:", 50, 640),
+      at("if (ready) {", 50, 622, { size: 9, font: mono }),
+      at("start();", 60, 611, { size: 9, font: mono }),
+      at("}", 50, 600, { size: 9, font: mono }),
+      at("•", 50, 580),
+      at("First item", 62, 580),
+      at("•", 50, 568),
+      at("Second item", 62, 568),
+    ];
+    expect(markdown(items)).toBe(
+      [
+        "# Getting Started",
+        "Use the `npm` command to install the package.",
+        "Next, run it:",
+        "```\nif (ready) {\n  start();\n}\n```",
+        "-   First item\n-   Second item",
+      ].join("\n\n"),
+    );
+  });
+
+  it("keeps the spaces that are items of their own, and makes a short bold line a heading", () => {
+    const items = [
+      at("Loops", 50, 700, { font: bold }),
+      at("Cache the", 50, 680),
+      at(" ", 95, 680),
+      at("length", 100, 680, { font: mono }),
+      at(" ", 130, 680, { font: mono }),
+      at("of the array.", 135, 680),
+    ];
+    expect(markdown(items)).toBe("### Loops\n\nCache the `length` of the array.");
+  });
+
+  it("reads two columns: the left column, then the right column", () => {
+    const items = [at("A Title Across Both Columns", 50, 720, { size: 18, width: 500 })];
+    for (let n = 0; n < 12; n++) {
+      items.push(at(`left words ${n}`, 50, 680 - n * 12, { width: 200 }));
+      items.push(at(`right words ${n}`, 320, 680 - n * 12, { width: 200 }));
+    }
+    const text = markdown(items);
+    expect(text.startsWith("# A Title Across Both Columns")).toBe(true);
+    expect(text.lastIndexOf("left")).toBeLessThan(text.indexOf("right"));
+  });
+
+  it("marks running heads, running feet, and page numbers, and keeps the body text", () => {
+    const pages = [1, 2, 3, 4].map((n) => [
+      at("Patterns in Practice", 50, 760),
+      at(`Body text about topic ${"ABCD"[n - 1]} starts here.`, 50, 700),
+      // The same text at the same place on each page, but not in the margin.
+      at(`More body text on page ${n}.`, 50, 688),
+      at(String(n + 10), 50, 40),
+      at("Chapter 2: Essentials", 80, 40),
+    ]);
+    expect(markRunningLines(pages)).toEqual(["11", "12", "13", "14"]);
+    for (const [n, items] of pages.entries()) {
+      expect(items.filter((item) => item.artifact).map((item) => item.str)).toEqual(["Patterns in Practice", String(n + 11), "Chapter 2: Essentials"]);
+    }
+  });
+
+  it("finds the body size and groups heading sizes that are almost the same", () => {
+    const items = [
+      at("x".repeat(500), 0, 0, { size: 10.2 }),
+      at("code".repeat(200), 0, 0, { size: 8, font: mono }),
+      at("Title", 0, 0, { size: 30 }),
+      at("Title", 0, 0, { size: 29.7 }),
+      at("Section", 0, 0, { size: 21.2 }),
+    ];
+    expect(bookLayout([items])).toEqual({ bodySize: 10, headingSizes: [29.5, 21] });
+  });
+
+  it("moves a bookmark from the title of a chapter to the label above it", () => {
+    const items = [
+      at("End of the last chapter.", 50, 740),
+      at("CHAPTER 3", 50, 700, { size: 14, font: bold }),
+      at("Literals", 50, 670, { size: 18, font: bold }),
+      at("Text of the chapter.", 50, 640),
+    ];
+    const xhtml = layoutToXhtml({ items, images: [], label: null, anchors: [{ id: "outline-3", top: 690 }], layout }).xhtml;
+    const blocks = flattenXhtml("page-0001", xhtml, 0, new Map());
+    const position = blocks.findIndex((block) => block.anchors.includes("outline-3"));
+    expect(blocks.slice(position).find((block) => block.kind === "heading")!.text).toBe("CHAPTER 3");
+  });
+
+  it("puts each image before the first block below its top", () => {
+    const items = [at("Text above the figure.", 50, 700), at("Figure 1. A caption.", 50, 500)];
+    const xhtml = layoutToXhtml({ items, images: [{ id: "abc", top: 690 }], label: null, anchors: [], layout }).xhtml;
+    expect(xhtml.indexOf("abc")).toBeGreaterThan(xhtml.indexOf("Text above"));
+    expect(xhtml.indexOf("abc")).toBeLessThan(xhtml.indexOf("Figure 1."));
+  });
+
+  it("makes the chapters from the headings of a PDF with no bookmarks", () => {
+    const heading = (level: number, text: string, id: string) => ({ id, level, text });
+    expect(
+      tocFromHeadings([
+        { page: 1, heading: heading(1, "A Book", "heading-1") },
+        { page: 2, heading: heading(2, "Introduction", "heading-1") },
+        { page: 2, heading: heading(3, "Details", "heading-2") },
+        { page: 5, heading: heading(2, "Methods", "heading-1") },
+      ]),
+    ).toEqual([
+      { title: "Introduction", file: "page-0002", anchor: "heading-1", children: [] },
+      { title: "Methods", file: "page-0005", anchor: "heading-1", children: [] },
+    ]);
+  });
+});
+
+describe("chapters of a PDF", () => {
+  it("keeps a chapter with sections on later pages as one chapter, and skips the title page and the notices", () => {
+    const words = (topic: string) => Array.from({ length: 60 }, (_, i) => `${topic}${i}`).join(" ");
+    const pages = [
+      '<span id="outline-1"/><h1>A Small Book</h1><p>By an author.</p>',
+      '<span id="outline-2"/><h1>Notice of Rights</h1><p>All rights reserved.</p>',
+      '<span id="outline-3"/><h1>Chapter 1. Basics</h1><p>A short introduction.</p>',
+      `<span id="outline-4"/><h2>First Section</h2><p>${words("first")}</p>`,
+      `<span id="outline-5"/><h2>Second Section</h2><p>${words("second")}</p>`,
+    ];
+    const blocks: Block[] = [];
+    pages.forEach((html, i) => {
+      const xhtml = `<html xmlns:epub="http://www.idpf.org/2007/ops"><body>${html}</body></html>`;
+      blocks.push(...flattenXhtml(pageFile(i + 1), xhtml, blocks.length, new Map()));
+    });
+    const entry = (n: number, title: string, children: BookSource["toc"] = []) => ({ title, file: pageFile(n), anchor: `outline-${n}`, children });
+    const source: BookSource = {
+      format: "pdf",
+      title: "A Small Book",
+      authors: [],
+      tocSource: "outline",
+      toc: [entry(1, "A Small Book"), entry(2, "Notice of Rights"), entry(3, "Chapter 1. Basics", [entry(4, "First Section"), entry(5, "Second Section")])],
+      landmarks: [],
+      blocks,
+      images: new Map(),
+      notes: [],
+    };
+    const book = buildBook(source, { minSectionWords: 20 });
+    expect(book.chapters.map((chapter) => chapter.title)).toEqual(["Chapter 1. Basics"]);
+    expect(book.chapters[0]!.sections.map((section) => section.title)).toEqual(["First Section", "Second Section"]);
+    expect(book.skipped.map((part) => part.title)).toEqual(["A Small Book", "Notice of Rights"]);
   });
 });

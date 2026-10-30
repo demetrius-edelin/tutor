@@ -59,7 +59,7 @@ A subject is an area of study, for example "SQL". Each subject has its own books
 
 A book can come from three places:
 
-- A book file: an EPUB file or a tagged PDF file. See [Add a book file](#add-a-book-file).
+- A book file: an EPUB file or a PDF file. See [Add a book file](#add-a-book-file).
 - An online book or online documentation. See [Add an online book](#add-an-online-book).
 - A YouTube video or playlist. See [Add a YouTube video or playlist](#add-a-youtube-video-or-playlist).
 
@@ -72,11 +72,11 @@ On the list of subjects, type a name in the "New subject" field. Then click "Cre
 ### Add a book file
 
 1. On the subject screen, click "Add a book".
-2. Select an EPUB file or a tagged PDF file. The file can have a size of up to 200 MB.
+2. Select an EPUB file or a PDF file. The file can have a size of up to 200 MB.
 
 The browser sends the file to the tutor. The tutor reads the chapters and keeps a copy of the file. This step uses no model, so it costs nothing. Then the book page opens, with the chapters of the book.
 
-If the tutor cannot read the file, the app shows the reason. For example, the tutor cannot read an untagged or a scanned PDF file.
+If the tutor cannot read the file, the app shows the reason. For example, the tutor cannot read a scanned PDF file, because it has no text layer.
 
 If the subject has the book already, the page of that book opens. Then you can add more chapters to it.
 

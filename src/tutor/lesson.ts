@@ -1,6 +1,7 @@
 import type { Db } from "../db/index.js";
 import { videoMoment } from "../ingest/video/youtube.js";
 import type { LlmClient, Message, Reference, Source } from "../llm/index.js";
+import { PLAIN_MATH_RULE } from "../llm/prompt.js";
 import type { AfterTestAction, LessonMessage, LessonReference, LessonView, SourceInfo, Status } from "../server/api-types.js";
 import { applyMarks, createSession, enqueue, failedTests, readSection, TutorError } from "./diagnosis.js";
 import { shuffle } from "./questions.js";
@@ -11,6 +12,7 @@ import { shuffle } from "./questions.js";
 
 // The rules for the sources. The lesson and the answers in the chat use the same rules.
 const SOURCE_RULES = `- Base the text on the sources. If you add a fact or a claim that is not in the sources, mark it with "(not from the books)".
+- Do not write notes about what the sources show or do not show. Use only the marker.
 - Put the marker one time at the end of the paragraph or the list item, not after each sentence.
 - Do not mark the standard behavior of a language or a tool. Do not mark the step-by-step explanation of an example.
 - If a source has an error or contradicts itself, say so in one sentence. Then teach the correct form. Do not discuss the source more.
@@ -31,13 +33,15 @@ Length:
 - Do not add content to reach a length. Stop when the concept is clear.
 Rules:
 ${SOURCE_RULES}
-- Expect the background knowledge that the sources expect from their reader. Do not explain the basics that the sources do not explain.`;
+- Expect the background knowledge that the sources expect from their reader. Do not explain the basics that the sources do not explain.
+${PLAIN_MATH_RULE}`;
 
 export const CHAT_SYSTEM = `You are a tutor. The learner read your lesson and asks a question about it.
 Answer in 1 to 3 short paragraphs. Use an example if it helps.
 If the question is not about the concept, answer it briefly and lead back to the concept.
 Rules:
-${SOURCE_RULES}`;
+${SOURCE_RULES}
+${PLAIN_MATH_RULE}`;
 
 // The maximum number of book sections in a lesson, so that the request stays small.
 const MAX_SECTIONS = 6;

@@ -35,7 +35,7 @@ export interface BookSource {
   format: "epub" | "pdf";
   title: string;
   authors: string[];
-  tocSource: "nav" | "ncx" | "outline" | "none";
+  tocSource: "nav" | "ncx" | "outline" | "headings" | "none";
   toc: TocEntry[];
   landmarks: Landmark[];
   // All blocks of the book in reading order. The index of a block is its position in this list.

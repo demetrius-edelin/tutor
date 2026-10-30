@@ -1270,6 +1270,26 @@ button.button {
   font-style: italic;
 }
 
+/* Code of more than one line in a question, an option, or a feedback (InlineCode). */
+.code-block {
+  display: block;
+  margin: 0.5rem 0;
+  overflow-x: auto;
+  padding: 0.75rem 1rem;
+  border-radius: 0.4rem;
+  background: color-mix(in srgb, var(--rule) 25%, var(--paper));
+  font-family: var(--code);
+  font-size: 0.85rem;
+  font-style: normal;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+/* An option with a code block must not get wider than the list of options. */
+.option > span {
+  min-width: 0;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

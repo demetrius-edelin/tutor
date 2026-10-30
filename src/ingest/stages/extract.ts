@@ -21,9 +21,11 @@ export const CONCEPT_RULES = `A concept is one idea that the sections explain, s
 - Use only the ideas that the sections explain. An idea that the sections only mention is not a concept.
 - One idea gets one concept. The same idea in other words, a direct result of an idea, and a small part of an idea go into the concept of that idea. Do not make two concepts that a learner can learn in one lesson.
 - The number of concepts follows the content, not the length of the text. A short section often teaches one concept or no new concept. A section that repeats an earlier idea teaches no new concept.
+- A section that asks only for a personal answer, for example an opinion or an experience, has no concept.
 For each concept, give these fields:
 - name: 2 to 6 words. The name must be clear without the book.
 - objective: one sentence. It tells what the learner can explain or do after learning the concept.
+- The name and the objective do not mention the sections, the book, or the video. The learner reads them without the sources.
 - kind: "skill" if the learner must do something, for example write, run, configure, or calculate. Otherwise "knowledge".
 - level: "basic", "intermediate", or "advanced", for the subject of the book.
 - quote: 5 to 25 words that you copy exactly from the section that teaches the concept. Do not change the words.`;

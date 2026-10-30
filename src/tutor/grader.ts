@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { LlmClient, Source } from "../llm/index.js";
+import { PLAIN_MATH_RULE } from "../llm/prompt.js";
 
 // The grader scores an answer to an open question: 2 is correct, 1 is partly correct, 0 is wrong.
 
@@ -18,7 +19,8 @@ These things do not lower the score:
 - A missing explanation, reason, example, or number, if the answer shows the understanding without it. This is also true when the question asks for it.
 - A key point that the answer does not state, but that a correct query or a correct result shows.
 - A typo, a small syntax error, or the wrong type of quotes, if the meaning is clear.
-feedback: 1 to 3 short sentences to the learner, with "you". Tell what is correct, and what is wrong. You can add a missing detail or a typo as a tip, but the tip does not change the score.`;
+feedback: 1 to 3 short sentences to the learner, with "you". Tell what is correct, and what is wrong. You can add a missing detail or a typo as a tip, but the tip does not change the score.
+${PLAIN_MATH_RULE}`;
 
 export interface GradeInput {
   question: string;

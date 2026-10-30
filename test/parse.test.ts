@@ -162,6 +162,8 @@ describe("classify", () => {
     expect(classify("Indexes", [])).toBe("chapter");
     expect(classify("Index", [])).toBe("index");
     expect(classify("Preface by the Author", ["chapter"])).toBe("front");
+    expect(classify("Notice of Rights", [])).toBe("front");
+    expect(classify("Trademark Notice", [])).toBe("front");
     expect(classify("Appendix A: Commands", [])).toBe("appendix");
   });
 });

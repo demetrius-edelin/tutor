@@ -37,11 +37,12 @@ export interface FakeHandlers {
 
 // Default test questions: a recall, an explain, and an apply question.
 export function defaultTestQuestions(sectionId: string) {
-  const open = { options: null, correctIndex: null, explanation: null, sectionId };
+  const open = { code: null, options: null, correctIndex: null, explanation: null, sectionId };
   return [
     {
       kind: "recall",
       question: "Which option is right?",
+      code: null,
       options: ["right", "wrong one", "wrong two", "wrong three"],
       correctIndex: 0,
       explanation: "The first option is right.",
@@ -61,6 +62,7 @@ export function defaultQuestions(conceptIds: string[], sources: Source[]) {
       conceptId,
       choice: {
         question: `Which option is right for ${conceptId}?`,
+        code: null,
         options: ["right", "wrong one", "wrong two", "wrong three"],
         correctIndex: 0,
         explanation: "The first option is right.",
@@ -69,6 +71,7 @@ export function defaultQuestions(conceptIds: string[], sources: Source[]) {
       open: {
         kind: "short",
         question: `Explain ${conceptId}.`,
+        code: null,
         keyPoints: ["point"],
         modelAnswer: "The point.",
         sectionId: sources[0]?.id ?? "0",

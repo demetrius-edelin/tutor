@@ -42,6 +42,7 @@ Status: draft 5. Date: 2026-10-15. The design is in `DESIGN-v3.md`. This file gi
 - Open diagnoses: built. Before, a diagnosis that the user left had no link back. A new "Test it" made a new session, and the model wrote new questions. Now the subject screen and the concept map show "Continue the diagnosis". "Test it" opens the open diagnosis. A concept with a new mark leaves the diagnosis.
 - Settings page: built. The page `#/settings` sets the provider, the model, the reasoning level, the API keys, and the video model. It writes the values into `.env`, and the server uses the new model with no restart. The page shows only the last 4 characters of a key. "Test the model" sends one small request. The home screen shows a note while the tutor has no model. The error texts name the Settings page and the `.env` variable. This is step 1 of an easy install for users who do not use a terminal.
 - Downloads: built. `npm run package` builds `Tutor.app` for macOS (Apple silicon and Intel in one app) and a folder with `Start Tutor.bat` for Windows. Each download has Node.js 24.22.0 and the production packages. With `--app`, the server keeps `.env` and `data/` in a folder of the user, uses a free port, opens the browser, and does not start a second time. The Settings page can stop the tutor. A tag `v<version>` makes a GitHub release, and the workflow signs and notarizes the Mac app if the secrets are set. See `docs/release.md`. On a Mac, the launcher, a second start, the stop, and both kinds of Node.js passed a test. Not tested yet: a real download with the quarantine mark, the signature and the notarization, the workflow on GitHub, and the Windows zip on a Windows computer.
+- Milestone 20: done. The parser reads untagged PDF files with a text layer. The layout reader finds the lines, the columns, the headings, the code, the lists, and the images. It removes the running heads and the page numbers. It needs no model. The parser refuses only a PDF with no text layer. Two untagged books of the user parse with no lost text. A book from XSL-FO parses into 8 chapters and 91 sections, with 52,010 words and 23 images, in 5 seconds. A book from calibre parses into 5 chapters, with 11,171 words and 14 images. Its title page and its three notices are front matter. Not tested yet: an untagged PDF file in the app.
 
 ## Milestones
 
@@ -300,6 +301,26 @@ Phase 3 moves ingest into the app. See "Ingest in the app (phase 3)" in `DESIGN-
     - Exit test: in the app, add `https://www.youtube.com/watch?v=ahCwqrYpIuM`. The book page opens with the plan of 6 chapters. A preview of one chapter gives a good concept map.
 
 After milestone 19, phase 3 is complete.
+
+20. Read untagged PDF files.
+    - Most PDF books have no structure tags, for example the books from LaTeX, XSL-FO, InDesign, and calibre. The parser refuses them. Many of them have a complete text layer.
+    - Add a layout reader for a PDF with text and no tags. It needs no model. Put it next to `src/ingest/pdf/page.ts`. Do not change the reader of the tagged pages.
+      - Lines: group the text items by their baseline. Keep the items with only a space, because some PDF files put each space in an item of its own.
+      - Columns: find a vertical gap that almost no text crosses. Read the left column, and then the right column.
+      - Running heads, running feet, and page numbers: a short line in the margin, with a large gap to the body text. It is at the same height on a quarter of the pages or more. It has a page number, or the same text on three pages. Mark these lines as artifacts. Use their page numbers as page labels.
+      - Headings: the body size is the size of most of the text that is not code. A line 1.15 times larger or more is a heading. Sizes with less than 4 % difference are one level. A short bold line alone, with no end punctuation, is a heading of the lowest level.
+      - Code: a line in a code font is code, but not a line of inline code in a paragraph. Lines of code with blank lines between them are one block. The existing code block function keeps the indentation.
+      - Paragraphs: a new paragraph starts after a large gap or at an indented line. It also starts after a short line with end punctuation, or at a new font size. Join a word that a line break divides, for example "exam-" and "ple".
+      - Lists: a bullet character, or a number such as "1.", with a gap after it.
+      - Images: follow the transformation matrix of the page to find the position of each image. An image smaller than half an inch is decoration. An image on three pages or more is a logo.
+      - A bookmark often points to the title of a chapter, below its label ("CHAPTER 3"). Move the bookmark to the label. Else the label ends the chapter before, and the sections of that chapter do not split.
+      - Without bookmarks, the headings of the highest level with two headings or more give the chapters.
+    - Refuse only a PDF with no text layer, for example a scanned book.
+    - Fix these problems of the book structure. They also affect tagged PDF files.
+      - In a PDF, each page is a file. The rule for parts needs children in other files and less than 150 words of own text. In a PDF, most chapters with sections meet this rule, and then each section becomes a chapter. In a PDF, use this rule: if the title of an entry is a part title ("Part II"), or if its children are chapters, the entry is a part. Else it is a chapter.
+      - A code block at the end of a page and a code block at the start of the next page are one code block.
+      - "Notice of Rights", "Notice of Liability", "Trademark Notice", "Legal Notice", and "Disclaimer" are front matter. A short entry with the title of the book is the title page.
+    - Exit test: an untagged PDF book with bookmarks parses into its chapters and sections, with its code blocks, and with no running heads. The parse report shows no lost text.
 
 ## Options
 

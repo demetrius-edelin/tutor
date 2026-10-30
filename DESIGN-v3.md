@@ -13,7 +13,7 @@ The tutor uses one large language model (LLM) from Anthropic, OpenAI, OpenRouter
 ## Decisions
 
 - Subjects are neutral. The tutor has no built-in subjects and no code for a specific subject. The user creates a subject with a name and adds books to it. The books define the content of the subject.
-- Books are EPUB files or tagged PDF files. A YouTube video or playlist also becomes a book, through an EPUB file. See "Videos (phase 3)".
+- Books are EPUB files or PDF files. A YouTube video or playlist also becomes a book, through an EPUB file. See "Videos (phase 3)".
 - Until phase 4, the tutor runs on the laptop of the user. In phase 4, each user can also run it on a server. The tutor has no Telegram bot and no other messaging.
 - The tutor is free and open source. Each user hosts their own copy. The project offers no public hosted version. See "Self-hosted release (phase 4)".
 - The review board shows what the user learned. The user decides what to read again or to test again. The tutor has no review schedule.
@@ -112,7 +112,7 @@ The parser does not use the model. It reads the EPUB file. An EPUB file is a ZIP
 The parser does these steps:
 
 1. Read the files in the order of the spine. Thus, the parser also reads files that the table of contents does not list.
-2. Classify each file: front matter, chapter, appendix, glossary, index, or back matter. Chapters and appendices become sections. The glossary and the index go into the checklist (see stage 3).
+2. Classify each file: front matter, chapter, appendix, glossary, index, or back matter. Chapters and appendices become sections. The glossary and the index go into the checklist (see stage 3). Legal notices, for example "Notice of Rights" and "Disclaimer", are front matter. A short entry with the title of the book is the title page, which is also front matter.
 3. Split each chapter into sections at its headings. If a long section has no subheadings, split it by size.
 4. Convert each section to Markdown with `turndown` and its GFM plugin (for tables).
 5. If the EPUB file has a page list, record the page breaks.
@@ -129,7 +129,7 @@ The parser keeps the data of each image in a format that a model can read: PNG, 
 
 ### Stage 1 for PDF files
 
-The PDF reader uses `pdfjs-dist`. It reads only tagged PDF files. A tagged PDF has a structure tree with headings, paragraphs, lists, tables, and figures, as HTML has. Word and many publishing tools make tagged PDF files.
+The PDF reader uses `pdfjs-dist`. A tagged PDF has a structure tree with headings, paragraphs, lists, tables, and figures, as HTML has. Word and many publishing tools make tagged PDF files. For an untagged PDF, the layout reader finds the structure. See "Untagged PDF files" below.
 
 The reader does these steps:
 
@@ -141,12 +141,29 @@ The reader also does these things:
 
 - It removes running headers and footers, because a tagged PDF marks them as artifacts. A page number in the footer becomes the print page label.
 - It joins consecutive lines of code into one code block, and it keeps the indentation.
-- It joins a paragraph that continues on the next page.
+- It joins a paragraph that continues on the next page. It also joins a code block at the end of a page with a code block at the start of the next page.
 - It joins a chapter label with the chapter name in the outline, for example "CHAPTER 1:" and "SQL Interview Questions".
 - It finds the image of each figure. pdf.js draws the image inside the marked content of the figure, so the marked content id connects the two. The reader saves the image as a PNG file, with a longest side of 1568 pixels or less.
 - It compares the words of each page with the words of the result, and reports the pages that lost text.
 
-An untagged PDF has only text at positions on the page. Many LaTeX books and all scanned books are untagged. The reader stops with a clear message for these books.
+#### Untagged PDF files
+
+An untagged PDF has only text at positions on the page. Most PDF books have no tags, for example the books from LaTeX, XSL-FO, InDesign, and calibre. If less than half of the pages with text have tags, the layout reader (`src/ingest/pdf/layout.ts`) reads the book. It needs no model.
+
+- Lines: it groups the text items by their baseline. It keeps the items with only a space, because some PDF files put each space in an item of its own.
+- Columns: it finds a vertical gap that almost no text crosses. It reads the left column, and then the right column.
+- Running heads, running feet, and page numbers: a short line in the margin, with a large gap to the body text. It is at the same height on a quarter of the pages or more. It has a page number, or the same text on three pages. The reader marks these lines as artifacts, and uses their page numbers as print page labels.
+- Headings: the body size is the size of most of the text that is not code. A line 1.15 times larger or more is a heading. Sizes with less than 4 % difference are one level. A short bold line alone, with no end punctuation, is a heading of the lowest level.
+- Code: a line in a code font is code, but not a line of inline code in a paragraph.
+- Paragraphs: a new paragraph starts after a large gap or at an indented line. It also starts after a short line with end punctuation, or at a new font size. The reader joins a word that a line break divides, for example "exam-" and "ple".
+- Lists: a bullet character, or a number such as "1.", with a gap after it.
+- Images: the reader follows the transformation matrix of the page to find the position of each image. An image smaller than half an inch is decoration. An image on three pages or more is a logo, and the reader removes it.
+- A bookmark often points to the title of a chapter, below its label ("CHAPTER 3"). The reader moves the bookmark to the label, so that the label stays with its chapter.
+- Without bookmarks, the headings of the highest level with two headings or more give the chapters.
+
+In a PDF, each page is a file. Thus the rule for parts of an EPUB does not work. In a PDF, the rule is this: if the title of an entry is a part title ("Part II"), or if its children are chapters, the entry is a part.
+
+A scanned book has no text layer. The reader stops with a clear message for these books.
 
 The parser checks its own output:
 
@@ -486,7 +503,7 @@ The plan and the report have too many parts for the subject screen, so they get 
 
 The user adds a book in this order:
 
-1. On the subject screen, the user clicks "Add a book" and selects an EPUB file or a tagged PDF file.
+1. On the subject screen, the user clicks "Add a book" and selects an EPUB file or a PDF file.
 2. The browser sends the file to the server as the body of one request. Thus, the server needs no package for multipart uploads.
 3. The server parses the file. The parse uses no model, so it costs nothing.
 4. The server keeps the file in the folder of the book, as the command does. The tutor has no folder for uploads.
@@ -494,7 +511,7 @@ The user adds a book in this order:
 
 The upload route accepts a file of up to 200 MB.
 
-If the parser cannot read the file, for example an untagged PDF file, the app shows the message of the parser. Then the app offers no run.
+If the parser cannot read the file, for example a scanned PDF file, the app shows the message of the parser. Then the app offers no run.
 
 If the subject has a book with the same title already, the server keeps the old file. The book page of that book opens, as for "Add chapters". To replace a book, use `npm run ingest` with `--replace`.
 
@@ -1076,7 +1093,7 @@ src/
   app/                React app
   ingest/core/        blocks, sections, Markdown, checklist (all formats)
   ingest/epub/        EPUB reader
-  ingest/pdf/         tagged PDF reader
+  ingest/pdf/         PDF reader (tagged and untagged)
   ingest/web/         online books: table of contents, download, EPUB writer
   ingest/video/       YouTube videos: yt-dlp, the video model, the transcript checks
   ingest/             concept extraction, merge
@@ -1104,7 +1121,7 @@ Each phase ends with a tool that the user can learn with.
 3. Phase 3: ingest in the app. The user creates a subject and adds a book from a file, from the web, or from a YouTube video or playlist. The user follows the progress of the run and reads the ingest report in the app. See "Ingest in the app (phase 3)".
 4. Phase 4: the self-hosted release. Each user runs their own copy on a laptop, a home server, a rented server, or a platform, with a password and HTTPS. See "Self-hosted release (phase 4)".
 5. Phase 5: more books for each subject. Test the merge step on real books and make it better.
-6. Later: the actions of the ingest report, the ingest test, a Telegram client, and untagged PDF files.
+6. Later: the actions of the ingest report, the ingest test, and a Telegram client.
 
 ## Risks
 

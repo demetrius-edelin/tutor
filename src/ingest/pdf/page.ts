@@ -177,14 +177,14 @@ function joinText(items: PdfTextItem[], format: boolean): string {
     .trim();
 }
 
-function inlineHtml(items: PdfTextItem[], format = true): string {
+export function inlineHtml(items: PdfTextItem[], format = true): string {
   const { cap, rest } = splitDropCap(items);
   const text = joinText(rest, format);
   return cap ? `${escapeHtml(cap)}${text}` : text;
 }
 
 // Split code items into lines, and keep the indentation of each line.
-function codeLines(items: PdfTextItem[]): { x: number; text: string; size: number }[] {
+export function codeLines(items: PdfTextItem[]): { x: number; text: string; size: number }[] {
   const lines: { x: number; y: number; size: number; parts: PdfTextItem[] }[] = [];
   for (const item of items) {
     const line = lines.at(-1);
@@ -205,7 +205,7 @@ function codeLines(items: PdfTextItem[]): { x: number; text: string; size: numbe
     .filter((line) => line.text.trim() !== "");
 }
 
-function codeBlock(lines: { x: number; text: string; size: number }[]): string {
+export function codeBlock(lines: { x: number; text: string; size: number }[]): string {
   if (lines.length === 0) return "";
   const left = Math.min(...lines.map((line) => line.x));
   const text = lines
@@ -327,7 +327,7 @@ function renderMixed(node: StructNode, byMcid: Map<string, PdfTextItem[]>): stri
 }
 
 // Remove a bullet character at the start of the text, also after opening tags.
-function stripBullet(html: string): string {
+export function stripBullet(html: string): string {
   const match = /^((?:<[^>]+>)*)(.*)$/s.exec(html)!;
   return match[1]! + match[2]!.replace(BULLET, "");
 }
@@ -387,14 +387,14 @@ function renderBlock(block: PageBlock, byMcid: Map<string, PdfTextItem[]>): stri
   }
 }
 
-interface Placeable {
+export interface Placeable {
   top: number | null;
   ids: string[];
 }
 
 // Give each outline destination to the block at the destination: the highest block that
 // starts at or below the top of the destination. The function returns the anchors with no block.
-function placeAnchors(blocks: Placeable[], anchors: OutlineAnchor[]): OutlineAnchor[] {
+export function placeAnchors(blocks: Placeable[], anchors: OutlineAnchor[]): OutlineAnchor[] {
   const unplaced: OutlineAnchor[] = [];
   for (const anchor of anchors) {
     const target =

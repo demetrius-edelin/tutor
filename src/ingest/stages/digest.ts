@@ -9,7 +9,8 @@ import type { ChapterDigest, ChapterInput, FoundConcept, ModelConcept } from "./
 // The version of the extract and review prompts. A change of these prompts must change the version,
 // so that the cache does not give the concepts of the old prompts.
 // Version 2: fewer and larger concepts, and a review step that adds only main ideas.
-export const PROMPTS_VERSION = 2;
+// Version 3: the name and the objective do not mention the sources, and a personal answer is not a concept.
+export const PROMPTS_VERSION = 3;
 
 // A key of the chapter content and of the prompts. The cache of a chapter digest is valid only for the same key.
 // The key includes the text of each section: a new edition can change a text and keep its word count and its title.

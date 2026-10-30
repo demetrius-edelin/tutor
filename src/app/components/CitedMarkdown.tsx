@@ -1,6 +1,7 @@
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { LessonReference } from "../../server/api-types";
+import { plainMath } from "../math";
 import { WatchButton } from "./VideoPlayer";
 
 // Change each reference marker " [2]" into a link "ref:2", outside of code.
@@ -12,7 +13,7 @@ export function linkReferences(markdown: string): string {
     .join("");
 }
 
-// Markdown with reference markers. A marker opens the book section of the reference.
+// Markdown with reference markers. A marker opens the book section of the reference. Math in LaTeX becomes plain text.
 export function CitedMarkdown(props: { text: string; references: LessonReference[]; onOpen: (reference: LessonReference) => void }) {
   return (
     <Markdown
@@ -43,7 +44,7 @@ export function CitedMarkdown(props: { text: string; references: LessonReference
         },
       }}
     >
-      {linkReferences(props.text)}
+      {linkReferences(plainMath(props.text))}
     </Markdown>
   );
 }

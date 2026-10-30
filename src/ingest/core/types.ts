@@ -69,7 +69,7 @@ export interface ParsedBook {
   format: "epub" | "pdf";
   title: string;
   authors: string[];
-  tocSource: "nav" | "ncx" | "outline" | "none";
+  tocSource: "nav" | "ncx" | "outline" | "headings" | "none";
   chapters: ParsedChapter[];
   skipped: SkippedPart[];
   glossaryEntries: number;

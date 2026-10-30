@@ -199,7 +199,7 @@ function AddBook({ slug, main }: { slug: string; main: boolean }) {
         </a>
       </span>
       <p className="quiet small">
-        A book file: an EPUB file or a tagged PDF file. The tutor reads the chapters with no model, so this step costs nothing. An online book: the
+        A book file: an EPUB file or a PDF file. The tutor reads the chapters with no model, so this step costs nothing. An online book: the
         tutor downloads its pages into an EPUB file. A YouTube video or playlist: the video model writes the transcript.
       </p>
       {error && (

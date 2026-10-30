@@ -4,7 +4,7 @@
 
 A personal tutor that teaches you all the concepts from your books, from online documentation, and from YouTube videos. You make a subject of study, for example "SQL", and add the material that you want to learn from:
 
-- **Book files**: EPUB files and tagged PDF files.
+- **Book files**: EPUB files and PDF files.
 - **Online books and online documentation**: type the address, for example `https://doc.rust-lang.org/book/`. The tutor downloads the pages.
 - **YouTube videos and playlists**: type the address. A video model writes the transcript, including the code on the screen.
 
@@ -79,7 +79,7 @@ Then, in the app:
 1. Click "Settings" at the top right. Select the provider, type the API key and the model name, and click "Save". Then click "Test the model".
 2. Make a subject, for example "SQL".
 3. Add a book in one of these ways:
-   - Click "Add a book" and select an EPUB file or a tagged PDF file.
+   - Click "Add a book" and select an EPUB file or a PDF file.
    - Click "Add an online book or video". Then type the address of an online book, of online documentation, or of a YouTube video or playlist.
 4. Select one chapter and click "Preview". The preview shows the concepts of the chapter and changes nothing.
 5. If the concepts look correct, click "Save these chapters". Then start to study.
@@ -230,7 +230,9 @@ The tutor reads three kinds of books. Each kind gives chapters and sections, and
 ### Book files
 
 - EPUB files work best. The parser reads the publisher CSS for headings, bold, and italic.
-- PDF files must be tagged. Word and many publishing tools make tagged PDF files. The parser stops with a clear message for an untagged or a scanned PDF.
+- PDF files need a text layer. A tagged PDF file gives the best result, because its tags give the headings, the lists, and the tables. Word and many publishing tools make tagged PDF files.
+- Most PDF books have no tags, for example the books from LaTeX and calibre. For these books, the parser finds the structure in the layout of the pages: the bookmarks give the chapters, the font sizes give the headings, and the code fonts give the code blocks. It removes the running heads and the page numbers.
+- The parser stops with a clear message for a scanned PDF, because a scanned PDF has no text layer.
 - Some books show code or tables as images. Ingest uses the model to read them. If the model does not accept images, the images stay as placeholders.
 
 ### Online books and online documentation
@@ -313,7 +315,7 @@ src/
   ingest/
     core/       blocks, sections, Markdown, checklist (all formats)
     epub/       EPUB reader
-    pdf/        tagged PDF reader
+    pdf/        PDF reader (tagged and untagged)
     stages/     extract, review, and merge (the model stages)
     web/        online books: table of contents, pages, and the EPUB writer
     video/      YouTube videos: yt-dlp, the video model, and the transcript checks
