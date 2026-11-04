@@ -1,5 +1,5 @@
 import { basename, extname } from "node:path";
-import { getDocument, ImageKind, OPS } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { getDocument, ImageKind, OPS, PermissionFlag } from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFDocumentProxy, PDFPageProxy, TextItem, TextMarkedContent } from "pdfjs-dist/types/src/display/api.js";
 import { flattenXhtml, type Block } from "../core/blocks.js";
 import { encodePng, imageId, shrink, type Pixels } from "../core/png.js";
@@ -18,6 +18,17 @@ export const pageFile = (page: number) => `page-${String(page).padStart(4, "0")}
 export class NoTextPdfError extends Error {
   override name = "NoTextPdfError";
 }
+
+// True if the permissions of a PDF allow the copy of its text. A PDF with no encryption has no permissions (null), so it
+// allows all. pdf.js gives an array or a set of PermissionFlag values.
+export function allowsCopy(permissions: Iterable<number> | null): boolean {
+  return permissions === null || [...permissions].includes(PermissionFlag.COPY);
+}
+
+// The owner of the file can forbid the copy of its text. The user reads own files on own computer, so the reader
+// reads the text and gives a warning (decided on 2026-11-04).
+export const COPY_RESTRICTED_NOTE =
+  "The permissions of this PDF file do not allow the copy of its text. The tutor reads the text for your own study. Do not share the text or the lessons.";
 
 interface OutlineNode {
   title: string;
@@ -375,6 +386,7 @@ export async function readPdf(data: Uint8Array, fileName: string): Promise<BookS
   const doc = await task.promise;
   try {
     const notes: string[] = [];
+    if (!allowsCopy(await doc.getPermissions())) notes.push(COPY_RESTRICTED_NOTE);
 
     // The outline (bookmarks) gives the chapters and sections.
     const outline = await readOutline(doc, ((await doc.getOutline()) ?? []) as OutlineNode[]);

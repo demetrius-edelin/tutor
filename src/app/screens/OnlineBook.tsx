@@ -24,6 +24,7 @@ export function OnlineBook({ slug }: { slug: string }) {
   const name = subject.state === "ready" ? subject.data.name : slug;
   // Each answer gets a new number, so that a new answer starts with a new selection.
   const [found, setFound] = useState<{ number: number; view: OnlineTocView } | null>(null);
+  const show = (view: OnlineTocView | null) => setFound((current) => (view ? { number: (current?.number ?? 0) + 1, view } : null));
   return (
     <Layout subject={{ slug, name }} tab="subject">
       <p className="back-link">
@@ -40,8 +41,8 @@ export function OnlineBook({ slug }: { slug: string }) {
         </Notice>
       ) : (
         <>
-          <AddressForm onFound={(view) => setFound((current) => (view ? { number: (current?.number ?? 0) + 1, view } : null))} />
-          {found?.view.kind === "web" && <Chapters key={found.number} slug={slug} found={found.view} />}
+          <AddressForm onFound={show} />
+          {found?.view.kind === "web" && <Chapters key={found.number} slug={slug} found={found.view} onFound={show} />}
           {found?.view.kind === "video" && <Videos key={found.number} slug={slug} video={found.view.video} />}
         </>
       )}
@@ -226,9 +227,47 @@ function SelectionTools({ selected, all, word, onSelect }: { selected: number[];
   );
 }
 
+// The book is only the page of the table of contents: one chapter with that page.
+const isOnePage = (toc: Extract<OnlineTocView, { kind: "web" }>["toc"]) =>
+  toc.chapters.length === 1 && toc.chapters[0]!.pages.length === 1 && toc.chapters[0]!.pages[0]!.url === toc.tocUrl;
+
+// "Use only this page": the book is only the start page, with no table of contents. This helps when the model takes
+// the links to other articles of a blog as a table of contents.
+function OnlyPage({ startUrl, onFound }: { startUrl: string; onFound: (view: OnlineTocView) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const use = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      onFound(await postJson<OnlineTocView>("/api/fetch/toc", { url: startUrl, page: true }));
+    } catch (problem) {
+      setError((problem as Error).message);
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <p className="quiet small">
+        Do you want only the text of {startUrl}, and not the other pages?{" "}
+        <button className="text-button" onClick={use} disabled={busy}>
+          {busy && <Spinner />}
+          Use only this page
+        </button>
+      </p>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </>
+  );
+}
+
 // The chapters of the table of contents, with checkboxes. All chapters start selected, as in the command.
-function Chapters({ slug, found }: { slug: string; found: Extract<OnlineTocView, { kind: "web" }> }) {
+function Chapters({ slug, found, onFound }: { slug: string; found: Extract<OnlineTocView, { kind: "web" }>; onFound: (view: OnlineTocView) => void }) {
   const { toc } = found;
+  const onePage = isOnePage(toc);
   const all = toc.chapters.map((_, i) => i + 1);
   const [selected, setSelected] = useState<number[]>(all);
   const download = useDownload(slug);
@@ -244,12 +283,20 @@ function Chapters({ slug, found }: { slug: string; found: Extract<OnlineTocView,
   return (
     <section aria-labelledby="toc-heading">
       <h2 id="toc-heading">{toc.title}</h2>
-      <p className="section-intro">
-        {toc.source === "llms.txt"
-          ? `The table of contents comes from ${toc.tocUrl}.`
-          : `The model found the table of contents in the links of ${toc.tocUrl}.`}{" "}
-        The tutor downloads only the pages in {toc.scope}. The site has {plural(toc.chapters.length, "chapter")} with {plural(pageCount(all), "page")}.
-      </p>
+      {onePage ? (
+        <p className="section-intro">The book is only the page {toc.tocUrl}. It has one chapter.</p>
+      ) : (
+        <>
+          <p className="section-intro">
+            {toc.source === "llms.txt"
+              ? `The table of contents comes from ${toc.tocUrl}.`
+              : `The model found the table of contents in the links of ${toc.tocUrl}.`}{" "}
+            The tutor downloads only the pages in {toc.scope}. The site has {plural(toc.chapters.length, "chapter")} with{" "}
+            {plural(pageCount(all), "page")}.
+          </p>
+          <OnlyPage startUrl={toc.startUrl} onFound={onFound} />
+        </>
+      )}
       <SelectionTools selected={selected} all={all} word="chapter" onSelect={select} />
       <div className="table-scroll">
         <table className="data-table chapter-table">

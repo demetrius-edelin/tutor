@@ -19,6 +19,7 @@ into an EPUB file in data/web/. Then add the EPUB file to a subject in the app.
 Options:
   --chapters <list>  Download only these chapters, for example 1-3 or 2,5. For a playlist: these videos.
   --toc <url>        Read the table of contents from the links of this page. Not for YouTube.
+  --page             Download only the start page, as a book with one chapter. Not for YouTube.
   --title <text>     The title of the book. The default is the title of the site, the video, or the playlist.
   --yes              Download all the chapters without the questions, and replace an old EPUB file.`;
 
@@ -53,10 +54,13 @@ async function main(): Promise<void> {
   }
   const tocUrl = valueOf("--toc");
   if (tocUrl !== undefined && !/^https?:\/\//i.test(tocUrl)) throw new Error(`"${tocUrl}" is not a web address.`);
+  const onlyPage = flag("--page");
+  if (onlyPage && tocUrl !== undefined) throw new Error("Use --page or --toc, not both.");
 
   loadEnvFile();
   if (isYoutubeUrl(startUrl)) {
     if (tocUrl !== undefined) throw new Error("--toc does not apply to a YouTube address.");
+    if (onlyPage) throw new Error("--page does not apply to a YouTube address.");
     await fetchVideoCommand({ url: startUrl, chapters: valueOf("--chapters"), title: valueOf("--title"), yes: flag("--yes"), ask });
     return;
   }
@@ -65,6 +69,7 @@ async function main(): Promise<void> {
   const toc = await findToc({
     startUrl,
     ...(tocUrl ? { tocUrl } : {}),
+    onlyPage,
     download,
     llm: () => {
       const config = modelConfig();

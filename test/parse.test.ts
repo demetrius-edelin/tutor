@@ -1,8 +1,10 @@
+import JSZip from "jszip";
 import { beforeAll, describe, expect, it } from "vitest";
 import { classify } from "../src/ingest/core/structure.js";
 import type { ParsedBook, ParsedChapter } from "../src/ingest/core/types.js";
+import { CopyProtectedEpubError, hasCopyProtection } from "../src/ingest/epub/protection.js";
 import { parseEpub } from "../src/ingest/parse.js";
-import { buildEpub, mainFixture, ncxFixture, styledFixture } from "./fixtures/epub.js";
+import { buildEpub, mainFixture, ncxFixture, styledFixture, xhtml } from "./fixtures/epub.js";
 
 let book: ParsedBook;
 const chapter = (title: string): ParsedChapter => {
@@ -164,6 +166,7 @@ describe("classify", () => {
     expect(classify("Preface by the Author", ["chapter"])).toBe("front");
     expect(classify("Notice of Rights", [])).toBe("front");
     expect(classify("Trademark Notice", [])).toBe("front");
+    expect(classify("Copyright Page", [])).toBe("front");
     expect(classify("Appendix A: Commands", [])).toBe("appendix");
   });
 });
@@ -203,5 +206,32 @@ describe("books that use CSS classes", () => {
       ["Index", "index"],
       ["ads.xhtml", "back"],
     ]);
+  });
+});
+
+describe("the copy protection of an EPUB file", () => {
+  const epub = async (extra: Record<string, string>) => {
+    const zip = await JSZip.loadAsync(await buildEpub({ files: { "ch1.xhtml": xhtml("<h1>One</h1><p>Text.</p>") }, spine: ["ch1.xhtml"] }));
+    for (const [path, text] of Object.entries(extra)) zip.file(path, text);
+    return zip.generateAsync({ type: "uint8array" });
+  };
+  const encryption = (algorithm: string) =>
+    `<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><EncryptedData xmlns="http://www.w3.org/2001/04/xmlenc#">
+<EncryptionMethod Algorithm="${algorithm}"/><CipherData><CipherReference URI="OEBPS/font.otf"/></CipherData></EncryptedData></encryption>`;
+
+  it("finds encrypted text and the files of the protection systems, and accepts obfuscated fonts", async () => {
+    const check = async (data: Uint8Array) => hasCopyProtection(await JSZip.loadAsync(data));
+    expect(await check(await epub({}))).toBe(false);
+    expect(await check(await epub({ "META-INF/encryption.xml": encryption("http://www.idpf.org/2008/embedding") }))).toBe(false);
+    expect(await check(await epub({ "META-INF/encryption.xml": encryption("http://www.w3.org/2001/04/xmlenc#aes128-cbc") }))).toBe(true);
+    expect(await check(await epub({ "META-INF/rights.xml": "<rights/>" }))).toBe(true);
+    expect(await check(await epub({ "meta-inf/license.lcpl": "{}" }))).toBe(true);
+  });
+
+  it("refuses a protected book with a clear message, and reads a book with obfuscated fonts", async () => {
+    await expect(parseEpub(await epub({ "META-INF/rights.xml": "<rights/>" }))).rejects.toThrow(CopyProtectedEpubError);
+    await expect(parseEpub(await epub({ "META-INF/rights.xml": "<rights/>" }))).rejects.toThrow("copy protection (DRM)");
+    const fonts = await parseEpub(await epub({ "META-INF/encryption.xml": encryption("http://www.idpf.org/2008/embedding") }));
+    expect(fonts.chapters.map((chapter) => chapter.title)).toEqual(["One"]);
   });
 });

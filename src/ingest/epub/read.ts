@@ -15,6 +15,7 @@ import {
 } from "../core/source.js";
 import { parseStylesheet, type StyleMap } from "../core/styles.js";
 import { normalizeSpace } from "../core/text.js";
+import { COPY_PROTECTED_EPUB, CopyProtectedEpubError, hasCopyProtection } from "./protection.js";
 
 export interface EpubPackage {
   title: string;
@@ -34,6 +35,8 @@ export interface EpubPackage {
 
 export async function openEpub(data: Uint8Array): Promise<EpubPackage> {
   const zip = await JSZip.loadAsync(data);
+  // The package document of a protected book is readable, but its text is not. Thus check before the parse.
+  if (await hasCopyProtection(zip)) throw new CopyProtectedEpubError(COPY_PROTECTED_EPUB);
   const byLowerCase = new Map<string, string>();
   zip.forEach((path) => byLowerCase.set(path.toLowerCase(), path));
 

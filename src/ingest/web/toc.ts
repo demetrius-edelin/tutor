@@ -3,7 +3,7 @@ import type { Element } from "domhandler";
 import { z } from "zod";
 import type { LlmClient } from "../../llm/index.js";
 import { blockText, descendants, localName } from "../core/dom.js";
-import { normalizeSpace } from "../core/text.js";
+import { countWords, normalizeSpace } from "../core/text.js";
 import { bodyText, RobotsError, type Downloader } from "./http.js";
 
 export interface WebPage {
@@ -30,6 +30,11 @@ export interface WebToc {
 
 export class TocError extends Error {
   override name = "TocError";
+}
+
+// A page with too little text for a book of one page. Some sites write their text with scripts.
+export class PageTextError extends TocError {
+  override name = "PageTextError";
 }
 
 function withoutHash(url: string): string {
@@ -294,6 +299,17 @@ export interface FindTocOptions {
   log?: (line: string) => void;
   // The advice in an error about a missing table of contents. The command names --toc, and the app names its form field.
   tocHint?: string;
+  // True if the book is only the start page: no llms.txt, no links, and no model request.
+  onlyPage?: boolean;
+}
+
+// A single page needs this many words to be a book. A page with less text and no links is not a book.
+export const MIN_PAGE_WORDS = 50;
+
+function pageWords(html: string): number {
+  const $ = cheerio.load(html);
+  $("script, style, noscript, template").remove();
+  return countWords($("body").text());
 }
 
 const TOC_HINT = "Add --toc <url> with a page that lists the pages.";
@@ -313,12 +329,14 @@ async function getText(download: Downloader, url: string): Promise<{ url: string
 }
 
 // Find the table of contents: first in an llms.txt file, then in the links of the start page or of the --toc page.
+// A start page with text is a book with one chapter in three cases: it has no links to other pages of its scope, the
+// model finds no table of contents in its links, or the user wants only this page (onlyPage).
 export async function findToc(options: FindTocOptions): Promise<WebToc> {
   const { startUrl, download } = options;
   const log = options.log ?? (() => {});
   const hint = options.tocHint ?? TOC_HINT;
 
-  if (!options.tocUrl) {
+  if (!options.tocUrl && !options.onlyPage) {
     for (const url of llmsTxtUrls(startUrl)) {
       const file = await getText(download, url).catch(() => null);
       if (!file || !isLlmsTxt(file.status, file.text)) continue;
@@ -341,14 +359,39 @@ export async function findToc(options: FindTocOptions): Promise<WebToc> {
   if (!page) throw new TocError(`robots.txt disallows ${tocUrl}.`);
   if (page.status !== 200) throw new TocError(`${tocUrl} gave the HTTP status ${page.status}.`);
   const links = collectLinks(page.text, page.url);
+  const urls = () => links.items.flatMap((item) => (item.url ? [item.url] : []));
+  // The book of the start page only: one chapter with one page.
+  const pageBook = (scope: string, reason: string): WebToc => {
+    const title = links.title || new URL(page.url).host;
+    log(reason);
+    return {
+      title,
+      language: links.language ?? "en",
+      startUrl: page.url,
+      source: "html",
+      tocUrl: page.url,
+      scope,
+      chapters: [{ title, pages: [{ title, url: page.url }] }],
+    };
+  };
+  const hasText = !options.tocUrl && pageWords(page.text) >= MIN_PAGE_WORDS;
+  if (options.onlyPage) {
+    if (!hasText) throw new PageTextError(`${page.url} has fewer than ${MIN_PAGE_WORDS} words.`);
+    return pageBook(scopeOf(page.url, urls()), "The book is only this page.");
+  }
+
   for (const frame of links.frames) {
     const framePage = await getText(download, frame).catch(() => null);
     if (framePage?.status === 200) links.items.push(...collectLinks(framePage.text, framePage.url).items);
   }
   const start = options.tocUrl ? startUrl : page.url;
-  const urls = links.items.flatMap((item) => (item.url ? [item.url] : []));
-  const scope = scopeOf(start, urls);
+  const scope = scopeOf(start, urls());
   const items = scopedItems(links.items, scope);
+  // A single page with text: no link in the scope, or only links into the page itself, for example to its own headings.
+  const same = (url: string) => withoutHash(url).replace(/\/$/, "") === withoutHash(page.url).replace(/\/$/, "");
+  if (hasText && !items.some((item) => item.url !== null && !same(item.url))) {
+    return pageBook(scope, "The page has no links to other pages of its scope, so the book is this page.");
+  }
   if (!items.some((item) => item.url !== null)) {
     throw new TocError(`${tocUrl} has no links to pages in ${scope}. ${hint}`);
   }
@@ -357,6 +400,8 @@ export async function findToc(options: FindTocOptions): Promise<WebToc> {
   log(`One model request finds the table of contents in ${items.length} links and group titles.`);
   const toc = await tocFromLinks(llm, { title: links.title, url: page.url }, items);
   if (toc.chapters.length === 0) {
+    // For example an article with links to other articles of the site.
+    if (hasText) return pageBook(scope, "The model found no table of contents, so the book is this page.");
     throw new TocError(`The model found no table of contents in ${tocUrl}. ${hint}`);
   }
   return { title: toc.title, language: links.language ?? "en", startUrl: start, source: "html", tocUrl: page.url, scope, chapters: toc.chapters };

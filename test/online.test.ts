@@ -7,6 +7,7 @@ import type { Fetcher } from "../src/ingest/web/http.js";
 import type { LlmClient } from "../src/llm/index.js";
 import type { BookView, FetchStartView, IngestView, OnlineTocView, SubjectDetail } from "../src/server/api-types.js";
 import { buildServer, type TutorServer } from "../src/server/app.js";
+import { checkToc } from "../src/server/online.js";
 import { FakeLlm } from "./fakes/llm.js";
 import { fakeSite, html, prose } from "./fakes/site.js";
 
@@ -132,6 +133,26 @@ describe("Find the table of contents", () => {
     expect(body.error).toBe(
       'https://site.test/book/ has no links to pages in https://site.test/book/. Type the address of a page that lists the pages in the field "Table of contents".',
     );
+  });
+
+  it("uses only the start page with page: true, with no model, and refuses a page with no text", async () => {
+    const site = fakeSite({
+      "https://site.test/blog/post": html(
+        `<main><h1>A Post</h1><p>${prose("post", 80)}</p></main><aside><a href="/blog/other">Other post</a> <a href="/blog/more">More</a></aside>`,
+        "A Post",
+      ),
+      "https://site.test/app/": html(`<div id="root"></div><a href="/app/a">A</a>`),
+    });
+    start(site, null);
+    const { status, body } = await post<WebTocView>("/api/fetch/toc", { url: "https://site.test/blog/post", toc: "https://site.test/blog/", page: true });
+    expect(status).toBe(200);
+    expect(body.toc.chapters).toEqual([{ title: "A Post", pages: [{ title: "A Post", url: "https://site.test/blog/post" }] }]);
+    // The app sends this table of contents back for the download.
+    expect(checkToc(body.toc).chapters).toHaveLength(1);
+
+    const empty = await post<WebTocView>("/api/fetch/toc", { url: "https://site.test/app/", page: true });
+    expect(empty.status).toBe(400);
+    expect(empty.body.error).toMatch(/found almost no text on https:\/\/site.test\/app\//);
   });
 
   it("refuses an address that is not a web page, and a table of contents for a YouTube address", async () => {

@@ -163,17 +163,22 @@ export function cleanPage(html: string, url: string, layout: PageLayout): CleanP
   }
 
   const text = normalizeSpace(blockText(root));
-  return {
-    images,
-    text,
-    words: countWords(text),
-    render(imageSrc) {
-      for (const element of descendants($, root).filter((item) => localName(item) === "img")) {
-        const local = element.attribs.src ? imageSrc.get(element.attribs.src) : undefined;
-        if (local) element.attribs.src = local;
-      }
-      return (root.children as AnyNode[]).map((node) => render(node, { xmlMode: true })).join("");
-    },
+  const xhtml = (root.children as AnyNode[]).map((node) => render(node, { xmlMode: true })).join("");
+  return { images, text, words: countWords(text), render: renderer(xhtml) };
+}
+
+// The render function of a clean page. It keeps only the XHTML, not the document of the page. A book keeps all its
+// pages until the images download, and the document of a page with a large menu uses about 15 MB. A closure in
+// cleanPage keeps the document, because the closures of a function share their variables.
+function renderer(xhtml: string): CleanPage["render"] {
+  return (imageSrc) => {
+    if (imageSrc.size === 0 || !xhtml.includes("<img")) return xhtml;
+    const $ = cheerio.load(xhtml, { xml: true }, false);
+    for (const element of $("img").toArray()) {
+      const local = element.attribs.src ? imageSrc.get(element.attribs.src) : undefined;
+      if (local) element.attribs.src = local;
+    }
+    return $.xml();
   };
 }
 

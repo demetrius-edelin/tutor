@@ -3,7 +3,7 @@ import type { Db } from "../db/index.js";
 import { isYoutubeUrl } from "../ingest/video/youtube.js";
 import { bookTitle, fetchBook } from "../ingest/web/fetch.js";
 import { Downloader, type Fetcher } from "../ingest/web/http.js";
-import { findToc, inScope, TocError, type WebToc } from "../ingest/web/toc.js";
+import { findToc, inScope, PageTextError, TocError, type WebToc } from "../ingest/web/toc.js";
 import type { LlmClient } from "../llm/index.js";
 import { TutorError } from "../tutor/diagnosis.js";
 import type { FetchStartView, OnlineTocView } from "./api-types.js";
@@ -51,11 +51,18 @@ export interface OnlineAccess {
 
 // Find the table of contents of an online book: first in an llms.txt file, then in the links of the start page.
 // The links need one model request. The app waits for the answer, as for a new lesson.
+// With `page: true`, the book is only the start page, with no model request. The field "Table of contents" then does
+// not apply.
 // For a YouTube address, the answer has the facts of the video or of the playlist.
-export async function findOnlineToc(access: OnlineAccess, llm: () => LlmClient, body: { url?: unknown; toc?: unknown }): Promise<OnlineTocView> {
+export async function findOnlineToc(
+  access: OnlineAccess,
+  llm: () => LlmClient,
+  body: { url?: unknown; toc?: unknown; page?: unknown },
+): Promise<OnlineTocView> {
   const startUrl = webAddress(body.url);
   if (!startUrl) throw new TutorError("Type the address of the online book or video.");
-  const tocUrl = webAddress(body.toc);
+  const onlyPage = body.page === true;
+  const tocUrl = onlyPage ? null : webAddress(body.toc);
   if (isYoutubeUrl(startUrl)) {
     if (tocUrl) throw new TutorError('The field "Table of contents" does not apply to a YouTube address. Clear the field.');
     return { kind: "video", video: await findVideoToc(access.video, access.dataDir, startUrl) };
@@ -63,9 +70,12 @@ export async function findOnlineToc(access: OnlineAccess, llm: () => LlmClient, 
   const { web } = access;
   const download = new Downloader(web.fetcher, { pauseMs: web.pauseMs });
   try {
-    const toc = await findToc({ startUrl, ...(tocUrl ? { tocUrl } : {}), download, llm, tocHint: APP_TOC_HINT });
+    const toc = await findToc({ startUrl, ...(tocUrl ? { tocUrl } : {}), download, llm, tocHint: APP_TOC_HINT, onlyPage });
     return { kind: "web", toc, secondsPerPage: web.pauseMs / 1000 };
   } catch (error) {
+    if (error instanceof PageTextError) {
+      throw new TutorError(`The tutor found almost no text on ${startUrl}. Some sites write their text with scripts, and the tutor cannot read such a page.`);
+    }
     if (error instanceof TocError) throw new TutorError(error.message);
     const problem = networkProblem(error);
     if (problem) throw new TutorError(`The tutor cannot download ${tocUrl ?? startUrl}: ${problem}.`, 502);

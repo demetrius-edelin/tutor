@@ -191,7 +191,7 @@ export function buildServer(options: ServerOptions): TutorServer {
 
   // Find the table of contents of an online book. For a site with no llms.txt file, this needs one model request.
   // For a YouTube address, yt-dlp reads the facts of the video or of the playlist.
-  app.post<{ Body: { url?: unknown; toc?: unknown } }>("/api/fetch/toc", async (request) => findOnlineToc(online, requireModel, request.body ?? {}));
+  app.post<{ Body: { url?: unknown; toc?: unknown; page?: unknown } }>("/api/fetch/toc", async (request) => findOnlineToc(online, requireModel, request.body ?? {}));
 
   // Start the download of some chapters of an online book or of the transcripts of videos.
   // If data/web/ has an EPUB file with the same title, the answer gives the file and no run starts.

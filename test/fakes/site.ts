@@ -1,6 +1,7 @@
 import type { Fetcher, FetchResult } from "../../src/ingest/web/http.js";
 
-export type FakePage = string | { status?: number; contentType?: string; body: string | Uint8Array };
+// A redirect is a page with the status 301 to 308 and a location, for example { status: 301, location: "/new" }.
+export type FakePage = string | { status?: number; contentType?: string; body?: string | Uint8Array; location?: string };
 
 // A fake site. An address that is not in the map gives a 404 page.
 export function fakeSite(pages: Record<string, FakePage>): Fetcher & { requested: string[] } {
@@ -10,8 +11,8 @@ export function fakeSite(pages: Record<string, FakePage>): Fetcher & { requested
     const page = pages[url];
     if (page === undefined) return { url, status: 404, contentType: "text/html", body: new TextEncoder().encode("<html><body>Not found</body></html>") };
     const item = typeof page === "string" ? { body: page } : page;
-    const body = typeof item.body === "string" ? new TextEncoder().encode(item.body) : item.body;
-    return { url, status: item.status ?? 200, contentType: item.contentType ?? "text/html; charset=utf-8", body };
+    const body = typeof item.body === "string" ? new TextEncoder().encode(item.body) : (item.body ?? new Uint8Array());
+    return { url, status: item.status ?? 200, contentType: item.contentType ?? "text/html; charset=utf-8", body, location: item.location ?? null };
   };
   return Object.assign(fetcher, { requested });
 }

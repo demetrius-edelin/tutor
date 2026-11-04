@@ -45,7 +45,7 @@ const GLOSSARY_TITLE = /^glossary( of .*)?$/i;
 const INDEX_TITLE = /^((general|subject) )?index$/i;
 const APPENDIX_TITLE = /^appendix\b/i;
 const FRONT_TITLE =
-  /^((preface|foreword)\b.*|licen[cs]e|dedications?|acknowledge?ments?|about (the )?(authors?|this book|the cover.*)|copyright|title page|half title|cover|(table of )?contents?|contributors|praise for\b.*|also by\b.*|epigraph|notice of (rights|liability)|(trademark|legal) notices?|disclaimer)$/i;
+  /^((preface|foreword)\b.*|licen[cs]e|dedications?|acknowledge?ments?|about (the )?(authors?|this book|the cover.*)|copyright( page)?|title page|half title|cover|(table of )?contents?|contributors|praise for\b.*|also by\b.*|epigraph|notice of (rights|liability)|(trademark|legal) notices?|disclaimer)$/i;
 const BACK_TITLE =
   /^(references|further reading|colophon|endnotes|notes|about the authors?|other books( by .*)?)$|\bbibliography\b/i;
 

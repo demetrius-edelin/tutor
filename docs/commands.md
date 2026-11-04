@@ -127,6 +127,12 @@ The command finds the chapters in one of these places:
 2. The links of the start page. One model request finds the table of contents in these links. The request is small. The command shows the model before the request.
 3. The links of the page that you give with `--toc <url>`. If the chapter list is wrong or empty, use this option. Give a page that lists all the pages of the book.
 
+A start page with text can also be a book with one chapter, for example an article. The command makes such a book in these cases:
+
+- The start page has no links to other pages in its folder. Then the command uses no model.
+- The model finds no table of contents in the links of the start page.
+- You give `--page`.
+
 The command does not follow links from page to page. It downloads only the pages in the table of contents. It waits one second between two requests, and it obeys `robots.txt`. Some sites show the same text under two addresses. The command keeps only the first of these pages.
 
 The EPUB file is a copy of the site on the day of the download. A later change to the site does not change your concepts or the references of your lessons.
@@ -135,6 +141,7 @@ Fetch options:
 
 - `--chapters <list>`: download only these chapters, for example `1-3` or `2,5`. The command does not ask which chapters to download.
 - `--toc <url>`: read the table of contents from the links of this page.
+- `--page`: download only the start page, as a book with one chapter. The command uses no model and reads no `llms.txt` file. Use this option for an article on a blog: the model can take the links to other articles as a table of contents.
 - `--title <text>`: the title of the book. The default is the title of the site. If you download only some chapters, the default title also contains these chapters. The title gives the name of the EPUB file and the folder of the book in a subject. If you download two parts of one site, give each part its own title.
 - `--yes`: download all the chapters without the question, and replace an old EPUB file with the same name.
 

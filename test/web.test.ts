@@ -10,6 +10,7 @@ import {
   inScope,
   llmsChapters,
   llmsTxtUrls,
+  PageTextError,
   parseLlmsTxt,
   scopedItems,
   scopeOf,
@@ -51,6 +52,29 @@ Disallow: /`;
   it("allows all paths for an empty Disallow line", () => {
     expect(robotsAllow(robotsRules("User-agent: *\nDisallow:"), "/a")).toBe(true);
   });
+
+  it("ends a group at an empty Disallow line, so the next group does not join it", () => {
+    const rules = robotsRules("User-agent: *\nDisallow:\n\nUser-agent: other-bot\nDisallow: /");
+    expect(robotsAllow(rules, "/docs/a")).toBe(true);
+  });
+
+  it("obeys the groups for the crawlers of AI services, in any case", () => {
+    const rules = robotsRules("User-agent: *\nDisallow:\n\nUser-agent: GPTBot\nUser-agent: ClaudeBot\nDisallow: /books/");
+    expect(robotsAllow(rules, "/books/a")).toBe(false);
+    expect(robotsAllow(rules, "/docs/a")).toBe(true);
+  });
+
+  it("obeys the group for all agents and the group for an AI crawler together", () => {
+    const rules = robotsRules("User-agent: *\nDisallow: /private/\n\nUser-agent: CCBot\nDisallow: /books/");
+    expect(robotsAllow(rules, "/private/a")).toBe(false);
+    expect(robotsAllow(rules, "/books/a")).toBe(false);
+    expect(robotsAllow(rules, "/docs/a")).toBe(true);
+  });
+
+  it("uses only the group for tutor-fetch if the file has one, also with a group for an AI crawler", () => {
+    const rules = robotsRules("User-agent: GPTBot\nDisallow: /\n\nUser-agent: tutor-fetch\nAllow: /");
+    expect(robotsAllow(rules, "/books/a")).toBe(true);
+  });
 });
 
 describe("Downloader", () => {
@@ -65,6 +89,56 @@ describe("Downloader", () => {
     expect((await download.get("https://site.test/a")).status).toBe(200);
     expect(calls).toBe(2);
     await expect(download.get("https://site.test/no/page")).rejects.toThrow("robots.txt disallows");
+  });
+
+  const robots = (body: string) => ({ contentType: "text/plain", body });
+
+  it("follows a redirect itself, with the check of robots.txt and the pause for each address", async () => {
+    const site = fakeSite({
+      "https://site.test/robots.txt": robots("User-agent: *\nDisallow: /secret/"),
+      "https://site.test/old": { status: 301, location: "/new" },
+      "https://site.test/new": html("<p>New</p>"),
+      "https://site.test/go": { status: 302, location: "https://site.test/secret/x" },
+    });
+    const download = new Downloader(site, { pauseMs: 30 });
+    const started = Date.now();
+    const result = await download.get("https://site.test/old");
+    // Three requests with a pause between them: robots.txt, the old address, and the new address.
+    expect(Date.now() - started).toBeGreaterThanOrEqual(55);
+    expect([result.url, result.status]).toEqual(["https://site.test/new", 200]);
+    expect(site.requested).toEqual(["https://site.test/robots.txt", "https://site.test/old", "https://site.test/new"]);
+    expect(download.requests).toBe(3);
+
+    await expect(download.get("https://site.test/go")).rejects.toThrow("robots.txt disallows https://site.test/secret/x");
+    expect(site.requested).not.toContain("https://site.test/secret/x");
+  });
+
+  it("checks robots.txt of the other site of a redirect, and follows a redirect of robots.txt", async () => {
+    const site = fakeSite({
+      "https://site.test/out": { status: 301, location: "https://other.test/page" },
+      "https://other.test/robots.txt": { status: 301, location: "/rules.txt" },
+      "https://other.test/rules.txt": robots("User-agent: *\nDisallow: /page"),
+    });
+    const download = new Downloader(site, { pauseMs: 0 });
+    await expect(download.get("https://site.test/out")).rejects.toThrow("robots.txt disallows https://other.test/page");
+    expect(site.requested).toContain("https://other.test/rules.txt");
+    expect(site.requested).not.toContain("https://other.test/page");
+  });
+
+  it("sends no fragment, and gives the address without its fragment, also after a redirect", async () => {
+    const site = fakeSite({
+      "https://site.test/a": { status: 301, location: "/b#part" },
+      "https://site.test/b": html("<p>B</p>"),
+    });
+    const result = await new Downloader(site, { pauseMs: 0 }).get("https://site.test/a#top");
+    expect(result.url).toBe("https://site.test/b");
+    expect(site.requested).toEqual(["https://site.test/robots.txt", "https://site.test/a", "https://site.test/b"]);
+  });
+
+  it("stops after five redirects", async () => {
+    const pages = Object.fromEntries(Array.from({ length: 7 }, (_, i) => [`https://site.test/r${i}`, { status: 307, location: `/r${i + 1}` }]));
+    const download = new Downloader(fakeSite(pages), { pauseMs: 0 });
+    await expect(download.get("https://site.test/r0")).rejects.toThrow("more than 5 redirects from https://site.test/r0");
   });
 });
 
@@ -284,6 +358,63 @@ describe("collectLinks", () => {
 });
 
 describe("findToc", () => {
+  it("makes a page with no links to other pages of its scope a book with one chapter, with no model", async () => {
+    const site = fakeSite({
+      "https://site.test/2023/article/": html(
+        `<nav><a href="#intro">Intro</a> <a href="https://other.test/">Other site</a></nav><main><h1>An Article</h1><p id="intro">${prose("text", 80)}</p></main>`,
+        "An Article",
+      ),
+    });
+    const toc = await findToc({ startUrl: "https://site.test/2023/article/", download: new Downloader(site, { pauseMs: 0 }), llm: noModel });
+    expect(toc).toMatchObject({ title: "An Article", source: "html", tocUrl: "https://site.test/2023/article/" });
+    expect(toc.chapters).toEqual([{ title: "An Article", pages: [{ title: "An Article", url: "https://site.test/2023/article/" }] }]);
+  });
+
+  it("makes an article a book with one page also from an address with a fragment", async () => {
+    const site = fakeSite({
+      "https://site.test/2023/article/": html(`<nav><a href="#intro">Intro</a></nav><main><h1>An Article</h1><p id="intro">${prose("text", 80)}</p></main>`, "An Article"),
+    });
+    const toc = await findToc({ startUrl: "https://site.test/2023/article/#intro", download: new Downloader(site, { pauseMs: 0 }), llm: noModel });
+    expect(toc.chapters).toEqual([{ title: "An Article", pages: [{ title: "An Article", url: "https://site.test/2023/article/" }] }]);
+    expect(site.requested).toContain("https://site.test/2023/article/");
+  });
+
+  it("makes a page with text a book with one page when the model finds no table of contents in its links", async () => {
+    const site = fakeSite({
+      "https://site.test/blog/topic/fundamentals": html(
+        `<nav><a href="/blog/topic/">The topic</a></nav><main><h1>Fundamentals</h1><p>${prose("text", 80)}</p></main>
+<aside><a href="/blog/topic/older-post">An older post</a> <a href="/blog/topic/best-practices">Best practices</a></aside>`,
+        "Fundamentals | The Blog",
+      ),
+    });
+    const llm = new FakeLlm({ toc: () => ({ title: "The Blog", chapters: [] }) });
+    const toc = await findToc({ startUrl: "https://site.test/blog/topic/fundamentals", download: new Downloader(site, { pauseMs: 0 }), llm: () => llm });
+    expect(llm.count("toc")).toBe(1);
+    expect(toc.chapters).toEqual([
+      { title: "Fundamentals | The Blog", pages: [{ title: "Fundamentals | The Blog", url: "https://site.test/blog/topic/fundamentals" }] },
+    ]);
+  });
+
+  it("reads only the start page with onlyPage: no llms.txt, no frame, and no model", async () => {
+    const site = fakeSite({
+      "https://site.test/en/llms.txt": { contentType: "text/plain", body: LLMS_TXT },
+      "https://site.test/en/docs/first-steps": html(
+        `<iframe src="toc.html"></iframe><a href="senders">Senders</a><main><h1>First Steps</h1><p>${prose("step", 80)}</p></main>`,
+        "First Steps",
+      ),
+    });
+    const toc = await findToc({ startUrl: "https://site.test/en/docs/first-steps", download: new Downloader(site, { pauseMs: 0 }), llm: noModel, onlyPage: true });
+    expect(site.requested.filter((url) => !url.endsWith("/robots.txt"))).toEqual(["https://site.test/en/docs/first-steps"]);
+    expect(toc.chapters).toEqual([{ title: "First Steps", pages: [{ title: "First Steps", url: "https://site.test/en/docs/first-steps" }] }]);
+  });
+
+  it("refuses only the start page if it has too little text, for example a page that a script writes", async () => {
+    const site = fakeSite({ "https://site.test/app/": html(`<div id="root"></div><a href="/app/a">A</a>`) });
+    await expect(
+      findToc({ startUrl: "https://site.test/app/", download: new Downloader(site, { pauseMs: 0 }), llm: noModel, onlyPage: true }),
+    ).rejects.toThrow(PageTextError);
+  });
+
   it("uses llms.txt, and needs no model", async () => {
     const site = fakeSite({ "https://site.test/en/llms.txt": { contentType: "text/plain", body: LLMS_TXT } });
     const toc = await findToc({ startUrl: "https://site.test/en/docs/first-steps", download: new Downloader(site, { pauseMs: 0 }), llm: noModel });

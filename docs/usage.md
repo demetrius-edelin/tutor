@@ -105,6 +105,8 @@ The start address sets the part of the site to download. The tutor keeps only th
 
 If the tutor does not find all the chapters, type the address of a page with the full list of pages in "Table of contents". Then click "Find the chapters" again. The tutor then reads the links of that page.
 
+An article, for example on a blog, is a book with one chapter. If the start page has text and no links to other pages in its folder, the tutor needs no model. If the model finds no table of contents in the links, the book is also the start page. If the chapters are the other articles of the blog, click "Use only this page".
+
 If you select only some chapters, the title of the book also names the chapters. For example, "The Rust Programming Language - chapters 1-5". The title gives the name of the EPUB file.
 
 If `data/web/` has an EPUB file with the same title from an earlier download, the page shows two buttons:

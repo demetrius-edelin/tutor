@@ -6,8 +6,8 @@ import { splitChapter } from "../src/ingest/core/structure.js";
 import { htmlToMarkdown } from "../src/ingest/core/markdown.js";
 import { bookLayout, layoutToXhtml, markRunningLines, type LayoutInput } from "../src/ingest/pdf/layout.js";
 import { pageToXhtml, type FontStyle, type PdfTextItem, type StructNode } from "../src/ingest/pdf/page.js";
-import { ImageKind } from "pdfjs-dist/legacy/build/pdf.mjs";
-import { attachImages, joinAcrossPages, joinLabels, pageFile, pixelsOf, styleOfFont, tocFromHeadings } from "../src/ingest/pdf/read.js";
+import { ImageKind, PermissionFlag } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { allowsCopy, attachImages, joinAcrossPages, joinLabels, pageFile, pixelsOf, styleOfFont, tocFromHeadings } from "../src/ingest/pdf/read.js";
 
 const regular: FontStyle = { bold: false, italic: false, mono: false };
 const bold: FontStyle = { ...regular, bold: true };
@@ -402,5 +402,18 @@ describe("chapters of a PDF", () => {
     expect(book.chapters.map((chapter) => chapter.title)).toEqual(["Chapter 1. Basics"]);
     expect(book.chapters[0]!.sections.map((section) => section.title)).toEqual(["First Section", "Second Section"]);
     expect(book.skipped.map((part) => part.title)).toEqual(["A Small Book", "Notice of Rights"]);
+  });
+});
+
+describe("allowsCopy", () => {
+  it("allows a PDF with no encryption, and a PDF whose permissions allow the copy", () => {
+    expect(allowsCopy(null)).toBe(true);
+    expect(allowsCopy(new Set([PermissionFlag.PRINT, PermissionFlag.COPY]))).toBe(true);
+    expect(allowsCopy([PermissionFlag.COPY])).toBe(true);
+  });
+
+  it("finds a PDF whose permissions do not allow the copy, also with the copy for accessibility", () => {
+    expect(allowsCopy(new Set([PermissionFlag.PRINT, PermissionFlag.COPY_FOR_ACCESSIBILITY]))).toBe(false);
+    expect(allowsCopy([])).toBe(false);
   });
 });
