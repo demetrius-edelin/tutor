@@ -4,8 +4,8 @@ import { z } from "zod";
 import { describeVideoModel, type VideoConfig } from "../config.js";
 import type { Db } from "../db/index.js";
 import { fetchVideos, ONE_CHAPTER_SECONDS, playlistBookTitle } from "../ingest/video/book.js";
-import { estimateCost, type ModelPrices, type VideoClient } from "../ingest/video/client.js";
-import { MAX_VIDEO_SECONDS } from "../ingest/video/transcript.js";
+import { CLIP_SECONDS } from "../ingest/video/clips.js";
+import { estimateCost, LIMIT_TEXT, maxVideoSeconds, takesClips, tooLong, type ModelPrices, type VideoClient } from "../ingest/video/client.js";
 import { readPlaylist, readVideo, type YtDlpRunner } from "../ingest/video/ytdlp.js";
 import { formatLength, parseYoutubeUrl, playlistUrl, videoUrl, type VideoFacts } from "../ingest/video/youtube.js";
 import { FetchStopped } from "../ingest/web/fetch.js";
@@ -31,8 +31,6 @@ export interface VideoAccess {
 
 const NO_VIDEO_MODEL =
   "Videos need a video model. On the Settings page, select the video provider and the video model, or set VIDEO_PROVIDER and VIDEO_MODEL in .env.";
-const LIMIT = `The tutor transcribes videos of up to ${MAX_VIDEO_SECONDS / 60} minutes, because a longer transcript does not fit into the answer of the model.`;
-const tooLong = (seconds: number | null) => seconds !== null && seconds > MAX_VIDEO_SECONDS;
 const transcriptsDir = (dataDir: string) => join(dataDir, "web", "transcripts");
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -49,7 +47,8 @@ async function costRate(video: VideoAccess): Promise<Pick<VideoToc, "dollarsPerS
   const config = video.config;
   if (!config) return { dollarsPerSecond: null, costNote: null };
   if (config.provider === "google") {
-    return { dollarsPerSecond: null, costNote: "No cost estimate for the Gemini API of Google. Its free tier allows 8 hours of YouTube video a day." };
+    const flex = config.tier === "flex" ? " The tier Flex costs half of the tier Standard." : "";
+    return { dollarsPerSecond: null, costNote: `No cost estimate for the Gemini API of Google. Its free tier allows 8 hours of YouTube video a day.${flex}` };
   }
   const prices = await video.prices(config.model);
   return prices
@@ -66,7 +65,8 @@ export async function findVideoToc(video: VideoAccess, dataDir: string, url: str
   const model = {
     model: video.config ? describeVideoModel(video.config) : null,
     modelError: video.config ? null : (video.error ?? NO_VIDEO_MODEL),
-    maxSeconds: MAX_VIDEO_SECONDS,
+    maxSeconds: maxVideoSeconds(video.config),
+    clipSeconds: video.config && takesClips(video.config) ? CLIP_SECONDS : null,
     oneChapterSeconds: ONE_CHAPTER_SECONDS,
     ...(await costRate(video)),
   };
@@ -144,8 +144,8 @@ export function startVideoFetch({ db, dataDir, video, subject, body, stops }: Vi
     const unknown = selected.filter((n) => n > facts.videos.length);
     if (unknown.length > 0) throw new TutorError(`The playlist has ${facts.videos.length} videos. There is no video ${unknown.join(", ")}.`);
   }
-  const long = selected.filter((n) => tooLong(facts.videos[n - 1]!.duration));
-  if (long.length > 0) throw new TutorError(`Video ${long.join(", ")} is too long. ${LIMIT}`);
+  const long = selected.filter((n) => tooLong(facts.videos[n - 1]!.duration, config));
+  if (long.length > 0) throw new TutorError(`Video ${long.join(", ")} is too long. ${LIMIT_TEXT}`);
 
   const entries = selected.map((n) => facts.videos[n - 1]!);
   const title =
@@ -168,7 +168,7 @@ export function startVideoFetch({ db, dataDir, video, subject, body, stops }: Vi
         progress({ text: `Reading the facts of video ${i + 1} of ${entries.length}.`, done: 0, total: entries.length });
         try {
           const facts = await readVideo(run, entry.id);
-          if (tooLong(facts.duration)) skipped.push({ url: videoUrl(entry.id), reason: `the video is ${formatLength(facts.duration)} long. ${LIMIT}` });
+          if (tooLong(facts.duration, config)) skipped.push({ url: videoUrl(entry.id), reason: `the video is ${formatLength(facts.duration)} long. ${LIMIT_TEXT}` });
           else videos.push(facts);
         } catch (error) {
           skipped.push({ url: videoUrl(entry.id), reason: `yt-dlp cannot read the video: ${message(error)}` });
@@ -184,6 +184,8 @@ export function startVideoFetch({ db, dataDir, video, subject, body, stops }: Vi
         source,
         videos,
         client: video.client(config),
+        clips: takesClips(config),
+        tier: config.tier,
         model: describeVideoModel(config),
         cacheDir: transcriptsDir(dataDir),
         progress,

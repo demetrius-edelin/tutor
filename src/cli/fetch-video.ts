@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { describeVideoModel, videoConfig } from "../config.js";
 import { slugify } from "../ingest/core/text.js";
 import { fetchVideos, ONE_CHAPTER_SECONDS, playlistBookTitle } from "../ingest/video/book.js";
-import { createVideoClient, estimateCost, openRouterPrices } from "../ingest/video/client.js";
-import { MAX_VIDEO_SECONDS } from "../ingest/video/transcript.js";
+import { CLIP_SECONDS, planClips } from "../ingest/video/clips.js";
+import { createVideoClient, estimateCost, LIMIT_TEXT, openRouterPrices, takesClips, tooLong as tooLongFor } from "../ingest/video/client.js";
 import { ensureYtDlp, readPlaylist, readVideo, ytDlpRunner } from "../ingest/video/ytdlp.js";
 import { formatLength, formatTime, parseYoutubeUrl, playlistUrl, videoUrl, type VideoFacts } from "../ingest/video/youtube.js";
 import { parseChapters } from "./chapters.js";
@@ -20,14 +20,13 @@ export interface VideoCommandArgs {
 
 const BIN_DIR = join("data", "bin");
 const TRANSCRIPTS_DIR = join("data", "web", "transcripts");
-const tooLong = (seconds: number | null) => seconds !== null && seconds > MAX_VIDEO_SECONDS;
-const LIMIT = `The tutor transcribes videos of up to ${MAX_VIDEO_SECONDS / 60} minutes, because a longer transcript does not fit into the answer of the model.`;
 
 // Download the transcript of a YouTube video or playlist into an EPUB file in data/web/.
 export async function fetchVideoCommand(args: VideoCommandArgs): Promise<void> {
   const target = parseYoutubeUrl(args.url);
   if (!target) throw new Error(`"${args.url}" is not the address of a YouTube video or playlist.`);
   const config = videoConfig();
+  const tooLong = (seconds: number | null) => tooLongFor(seconds, config);
   console.log(`\nVideo model: ${describeVideoModel(config)}`);
   const program = await ensureYtDlp({ dir: BIN_DIR, log: (line) => console.log(line) });
   const run = ytDlpRunner(program);
@@ -52,9 +51,16 @@ export async function fetchVideoCommand(args: VideoCommandArgs): Promise<void> {
         console.log(`\nThe video is ${ONE_CHAPTER_SECONDS / 60} minutes or shorter, so the book gets one chapter. The YouTube chapters become its sections.`);
       }
     } else {
-      console.log("The video has no YouTube chapters. The book gets one chapter, and the parser splits it by size.");
+      console.log(
+        video.duration > ONE_CHAPTER_SECONDS
+          ? `The video has no YouTube chapters. The book gets one chapter for each part of at most ${ONE_CHAPTER_SECONDS / 60} minutes.`
+          : "The video has no YouTube chapters. The book gets one chapter, and the parser splits it by size.",
+      );
     }
-    if (tooLong(video.duration)) throw new Error(`The video is ${formatLength(video.duration)} long. ${LIMIT}`);
+    if (tooLong(video.duration)) throw new Error(`The video is ${formatLength(video.duration)} long. ${LIMIT_TEXT}`);
+    if (takesClips(config) && video.duration > CLIP_SECONDS) {
+      console.log(`The video is longer than ${CLIP_SECONDS / 60} minutes, so the video model gets it in ${planClips(video.duration).length} clips.`);
+    }
     kind = "video";
     title = args.title ?? video.title;
     channel = video.channel;
@@ -70,7 +76,7 @@ export async function fetchVideoCommand(args: VideoCommandArgs): Promise<void> {
       console.log(`${String(i + 1).padStart(3)}  ${length.padStart(6)}  ${video.title}${tooLong(video.duration) ? "  (too long)" : ""}`);
     });
     const allowed = playlist.videos.flatMap((video, i) => (tooLong(video.duration) ? [] : [i + 1]));
-    if (allowed.length < playlist.videos.length) console.log(`\n${LIMIT}`);
+    if (allowed.length < playlist.videos.length) console.log(`\n${LIMIT_TEXT}`);
 
     let answer = args.chapters;
     if (answer === undefined && !args.yes) answer = await args.ask("\nVideos to download, for example 1-3,5 [all]: ");
@@ -78,14 +84,14 @@ export async function fetchVideoCommand(args: VideoCommandArgs): Promise<void> {
     const unknown = numbers.filter((number) => number > playlist.videos.length);
     if (unknown.length > 0) throw new Error(`The playlist has ${playlist.videos.length} videos. There is no video ${unknown.join(", ")}.`);
     const long = numbers.filter((number) => !allowed.includes(number));
-    if (long.length > 0) throw new Error(`Video ${long.join(", ")} is too long. ${LIMIT}`);
+    if (long.length > 0) throw new Error(`Video ${long.join(", ")} is too long. ${LIMIT_TEXT}`);
     if (numbers.length === 0) throw new Error("No video is selected.");
 
     console.log(`\nReading the facts of ${numbers.length} videos.`);
     videos = [];
     for (const number of numbers) {
       const video = await readVideo(run, playlist.videos[number - 1]!.id);
-      if (tooLong(video.duration)) throw new Error(`Video ${number}, "${video.title}", is ${formatLength(video.duration)} long. ${LIMIT}`);
+      if (tooLong(video.duration)) throw new Error(`Video ${number}, "${video.title}", is ${formatLength(video.duration)} long. ${LIMIT_TEXT}`);
       videos.push(video);
     }
     kind = "playlist";
@@ -108,7 +114,9 @@ export async function fetchVideoCommand(args: VideoCommandArgs): Promise<void> {
           : `No cost estimate: the model list of OpenRouter does not have "${config.model}".`,
       );
     } else {
-      console.log("No cost estimate for the Gemini API of Google. Its free tier allows 8 hours of YouTube video a day.");
+      console.log(
+        `No cost estimate for the Gemini API of Google. Its free tier allows 8 hours of YouTube video a day.${config.tier === "flex" ? " The tier Flex costs half of the tier Standard, but each request can wait some minutes in a queue." : ""}`,
+      );
     }
   }
 
@@ -134,6 +142,8 @@ export async function fetchVideoCommand(args: VideoCommandArgs): Promise<void> {
     source,
     videos,
     client: createVideoClient(config),
+    clips: takesClips(config),
+    tier: config.tier,
     model: describeVideoModel(config),
     cacheDir: TRANSCRIPTS_DIR,
     log: (line) => console.log(line),

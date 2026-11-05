@@ -181,24 +181,29 @@ The book has these parts:
 
 - One video of up to 30 minutes: the video is one chapter, and its YouTube chapters are its sections.
 - One longer video: each YouTube chapter is a chapter of the book.
+- One longer video with no YouTube chapters: each part of at most 30 minutes is a chapter, for example "Part 2 (30:00 to 1:00:00)".
 - A playlist: each video is a chapter, and the YouTube chapters of a video are its sections.
-- A video with no YouTube chapters is one chapter. The parser splits it into sections by size.
+- A video of up to 30 minutes with no YouTube chapters is one chapter. The parser splits it into sections by size.
 - Each paragraph starts with a link to its time in the video. In the app, "Read the section" shows the player at the paragraph of the quote. A click on a time link moves the player to that time.
 - Before each code block and each table, a note tells you that the tutor read it from the video. The model can make an error in the code. The lesson model sees the note and can correct a small error.
 
 The command checks each transcript. If a transcript stops early, or has a gap of more than 3 minutes, the command tries one more time. After a second bad transcript, it skips the video and shows the reason.
 
+With the Gemini API of Google (`VIDEO_PROVIDER=google`), a video of more than 45 minutes goes to the video model in clips. At most 3 clips go at the same time. Each clip also contains the first minute of the next clip. The command joins two clips at a sentence that both clips contain, so no text repeats. The command checks each clip, and tries a bad clip one more time. If a clip is still bad, the command skips the video, but it keeps the good clips in `data/web/transcripts/clips/`. A new download then asks only for the bad clip.
+
+With `VIDEO_TIER=flex`, the first request of each transcript uses the tier Flex of the Gemini API. Flex costs half of Standard, but each request waits some minutes in a queue at Google. If Google refuses a Flex request, or if it takes too long, the command sends the request again in the tier Standard.
+
 The command keeps each good transcript in `data/web/transcripts/`, one file for each video. A later download of the same video uses this file and costs nothing, for example in a larger playlist. To get a new transcript of a video, delete its file.
 
 Fetch options for YouTube:
 
-- `--chapters <list>`: for a playlist, download only these videos, for example `1-3` or `2,5`. The command does not ask which videos to download. For one video, this option does not apply, because each request contains the full video.
+- `--chapters <list>`: for a playlist, download only these videos, for example `1-3` or `2,5`. The command does not ask which videos to download. For one video, this option does not apply, because the command transcribes the full video.
 - `--title <text>`: the title of the book. The default is the title of the video or of the playlist. If you download only some videos of a playlist, the default title also contains these videos.
 - `--yes`: download all the videos without the questions, and replace an old EPUB file with the same name.
 
 The command cannot read these videos:
 
-- Videos longer than 90 minutes. The transcript of a longer video does not fit into the answer of the model. In a playlist, the command shows such a video as "too long".
+- Through OpenRouter, videos longer than 90 minutes. The transcript of a longer video does not fit into the answer of the model, and OpenRouter sends no clips. In a playlist, the command shows such a video as "too long". The Gemini API of Google has no length limit.
 - Private and unlisted videos. The video model reads only public videos.
 - Videos from other sites, and video files on your computer.
 

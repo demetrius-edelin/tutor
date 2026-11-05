@@ -47,7 +47,7 @@ describe("Settings in the app", () => {
 
   const get = async () => (await app.inject({ method: "GET", url: "/api/settings" })).json() as SettingsView;
   const save = (body: unknown) => app.inject({ method: "POST", url: "/api/settings", payload: body as object });
-  const values = { provider: "", model: "", reasoning: "", openrouterProviders: "", videoProvider: "", videoModel: "", keys: {} };
+  const values = { provider: "", model: "", reasoning: "", openrouterProviders: "", videoProvider: "", videoModel: "", videoTier: "", keys: {} };
 
   afterEach(async () => {
     await app.close();
@@ -98,6 +98,17 @@ describe("Settings in the app", () => {
     view = (await save({ ...values, videoProvider: "openrouter", videoModel: "google/gemini-3.8-flash", keys: { openrouter: "k" } })).json() as SettingsView;
     expect(view).toMatchObject({ videoModel: "openrouter google/gemini-3.8-flash", videoError: null });
     expect(view.modelError).toMatch(/LLM_PROVIDER/);
+  });
+
+  it("writes the tier of the Gemini API, and shows Flex in the video model", async () => {
+    start();
+    const google = { ...values, videoProvider: "google", videoModel: "gemini-3.8-flash", keys: { google: "gemini-key" } };
+    let view = (await save({ ...google, videoTier: "flex" })).json() as SettingsView;
+    expect(view).toMatchObject({ values: { videoTier: "flex" }, videoModel: "google gemini-3.8-flash, tier Flex" });
+    expect(readFileSync(join(dir, ".env"), "utf8")).toContain("VIDEO_TIER=flex\n");
+    view = (await save({ ...google, videoTier: "" })).json() as SettingsView;
+    expect(view).toMatchObject({ values: { videoTier: "standard" }, videoModel: "google gemini-3.8-flash" });
+    expect((await save({ ...google, videoTier: "batch" })).statusCode).toBe(400);
   });
 
   it("rejects values that are not valid, and writes nothing", async () => {

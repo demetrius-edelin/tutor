@@ -23,6 +23,7 @@ import { buildServer, type TutorServer } from "../src/server/app.js";
 import type { VideoAccess } from "../src/server/videos.js";
 import { FakeLlm } from "./fakes/llm.js";
 import { prose } from "./fakes/site.js";
+import { formatTime } from "../src/ingest/video/youtube.js";
 
 // The facts that the fake yt-dlp gives, in the JSON form of yt-dlp.
 const VIDEOS: Record<string, { title: string; duration: number; chapters?: { title: string; start_time: number; end_time: number }[] }> = {
@@ -96,7 +97,7 @@ function fakeClient(gateAt?: string) {
   return { client, calls, waiting, open: () => release() };
 }
 
-const CONFIG: VideoConfig = { provider: "openrouter", model: "google/gemini-test", apiKey: "key" };
+const CONFIG: VideoConfig = { provider: "openrouter", model: "google/gemini-test", apiKey: "key", tier: "standard" };
 const PRICES = { input: 0.0000003, output: 0.0000025 };
 
 let db: Db;
@@ -150,6 +151,7 @@ describe("Find a YouTube video or playlist", () => {
       model: "openrouter google/gemini-test",
       modelError: null,
       maxSeconds: 5400,
+      clipSeconds: null,
       oneChapterSeconds: 1800,
       costNote: null,
     });
@@ -171,11 +173,13 @@ describe("Find a YouTube video or playlist", () => {
     expect(started).toEqual({ status: 503, body: { error: "No video model is selected." } });
   });
 
-  it("gives no cost for the Gemini API of Google, and the message of yt-dlp for a video that it cannot read", async () => {
-    start({ config: { ...CONFIG, provider: "google", model: "gemini-test" } });
+  it("gives no cost and no length limit for the Gemini API of Google, and the message of yt-dlp for a video that it cannot read", async () => {
+    start({ config: { ...CONFIG, provider: "google", model: "gemini-test", tier: "flex" } });
     expect(await findVideo("https://youtu.be/bbbbbbbbbbb")).toMatchObject({
       dollarsPerSecond: null,
-      costNote: "No cost estimate for the Gemini API of Google. Its free tier allows 8 hours of YouTube video a day.",
+      costNote: "No cost estimate for the Gemini API of Google. Its free tier allows 8 hours of YouTube video a day. The tier Flex costs half of the tier Standard.",
+      maxSeconds: null,
+      clipSeconds: 2700,
     });
     const missing = await post("/api/fetch/toc", { url: "https://youtu.be/zzzzzzzzzzz" });
     expect(missing.status).toBe(502);
@@ -222,6 +226,43 @@ describe("Download the transcript of a video", () => {
     const bad = { ...video, videos: [{ ...video.videos[0]!, id: "../../../x" }] };
     expect((await post("/api/subjects/videos/fetch", { video: bad })).body.error).toBe("The facts of the video are not valid. Find the video again.");
     expect((await post("/api/subjects/videos/fetch", { video: { title: "No id" } })).status).toBe(400);
+  });
+});
+
+describe("Download a long video through the Gemini API", () => {
+  it("accepts a video of more than 90 minutes, and sends it in clips with the tier of the settings", async () => {
+    const calls: TranscribeRequest[] = [];
+    const client: VideoClient = {
+      async transcribe(request) {
+        calls.push(request);
+        const clip = request.clip!;
+        const text = Array.from({ length: Math.ceil((clip.end - clip.start) / 60) }, (_, i) => clip.start + i * 60)
+          .map((t) => `[${formatTime(t)}] Minute ${t / 60} starts here. ${prose(`m${t}x`, 30)}.`)
+          .join("\n\n");
+        return { text, finishReason: "stop", inputTokens: 1000, outputTokens: 100, cost: null, tier: "flex" };
+      },
+    };
+    start({ config: { ...CONFIG, provider: "google", model: "gemini-test", tier: "flex" }, client: () => client });
+    await post("/api/subjects", { name: "Videos" });
+    const video = await findVideo("https://www.youtube.com/watch?v=ccccccccccc");
+    const started = await post<FetchStartView>("/api/subjects/videos/fetch", { video });
+    expect(started.status).toBe(200);
+    await app.idle();
+    const run = (await get<IngestView>(`/api/ingests/${started.body.run!.id}`)).body;
+    expect(run).toMatchObject({ status: "done", error: null, download: { videos: 1, requests: 3, skipped: [] } });
+    expect(calls.map((call) => [call.clip, call.tier])).toEqual([
+      [{ start: 0, end: 2060 }, "flex"],
+      [{ start: 2000, end: 4060 }, "flex"],
+      [{ start: 4000, end: 6000 }, "flex"],
+    ]);
+    // The video has no YouTube chapters, so each part of at most 30 minutes is a chapter.
+    const book = (await get<BookView>("/api/subjects/videos/books/three")).body;
+    expect(book.chapters.map((chapter) => chapter.title)).toEqual([
+      "Part 1 (0:00 to 25:00)",
+      "Part 2 (25:00 to 50:00)",
+      "Part 3 (50:00 to 1:15:00)",
+      "Part 4 (1:15:00 to 1:40:00)",
+    ]);
   });
 });
 

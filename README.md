@@ -204,6 +204,12 @@ VIDEO_MODEL=gemini-3.8-flash
 GEMINI_API_KEY=
 ```
 
+The two paths have these differences:
+
+- Through OpenRouter, a video can be 90 minutes long at most. A longer transcript does not fit into the answer of the model.
+- The Gemini API of Google has no length limit. It sends a video of more than 45 minutes in clips of equal length, at most 3 at the same time. Each clip also contains the first minute of the next clip, and the tutor joins the clips at a sentence that both clips contain.
+- The Gemini API of Google has the tier Flex. Flex costs half of Standard, but each request waits some minutes in a queue at Google. To use it, select the tier on the Settings page, or set `VIDEO_TIER=flex`. If Google refuses a Flex request, or if it takes too long, the tutor sends the request again in the tier Standard.
+
 ### Cost
 
 The tutor uses your API key, so your provider charges you for each request.
@@ -212,7 +218,7 @@ The tutor uses your API key, so your provider charges you for each request.
 - The tutor keeps the model results of each chapter and each image in a cache. A later run does not pay again for the chapters in the cache.
 - In the app, the diagnosis, the lessons, the questions about a lesson, and the tests use the model.
 - A high reasoning level makes each request slower.
-- A YouTube video costs one request of the video model. With Gemini 3.8 Flash on OpenRouter, a 12-minute video cost $0.07, so one hour costs about $0.37. Google doubles the price of this model on January 1, 2027. The tutor keeps each transcript, so you pay for a video only one time.
+- A YouTube video costs one request of the video model. A long video through the Gemini API costs one request for each clip. With Gemini 3.8 Flash on OpenRouter, a 12-minute video cost $0.07, so one hour costs about $0.37. Google doubles the price of this model on January 1, 2027. The tutor keeps each transcript, so you pay for a video only one time.
 - With a Gemini key, YouTube videos are free now, because Google offers them as a preview. The free tier allows 8 hours of video a day. Google can end the preview at any time.
 
 ### Port
@@ -249,10 +255,10 @@ See [Add an online book](docs/usage.md#add-an-online-book).
 
 - On the subject screen, click "Add an online book or video" and type the address of a video or of a playlist.
 - The tutor does not download the video. It sends the address to a video model, which hears the speech and sees the screen. Thus, the transcript also contains the code, the commands, and the tables on the screen.
-- A video of up to 30 minutes becomes one chapter, and its YouTube chapters become its sections. For a longer video, each YouTube chapter becomes a chapter. For a playlist, each video becomes a chapter, and you select the videos.
+- A video of up to 30 minutes becomes one chapter, and its YouTube chapters become its sections. For a longer video, each YouTube chapter becomes a chapter. A longer video with no YouTube chapters gets one chapter for each part of at most 30 minutes. For a playlist, each video becomes a chapter, and you select the videos.
 - You watch the video in the app, at the point of each reference. "Read the section" shows the player at the paragraph of the quote, and the concept map and the lessons have "Watch from 4:05".
 - The tutor keeps each transcript, so you pay for a video only one time. See [Cost](#cost).
-- A video can be 90 minutes long at most. The video model reads only public videos.
+- Through OpenRouter, a video can be 90 minutes long at most. The Gemini API of Google has no limit, because it sends a long video in clips. See [Which video model to use](#which-video-model-to-use). The video model reads only public videos.
 
 See [Add a YouTube video or playlist](docs/usage.md#add-a-youtube-video-or-playlist).
 

@@ -360,10 +360,12 @@ function costText(video: VideoToc, entries: VideoToc["videos"]): string {
 }
 
 // One video with its YouTube chapters, or the videos of a playlist with checkboxes. One video has no selection,
-// because each request contains the full video. A video longer than the limit has no checkbox.
+// because the tutor transcribes the full video. A video longer than the limit has no checkbox. The Gemini API of Google
+// has no limit, because it takes a long video in clips.
 function Videos({ slug, video }: { slug: string; video: VideoToc }) {
   const playlist = video.kind === "playlist";
-  const tooLong = (entry: VideoToc["videos"][number]) => entry.duration !== null && entry.duration > video.maxSeconds;
+  const max = video.maxSeconds;
+  const tooLong = (entry: VideoToc["videos"][number]) => entry.duration !== null && max !== null && entry.duration > max;
   const allowed = video.videos.flatMap((entry, i) => (tooLong(entry) ? [] : [i + 1]));
   const [selected, setSelected] = useState<number[]>(playlist ? allowed : [1]);
   const download = useDownload(slug);
@@ -376,7 +378,10 @@ function Videos({ slug, video }: { slug: string; video: VideoToc }) {
   const entries = selected.map((number) => video.videos[number - 1]!);
   const length = entries.reduce((total, entry) => total + (entry.duration ?? 0), 0);
   const one = video.videos[0]!;
-  const limit = `The tutor transcribes videos of up to ${formatLength(video.maxSeconds)}.`;
+  const limit =
+    max === null
+      ? ""
+      : `Through OpenRouter, the tutor transcribes videos of up to ${formatLength(max)}. The Gemini API of Google transcribes a longer video in clips. To use it, select the video provider Google Gemini API on the Settings page.`;
   // With no video model, or for one video that is too long, the page shows no "Download" button.
   const possible = video.model !== null && (playlist || !tooLong(one));
 
@@ -392,7 +397,10 @@ function Videos({ slug, video }: { slug: string; video: VideoToc }) {
         {playlist
           ? `A YouTube playlist of ${video.channel} with ${plural(video.videos.length, "video")}. Each video becomes a chapter of the book.`
           : `A YouTube video of ${video.channel}, ${formatLength(one.duration ?? 0)} long.`}{" "}
-        The video model writes the transcript, with the code on the screen. Each request contains one full video.
+        The video model writes the transcript, with the code on the screen.{" "}
+        {video.clipSeconds === null
+          ? "Each request contains one full video."
+          : `A video of up to ${formatLength(video.clipSeconds)} goes to the video model in one request. A longer video goes in clips of equal length, at most 3 at the same time.`}
       </p>
       {video.playlist && (
         <p className="run-note">
@@ -428,7 +436,11 @@ function Videos({ slug, video }: { slug: string; video: VideoToc }) {
             </table>
           </div>
         ) : (
-          <p className="section-intro">The video has no YouTube chapters. The book gets one chapter, and the tutor splits it into sections by size.</p>
+          <p className="section-intro">
+            {(one.duration ?? 0) > video.oneChapterSeconds
+              ? `The video has no YouTube chapters. The book gets one chapter for each part of at most ${formatLength(video.oneChapterSeconds)}.`
+              : "The video has no YouTube chapters. The book gets one chapter, and the tutor splits it into sections by size."}
+          </p>
         ))}
 
       {playlist && (
@@ -471,7 +483,7 @@ function Videos({ slug, video }: { slug: string; video: VideoToc }) {
               </tbody>
             </table>
           </div>
-          {allowed.length < video.videos.length && <p className="quiet small">{limit} A longer transcript does not fit into the answer of the model.</p>}
+          {allowed.length < video.videos.length && <p className="quiet small">{limit}</p>}
         </>
       )}
 

@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ConfigError, loadEnvFile, modelConfig, videoConfig } from "../src/config.js";
+import { ConfigError, describeVideoModel, loadEnvFile, modelConfig, videoConfig } from "../src/config.js";
 
 describe("modelConfig", () => {
   it("reads the provider, the model, and the key of the provider", () => {
@@ -51,8 +51,19 @@ describe("videoConfig", () => {
       provider: "openrouter",
       model: "google/gemini-3.8-flash",
       apiKey: "key-1",
+      tier: "standard",
     });
     expect(videoConfig({ VIDEO_PROVIDER: "google", VIDEO_MODEL: "gemini-3.8-flash", GEMINI_API_KEY: "key-2" }).apiKey).toBe("key-2");
+  });
+
+  it("reads the tier Flex only for the Gemini API of Google, and refuses another tier", () => {
+    const google = { VIDEO_PROVIDER: "google", VIDEO_MODEL: "gemini-3.8-flash", GEMINI_API_KEY: "key" };
+    expect(videoConfig(google).tier).toBe("standard");
+    expect(videoConfig({ ...google, VIDEO_TIER: "Flex" }).tier).toBe("flex");
+    expect(describeVideoModel(videoConfig({ ...google, VIDEO_TIER: "flex" }))).toBe("google gemini-3.8-flash, tier Flex");
+    // OpenRouter sends no tier.
+    expect(videoConfig({ VIDEO_PROVIDER: "openrouter", VIDEO_MODEL: "google/gemini-3.8-flash", OPENROUTER_API_KEY: "k", VIDEO_TIER: "flex" }).tier).toBe("standard");
+    expect(() => videoConfig({ ...google, VIDEO_TIER: "batch" })).toThrow('VIDEO_TIER "batch" is not valid. Use standard or flex.');
   });
 
   it("has no default video model, and needs the key of the video provider", () => {

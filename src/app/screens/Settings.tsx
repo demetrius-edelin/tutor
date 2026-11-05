@@ -176,7 +176,8 @@ function SettingsForm({ initial }: { initial: SettingsView }) {
         <h2>Video model</h2>
         <p className="quiet">
           Only YouTube videos need a video model. It must be a Gemini model, because only Gemini models read YouTube videos. One OpenRouter key or
-          one Gemini key serves the model and the video model.
+          one Gemini key serves the model and the video model. Through OpenRouter, the tutor transcribes videos of up to 90 minutes. The Gemini API
+          of Google transcribes a longer video in clips.
         </p>
         <Field
           id="video-provider"
@@ -205,6 +206,18 @@ function SettingsForm({ initial }: { initial: SettingsView }) {
             <Field id="video-model" label="Video model name" note={videoProvider.modelNote}>
               <input id="video-model" type="text" spellCheck={false} autoComplete="off" value={values.videoModel} onChange={update("videoModel")} />
             </Field>
+            {videoProvider.id === "google" && (
+              <Field
+                id="video-tier"
+                label="Tier"
+                note="Flex costs half of Standard, but each request waits some minutes in a queue at Google. If Google refuses a Flex request, or if it takes too long, the tutor sends the request again in the tier Standard."
+              >
+                <select id="video-tier" value={values.videoTier || "standard"} onChange={update("videoTier")}>
+                  <option value="standard">Standard</option>
+                  <option value="flex">Flex: half the price, slower</option>
+                </select>
+              </Field>
+            )}
           </>
         )}
 

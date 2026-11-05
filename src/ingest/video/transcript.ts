@@ -16,7 +16,8 @@ const MAX_GAP = 180;
 // The model writes about 550 output tokens for each minute of video, more for code on the screen.
 const TOKENS_PER_MINUTE = 700;
 export const MAX_OUTPUT_TOKENS = 65_536;
-// A longer video does not fit into the output limit of the model.
+// The longest video in one request. A longer transcript does not fit into the output limit of the model. The Gemini
+// API of Google takes a longer video in clips (clips.ts). OpenRouter sends no clips, so this limit applies to it.
 export const MAX_VIDEO_SECONDS = 90 * 60;
 
 export const CODE_NOTE = "_The tutor read this code from the video:_";
@@ -38,8 +39,15 @@ Rules:
 - Write only the transcript. No introduction and no notes at the end.`;
 }
 
-const TIME = /^\[(?:(\d+):)?(\d+):(\d{2})\]\s*/;
-const FENCE = /^\s*(```|~~~)/;
+// The time at the start of a paragraph line, for example "[4:05]" or "[1:04:05]". After one hour, the model can also
+// write "[84:10]".
+export const TIME = /^\[(?:(\d+):)?(\d+):(\d{2})\]\s*/;
+export const FENCE = /^\s*(```|~~~)/;
+
+// The seconds of a match of TIME.
+export function secondsOf(match: RegExpExecArray): number {
+  return Number(match[1] ?? 0) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+}
 
 // Split the answer of the model into paragraphs at the lines that start with a time, for example "[4:05]".
 // A heading line goes. Text before the first time belongs to a paragraph at 0:00.
@@ -55,8 +63,7 @@ export function parseTranscript(text: string): TranscriptParagraph[] {
     }
     const time = TIME.exec(line);
     if (time) {
-      const start = Number(time[1] ?? 0) * 3600 + Number(time[2]) * 60 + Number(time[3]);
-      paragraphs.push({ start, lines: [line.slice(time[0].length)] });
+      paragraphs.push({ start: secondsOf(time), lines: [line.slice(time[0].length)] });
       continue;
     }
     if (/^#{1,6}\s/.test(line)) continue;

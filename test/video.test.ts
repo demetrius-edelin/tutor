@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { VideoConfig } from "../src/config.js";
 import { parseBook } from "../src/ingest/parse.js";
-import { fetchVideos, playlistBookTitle, splitByParts } from "../src/ingest/video/book.js";
+import { fetchVideos, playlistBookTitle, splitByParts, timeParts } from "../src/ingest/video/book.js";
 import {
   estimateCost,
   GEMINI_INTERACTIONS_URL,
@@ -424,6 +424,132 @@ let lucky: number = 23;
     expect(result.cost).toBeNull();
   });
 
+  // A transcript of the part of a video from `start` to `end`, with a paragraph each minute. The text of a paragraph
+  // depends only on its time, so two clips agree in their overlap.
+  const minutes = (start: number, end: number) =>
+    Array.from({ length: Math.ceil((end - start) / 60) }, (_, i) => start + i * 60)
+      .map((t) => `[${formatTime(t)}] Minute ${t / 60} starts here. ${prose(`m${t}x`, 30)}.`)
+      .join("\n\n");
+  // A fake Gemini API that answers each clip with its own transcript. `answer` can change the answer of one call.
+  function clipClient(answer?: (request: TranscribeRequest, call: number) => (Partial<TranscribeResult> & { text: string }) | Error | null) {
+    const calls: TranscribeRequest[] = [];
+    const client: VideoClient = {
+      async transcribe(request) {
+        calls.push(request);
+        const special = answer?.(request, calls.length);
+        if (special instanceof Error) throw special;
+        const base = { finishReason: "stop", inputTokens: 1000, outputTokens: 100, cost: null, tier: request.tier ?? "standard" };
+        if (special) return { ...base, ...special };
+        const clip = request.clip ?? { start: 0, end: request.url.endsWith("ccccccccccc") ? 7200 : 600 };
+        return { ...base, text: minutes(clip.start, clip.end) };
+      },
+    };
+    return { client, calls };
+  }
+  const lecture = video("ccccccccccc", "Lecture", 7200);
+  const lectureOptions = (cacheDir: string, client: VideoClient, lines: string[] = []) => ({
+    kind: "video" as const,
+    title: "Lecture",
+    channel: "T",
+    source: "s",
+    videos: [lecture],
+    client,
+    clips: true,
+    model: "google gemini-test",
+    cacheDir,
+    log: (line: string) => lines.push(line),
+  });
+
+  it("sends a long video in clips, joins the clips, and makes a chapter for each time part", async () => {
+    const cacheDir = tempDir();
+    const { client, calls } = clipClient();
+    const lines: string[] = [];
+    const progress: string[] = [];
+    const result = await fetchVideos({ ...lectureOptions(cacheDir, client, lines), progress: (step) => progress.push(step.text) });
+    expect(calls.map((call) => call.clip)).toEqual([
+      { start: 0, end: 2460 },
+      { start: 2400, end: 4860 },
+      { start: 4800, end: 7200 },
+    ]);
+    expect(calls[0]!.prompt).toContain("The video is 41:00 long.");
+    expect(calls[0]!.maxTokens).toBe(maxTokensFor(2460));
+    expect(result).toMatchObject({ videos: 1, requests: 3, skipped: [] });
+    expect(lines).toContain(`  3 clips of about ${formatLength(2400)}, at most 3 at the same time.`);
+    expect(lines).toContain("  The join of clips 1 and 2 is at 40:00.");
+    expect(progress).toContain('Transcribing video 1 of 1, "Lecture": 3 of 3 clips are ready.');
+
+    // The video has no YouTube chapters, so each part of at most 30 minutes is a chapter.
+    const book = await parseBook(result.epub, "lecture.epub");
+    expect(book.chapters.map((chapter) => chapter.title)).toEqual([
+      "Part 1 (0:00 to 30:00)",
+      "Part 2 (30:00 to 1:00:00)",
+      "Part 3 (1:00:00 to 1:30:00)",
+      "Part 4 (1:30:00 to 2:00:00)",
+    ]);
+    // The overlaps do not repeat: each minute is in the book one time.
+    const text = book.chapters.flatMap((chapter) => chapter.sections.map((section) => section.markdown)).join("\n");
+    for (const minute of [0, 40, 41, 80, 81, 119]) expect(text.split(`Minute ${minute} starts here.`)).toHaveLength(2);
+
+    // The cache keeps the full transcript, and the clips go.
+    expect(existsSync(join(cacheDir, "ccccccccccc.json"))).toBe(true);
+    expect(existsSync(join(cacheDir, "clips", "ccccccccccc"))).toBe(false);
+  });
+
+  it("keeps the finished clips after a clip that fails two times, and the next run asks only for that clip", async () => {
+    const cacheDir = tempDir();
+    const broken = clipClient((request) => (request.clip?.start === 2400 ? { text: "[40:00] Only the start." } : null));
+    const short = video("aaaaaaaaaaa", "Short", 600);
+    const failed = await fetchVideos({ ...lectureOptions(cacheDir, broken.client), kind: "playlist", videos: [lecture, short] });
+    // Three clips, a second try of clip 2, and the short video.
+    expect(broken.calls).toHaveLength(5);
+    expect(failed.skipped).toEqual([
+      {
+        url: "https://www.youtube.com/watch?v=ccccccccccc",
+        reason: "clip 2 of 3 (40:00 to 1:21:00): the transcript stops at 0:00, but the video is 41:00 long",
+      },
+    ]);
+    expect(existsSync(join(cacheDir, "clips", "ccccccccccc", "0-2460.json"))).toBe(true);
+    expect(existsSync(join(cacheDir, "clips", "ccccccccccc", "4800-7200.json"))).toBe(true);
+
+    const good = clipClient();
+    const lines: string[] = [];
+    const result = await fetchVideos(lectureOptions(cacheDir, good.client, lines));
+    expect(good.calls.map((call) => call.clip)).toEqual([{ start: 2400, end: 4860 }]);
+    expect(result).toMatchObject({ videos: 1, requests: 1 });
+    expect(lines).toContain("  Clip 1 of 3 (0:00 to 41:00): From the cache.");
+    expect(existsSync(join(cacheDir, "clips", "ccccccccccc"))).toBe(false);
+  });
+
+  it("sends a long video in one request if the video model takes no clips", async () => {
+    const { client, calls } = clipClient();
+    await fetchVideos({ ...lectureOptions(tempDir(), client), clips: false });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.clip).toBeUndefined();
+  });
+
+  it("sends the first request in the tier Flex, and again in the tier Standard after a failure", async () => {
+    const short = video("aaaaaaaaaaa", "Short", 600);
+    const { client, calls } = clipClient((request) => (request.tier === "flex" ? new LlmError("google has no capacity now.") : { text: minutes(0, 600) }));
+    const lines: string[] = [];
+    const result = await fetchVideos({ ...lectureOptions(tempDir(), client, lines), videos: [short], tier: "flex" });
+    expect(calls.map((call) => [call.tier, call.timeoutMs])).toEqual([
+      ["flex", 8 * 60_000 + 10 * 8000],
+      [undefined, undefined],
+    ]);
+    expect(result).toMatchObject({ videos: 1, requests: 2 });
+    expect(lines).toContain("  The Flex request failed: google has no capacity now. Trying the tier Standard.");
+
+    // After a transcript that is not complete, the second try uses Standard.
+    const cut = clipClient((request, call) => (call === 1 ? { text: "[0:00] Cut.", tier: "flex" } : { text: minutes(0, 600) }));
+    await fetchVideos({ ...lectureOptions(tempDir(), cut.client), videos: [short], tier: "flex" });
+    expect(cut.calls.map((call) => call.tier)).toEqual(["flex", undefined]);
+  });
+
+  it("makes equal time parts of at most 30 minutes", () => {
+    expect(timeParts(1800)).toEqual([{ title: "Part 1 (0:00 to 30:00)", start: 0, end: 1800 }]);
+    expect(timeParts(2400).map((part) => part.title)).toEqual(["Part 1 (0:00 to 20:00)", "Part 2 (20:00 to 40:00)"]);
+  });
+
   it("puts each paragraph into the part that holds the larger share of its time", () => {
     const parts = [
       { title: "A", start: 10, end: 60 },
@@ -465,7 +591,7 @@ describe("video clients", () => {
         },
       },
     };
-    const config: VideoConfig = { provider: "openrouter", model: "google/gemini-3.8-flash", apiKey: "key" };
+    const config: VideoConfig = { provider: "openrouter", model: "google/gemini-3.8-flash", apiKey: "key", tier: "standard" };
     const client = new OpenRouterVideoClient(config, sdk as unknown as ConstructorParameters<typeof OpenRouterVideoClient>[1]);
     const result = await client.transcribe(request);
     expect(params).toMatchObject({
@@ -493,7 +619,7 @@ describe("video clients", () => {
     };
     return { calls, fetcher: fetcher as typeof fetch };
   };
-  const config: VideoConfig = { provider: "google", model: "gemini-3.8-flash", apiKey: "gemini-key" };
+  const config: VideoConfig = { provider: "google", model: "gemini-3.8-flash", apiKey: "gemini-key", tier: "standard" };
 
   it("sends the YouTube address to the Interactions API of Gemini in a video part", async () => {
     const { calls, fetcher } = gemini(200, {
@@ -511,12 +637,43 @@ describe("video clients", () => {
       model: "gemini-3.8-flash",
       input: [
         { type: "text", text: "Write a transcript." },
-        { type: "video", uri: request.url, processing: "static" },
+        { type: "video", uri: request.url, processing: { type: "static" } },
       ],
       generation_config: { max_output_tokens: 8000, thinking_level: "low" },
       store: false,
     });
-    expect(result).toEqual({ text: "[0:00] Hello there.", finishReason: "stop", inputTokens: 70000, outputTokens: 6100, cost: null });
+    expect(result).toEqual({ text: "[0:00] Hello there.", finishReason: "stop", inputTokens: 70000, outputTokens: 6100, cost: null, tier: "standard" });
+  });
+
+  it("sends the clip offsets as strings and the tier Flex, and tells the tier that served the request", async () => {
+    const { calls, fetcher } = gemini(200, { status: "completed", service_tier: "flex", steps: [{ type: "model_output", content: [{ type: "text", text: "[40:00] Hi." }] }] });
+    const result = await new GeminiVideoClient(config, fetcher).transcribe({ ...request, clip: { start: 2400, end: 4860 }, tier: "flex", timeoutMs: 600_000 });
+    const body = JSON.parse(String(calls[0]!.init.body)) as Record<string, unknown>;
+    expect(body.input).toContainEqual({ type: "video", uri: request.url, processing: { type: "static", start_offset: "2400s", end_offset: "4860s" } });
+    expect(body.service_tier).toBe("flex");
+    expect(result.tier).toBe("flex");
+  });
+
+  it("reads an error in an array, as Google sends it for a key that is not valid", async () => {
+    const invalid = gemini(400, [{ error: { code: 400, message: "API key not valid. Please pass a valid API key.", status: "INVALID_ARGUMENT" } }]);
+    await expect(new GeminiVideoClient(config, invalid.fetcher).transcribe(request)).rejects.toThrow(/did not accept the API key/);
+  });
+
+  it("gives a clear error when the Gemini API gives no answer in the time limit", async () => {
+    const slow = (async (_url: string | URL | Request, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
+      })) as typeof fetch;
+    const error = await new GeminiVideoClient(config, slow).transcribe({ ...request, timeoutMs: 20 }).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(LlmError);
+    expect((error as Error).message).toBe("The Gemini API gave no answer in 0 minutes.");
+  });
+
+  it("refuses a clip through OpenRouter, because OpenRouter sends no clip offsets", async () => {
+    const sdk = { chat: { completions: { create: async () => ({}) } } };
+    const openrouter: VideoConfig = { provider: "openrouter", model: "google/gemini-3.8-flash", apiKey: "key", tier: "standard" };
+    const client = new OpenRouterVideoClient(openrouter, sdk as unknown as ConstructorParameters<typeof OpenRouterVideoClient>[1]);
+    await expect(client.transcribe({ ...request, clip: { start: 0, end: 600 } })).rejects.toThrow(/OpenRouter sends no clip offsets/);
   });
 
   it("gives the finish reason length for an incomplete answer, and a clear error for a limit", async () => {

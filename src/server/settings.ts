@@ -10,6 +10,7 @@ import {
   PROVIDERS,
   REASONING_LEVELS,
   VIDEO_PROVIDERS,
+  VIDEO_TIERS,
   videoConfig,
   type VideoConfig,
 } from "../config.js";
@@ -73,6 +74,7 @@ export function settingsView(file: string, env: NodeJS.ProcessEnv, models: Omit<
       openrouterProviders: value("OPENROUTER_PROVIDERS"),
       videoProvider,
       videoModel: value("VIDEO_MODEL"),
+      videoTier: value("VIDEO_TIER").toLowerCase() || "standard",
     },
     keys: Object.fromEntries(PROVIDERS.map((provider) => [provider, keyEnd(value(KEY_NAMES[provider]))])),
     model: models.modelName,
@@ -118,6 +120,7 @@ export function saveSettings(file: string, exampleFile: string | undefined, body
     OPENROUTER_PROVIDERS: text({ providers }, "providers", "list of OpenRouter providers"),
     VIDEO_PROVIDER: choice(input, "videoProvider", "video provider", VIDEO_PROVIDERS),
     VIDEO_MODEL: text(input, "videoModel", "video model name"),
+    VIDEO_TIER: choice(input, "videoTier", "tier of the Gemini API", VIDEO_TIERS),
   };
   const keys = input.keys ?? {};
   if (typeof keys !== "object" || keys === null || Array.isArray(keys)) throw new TutorError("The API keys must be an object.");

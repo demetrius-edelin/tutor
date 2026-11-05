@@ -89,14 +89,20 @@ export const VIDEO_KEY_NAMES: Record<VideoProvider, string> = {
   google: "GEMINI_API_KEY",
 };
 
+// The tiers of the Gemini API. Flex costs half of Standard, but a request waits some minutes in a queue. Only the
+// Gemini API of Google has the tiers. OpenRouter always uses Standard.
+export const VIDEO_TIERS = ["standard", "flex"] as const;
+export type VideoTier = (typeof VIDEO_TIERS)[number];
+
 export interface VideoConfig {
   provider: VideoProvider;
   model: string;
   apiKey: string;
+  tier: VideoTier;
 }
 
 export function describeVideoModel(config: VideoConfig): string {
-  return `${config.provider} ${config.model}`;
+  return `${config.provider} ${config.model}${config.tier === "flex" ? ", tier Flex" : ""}`;
 }
 
 // The video model that the user selected in .env. The tutor has no default video model.
@@ -117,5 +123,10 @@ export function videoConfig(env: NodeJS.ProcessEnv = process.env): VideoConfig {
   if (!apiKey) {
     throw new ConfigError(`The video provider "${provider}" needs an API key. On the Settings page, type the key, or set ${keyName} in .env.`);
   }
-  return { provider: provider as VideoProvider, model, apiKey };
+  const tier = (env.VIDEO_TIER ?? "").trim().toLowerCase() || "standard";
+  if (!(VIDEO_TIERS as readonly string[]).includes(tier)) {
+    throw new ConfigError(`VIDEO_TIER "${tier}" is not valid. Use standard or flex.`);
+  }
+  // OpenRouter sends no tier to Gemini.
+  return { provider: provider as VideoProvider, model, apiKey, tier: provider === "google" ? (tier as VideoTier) : "standard" };
 }

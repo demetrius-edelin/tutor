@@ -128,16 +128,16 @@ First, set the video model on the Settings page. The video model must be a Gemin
 
 At the first use, the tutor downloads the yt-dlp program into `data/bin/`, so you install nothing. yt-dlp reads the facts of the video: the title, the channel, the length, and the YouTube chapters.
 
-For one video, the page shows its YouTube chapters. A video of up to 30 minutes becomes one chapter, and its YouTube chapters become its sections. For a longer video, each YouTube chapter becomes a chapter of the book. You cannot select the chapters of one video, because each request contains the full video.
+For one video, the page shows its YouTube chapters. A video of up to 30 minutes becomes one chapter, and its YouTube chapters become its sections. For a longer video, each YouTube chapter becomes a chapter of the book. A longer video with no YouTube chapters gets one chapter for each part of at most 30 minutes. You cannot select the chapters of one video, because the tutor transcribes the full video.
 
-For a playlist, the page shows its videos with their lengths. Each video becomes a chapter of the book, and its YouTube chapters become its sections. All the videos start selected. A video longer than 90 minutes shows "Too long" and has no checkbox. "In the cache" marks a video with a transcript from an earlier download. Such a video costs nothing.
+For a playlist, the page shows its videos with their lengths. Each video becomes a chapter of the book, and its YouTube chapters become its sections. All the videos start selected. Through OpenRouter, a video longer than 90 minutes shows "Too long" and has no checkbox. The Gemini API of Google has no length limit. "In the cache" marks a video with a transcript from an earlier download. Such a video costs nothing.
 
 4. For a playlist, clear the checkboxes of the videos that you do not want.
 5. Click "Download".
 
 The bar at the bottom of the page shows the total length. For OpenRouter, it also shows the estimated cost. If the settings have no video model, the bar shows the message about the video model, and the page has no "Download" button.
 
-The book page shows the progress. Each video is one request to the video model, and a long video can take some minutes. "Stop" ends the download after the current video. The finished transcripts stay in the cache, so a new download does not pay for them again. A stopped download writes no EPUB file.
+The book page shows the progress. Each video is one request to the video model, and a long video can take some minutes. With the Gemini API of Google, a video of more than 45 minutes goes to the video model in clips. At most 3 clips go at the same time. The progress then shows the clips that are ready. With the tier Flex, each request waits some minutes in a queue at Google. "Stop" ends the download after the current video. The finished transcripts stay in the cache, so a new download does not pay for them again. A stopped download writes no EPUB file.
 
 After the download, the book page shows the chapters, as for a book file. Above the chapters, the page shows the number of videos, the words, the requests, and the cost. "Videos with no transcript" lists the videos that the tutor skipped, with the reason. For example, the tutor skips a video after two transcripts that stop early.
 

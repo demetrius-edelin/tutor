@@ -120,8 +120,11 @@ export interface VideoToc {
   videos: VideoEntry[];
   // The YouTube chapters of one video. A playlist and a video with no chapters have none.
   chapters: { title: string; start: number }[];
-  // The longest video that the tutor can transcribe, in seconds.
-  maxSeconds: number;
+  // The longest video that the tutor can transcribe, in seconds, or null for no limit. The Gemini API of Google takes a
+  // long video in clips, so it has no limit.
+  maxSeconds: number | null;
+  // A longer video goes to the video model in clips, or null if the video model takes no clips.
+  clipSeconds: number | null;
   // The longest video that becomes one chapter. Its YouTube chapters become sections.
   oneChapterSeconds: number;
   // The video model from .env, or the reason that there is no video model.
@@ -497,6 +500,8 @@ export interface SettingsValues {
   openrouterProviders: string;
   videoProvider: string;
   videoModel: string;
+  // "standard" or "flex". Only the Gemini API of Google uses it.
+  videoTier: string;
 }
 
 export interface SettingsView {
