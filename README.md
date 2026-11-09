@@ -1,6 +1,8 @@
 # <img src="src/app/public/logo.svg" alt="" height="32"> Tutor: a personal teacher for your books, online documentation, and YouTube videos
 
-> See also my other project, [Tapas Habit & Goal Tracker](https://tapastracker.app), a full-featured habit tracker for iPhone and Android. Also, **I am looking for a full-time role** as an AI/software developer. Contact me on [LinkedIn](https://www.linkedin.com/in/demetrius-edelin/).
+> **New: Concept Tutor, the mobile version of Tutor.** It is now on the App Store for iPhone, and the Android app comes soon. See [tutor.demetriusedelin.com](https://tutor.demetriusedelin.com/).
+>
+> See also my other project, [Tapas Habit & Goal Tracker](https://tapastracker.app), a full-featured habit tracker for iPhone and Android.
 
 A personal tutor that teaches you all the concepts from your books, from online documentation, and from YouTube videos. You make a subject of study, for example "SQL", and add the material that you want to learn from:
 
@@ -361,3 +363,7 @@ Before you send a pull request, do these steps:
 ## License
 
 [MIT](LICENSE)
+
+## Work with me
+
+**I am looking for a full-time role** as an AI/software developer. Contact me on [LinkedIn](https://www.linkedin.com/in/demetrius-edelin/).
